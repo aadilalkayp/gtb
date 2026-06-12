@@ -33,6 +33,7 @@ import {
 type ServiceFilter = "all" | ServiceType;
 type WhenFilter = "upcoming" | "today" | "past" | "all";
 type View = "list" | "calendar";
+type ScopeFilter = "mine" | "all";
 
 const SERVICE_CHIP: Record<ServiceType, string> = {
   skincare: "bg-info",
@@ -67,6 +68,10 @@ export function ConsultationsPage() {
   const [service, setService] = useState<ServiceFilter>("all");
   const [when, setWhen] = useState<WhenFilter>("upcoming");
   const [view, setView] = useState<View>("list");
+  // Consultants default to a focused queue of their own sessions; they can flip
+  // to "all" to see the rest of their clients' schedule for context. Admins
+  // (founder/ops) have no sessions of their own, so they always see all.
+  const [scope, setScope] = useState<ScopeFilter>(isAdmin ? "all" : "mine");
   const [action, setAction] = useState<
     { kind: "complete"; session: SessionRow } | { kind: "reschedule"; session: SessionRow } | null
   >(null);
@@ -84,6 +89,7 @@ export function ConsultationsPage() {
 
   const filtered = useMemo(() => {
     return sessions.filter((s) => {
+      if (scope === "mine" && s.consultantId !== user?.id) return false;
       if (service !== "all" && s.serviceType !== service) return false;
       const d = startOfDay(asDate(s.scheduledDate));
       const open = s.status === "scheduled" || s.status === "delayed";
@@ -98,7 +104,7 @@ export function ConsultationsPage() {
           return true;
       }
     });
-  }, [sessions, service, when, today]);
+  }, [sessions, service, when, today, scope, user?.id]);
 
   const canAct = (s: SessionRow) => isAdmin || s.consultantId === user?.id;
 
@@ -109,6 +115,7 @@ export function ConsultationsPage() {
 
   const calendarEvents: CalendarEvent[] = sessions
     .filter((s) => s.status === "scheduled" || s.status === "delayed")
+    .filter((s) => scope === "all" || s.consultantId === user?.id)
     .filter((s) => service === "all" || s.serviceType === service)
     .map((s) => ({
       id: s.id,
@@ -131,28 +138,53 @@ export function ConsultationsPage() {
         title="Consultations"
         subtitle="Track, complete, and reschedule sessions across all services."
         actions={
-          <div className="flex rounded-lg border border-border p-0.5">
-            {(
-              [
-                { id: "list", icon: List },
-                { id: "calendar", icon: CalendarDays },
-              ] as const
-            ).map((v) => (
-              <button
-                key={v.id}
-                onClick={() => setView(v.id)}
-                className={
-                  "flex h-8 w-9 items-center justify-center rounded-md " +
-                  (view === v.id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted")
-                }
-                aria-label={v.id}
-              >
-                <v.icon className="h-4 w-4" />
-              </button>
-            ))}
-          </div>
+          <>
+            {!isAdmin && (
+              <div className="flex rounded-md border border-border p-0.5 text-sm">
+                {(
+                  [
+                    { id: "mine", label: "My sessions" },
+                    { id: "all", label: "All sessions" },
+                  ] as const
+                ).map((o) => (
+                  <button
+                    key={o.id}
+                    onClick={() => setScope(o.id)}
+                    className={
+                      "h-8 rounded px-3 font-medium transition-colors " +
+                      (scope === o.id
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:bg-muted")
+                    }
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex rounded-md border border-border p-0.5">
+              {(
+                [
+                  { id: "list", icon: List },
+                  { id: "calendar", icon: CalendarDays },
+                ] as const
+              ).map((v) => (
+                <button
+                  key={v.id}
+                  onClick={() => setView(v.id)}
+                  className={
+                    "flex h-8 w-9 items-center justify-center rounded " +
+                    (view === v.id
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted")
+                  }
+                  aria-label={v.id}
+                >
+                  <v.icon className="h-4 w-4" />
+                </button>
+              ))}
+            </div>
+          </>
         }
       />
 

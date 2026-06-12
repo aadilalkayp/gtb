@@ -1,9 +1,11 @@
+import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 import { Home, CalendarCheck, Wallet, FileText, User, LogOut } from "lucide-react";
 import { CLIENT_TYPE_LABELS } from "@gtb/shared";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { NotificationsBell } from "@/components/NotificationsBell";
+import { ContentSpinner } from "@/components/ui/Spinner";
 
 const CLIENT_NAV = [
   { label: "Home", to: "/portal", icon: Home, end: true },
@@ -63,7 +65,9 @@ export function ClientLayout() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-6 pb-24 sm:pb-6">
-        <Outlet />
+        <Suspense fallback={<ContentSpinner />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       {/* Bottom nav (mobile) */}

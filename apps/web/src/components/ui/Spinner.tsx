@@ -12,3 +12,16 @@ export function FullPageSpinner() {
     </div>
   );
 }
+
+/**
+ * Loader sized to fill a layout's content region (not the whole viewport), so
+ * the surrounding shell — sidebar, header — stays visible while a lazy route
+ * chunk loads. Used as the Suspense fallback inside StaffLayout/ClientLayout.
+ */
+export function ContentSpinner() {
+  return (
+    <div className="flex h-full min-h-[50vh] items-center justify-center">
+      <Spinner className="h-6 w-6 text-muted-foreground" />
+    </div>
+  );
+}

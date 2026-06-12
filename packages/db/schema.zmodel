@@ -311,7 +311,7 @@ model Client {
   @@index([type])
   @@index([weddingDate])
 
-  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', auth().role == founder || auth().role == ops_head || auth().role == cro)
   @@allow('read', assignments?[staffId == auth().id && isActive])
   @@allow('read', userId == auth().id)
   @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro)

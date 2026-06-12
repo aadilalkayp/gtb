@@ -17,10 +17,16 @@ import { supabaseAnon } from "./supabase.js";
 export async function resolveAuthUser(req: Request): Promise<AuthUser | undefined> {
   const authHeader = req.headers.get("authorization") ?? "";
   const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
-  if (!token) return undefined;
+  if (!token) {
+    console.warn("[auth] no bearer token");
+    return undefined;
+  }
 
   const { data, error } = await supabaseAnon.auth.getUser(token);
-  if (error || !data.user) return undefined;
+  if (error || !data.user) {
+    console.warn("[auth] supabase getUser failed:", error?.message ?? "no user");
+    return undefined;
+  }
 
   const authId = data.user.id;
   const email = data.user.email?.toLowerCase();
@@ -43,9 +49,18 @@ export async function resolveAuthUser(req: Request): Promise<AuthUser | undefine
         data: { authId },
         select: { id: true, role: true, isActive: true },
       });
+      console.info(`[auth] linked email=${email} to authId=${authId}`);
     }
   }
 
-  if (!user || !user.isActive) return undefined;
+  if (!user) {
+    console.warn(`[auth] no user row for authId=${authId} email=${email}`);
+    return undefined;
+  }
+  if (!user.isActive) {
+    console.warn(`[auth] user ${user.id} (${user.role}) is deactivated`);
+    return undefined;
+  }
+
   return { id: user.id, role: user.role };
 }

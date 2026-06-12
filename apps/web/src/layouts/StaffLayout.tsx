@@ -1,8 +1,10 @@
+import { Suspense } from "react";
 import { Outlet } from "react-router-dom";
 import { LogOut } from "lucide-react";
 import { useAuth } from "@/auth/AuthProvider";
 import { Sidebar } from "./Sidebar";
 import { NotificationsBell } from "@/components/NotificationsBell";
+import { ContentSpinner } from "@/components/ui/Spinner";
 
 export function StaffLayout() {
   const { signOut } = useAuth();
@@ -21,7 +23,9 @@ export function StaffLayout() {
           </button>
         </header>
         <main className="flex-1 overflow-y-auto bg-background">
-          <Outlet />
+          <Suspense fallback={<ContentSpinner />}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

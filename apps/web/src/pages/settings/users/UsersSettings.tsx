@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Send, Check, Copy } from "lucide-react";
+import { Plus, Pencil, Send, Check, Copy, RefreshCw } from "lucide-react";
 import {
   useFindManyUser,
   useUpdateUser,
@@ -70,6 +70,28 @@ export function UsersSettings() {
   }, [rates]);
 
   const [modal, setModal] = useState<"new" | { userId: string } | null>(null);
+  const [resendResult, setResendResult] = useState<{
+    name: string;
+    url: string;
+  } | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+
+  async function resendInvite(u: { id: string; name: string; email: string; phone: string | null; role: string }) {
+    setResendingId(u.id);
+    try {
+      const res = await inviteStaff({
+        name: u.name,
+        email: u.email,
+        phone: u.phone || undefined,
+        role: u.role,
+      });
+      setResendResult({ name: u.name, url: res.registrationUrl });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Failed to resend invite");
+    } finally {
+      setResendingId(null);
+    }
+  }
 
   async function toggleActive(id: string, isActive: boolean) {
     await updateUser.mutateAsync({ where: { id }, data: { isActive: !isActive } });
@@ -87,9 +109,18 @@ export function UsersSettings() {
             Invite staff, manage roles, deactivate accounts, and set consultant rates.
           </p>
         </div>
-        <Button onClick={() => setModal("new")}>
-          <Plus className="h-4 w-4" /> Invite staff
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => void refetch()}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+            aria-label="Refresh"
+          >
+            <RefreshCw className="h-4 w-4" />
+          </button>
+          <Button onClick={() => setModal("new")}>
+            <Plus className="h-4 w-4" /> Invite staff
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -124,6 +155,16 @@ export function UsersSettings() {
                   </p>
                 </div>
                 <div className="flex gap-1">
+                  {!u.authId && u.isActive && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void resendInvite(u)}
+                      loading={resendingId === u.id}
+                    >
+                      <Send className="h-3.5 w-3.5" /> Resend invite
+                    </Button>
+                  )}
                   <button
                     onClick={() => setModal({ userId: u.id })}
                     className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
@@ -159,6 +200,13 @@ export function UsersSettings() {
             setModal(null);
             void refetch();
           }}
+        />
+      )}
+      {resendResult && (
+        <InviteLinkModal
+          name={resendResult.name}
+          url={resendResult.url}
+          onClose={() => setResendResult(null)}
         />
       )}
     </div>
@@ -379,6 +427,42 @@ function EditStaffModal({
           </Field>
         )}
         {error && <p className="text-sm text-danger">{error}</p>}
+      </div>
+    </Modal>
+  );
+}
+
+function InviteLinkModal({
+  name,
+  url,
+  onClose,
+}: {
+  name: string;
+  url: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  return (
+    <Modal open onClose={onClose} title={`Invite link — ${name}`} size="sm" footer={<Button onClick={onClose}>Done</Button>}>
+      <div className="space-y-3">
+        <p className="text-sm text-muted-foreground">
+          A fresh invite has been emailed. You can also share this link directly:
+        </p>
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
+          <code className="flex-1 truncate text-xs text-muted-foreground">{url}</code>
+          <button
+            onClick={() => {
+              void navigator.clipboard.writeText(url);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-muted"
+          >
+            {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
       </div>
     </Modal>
   );

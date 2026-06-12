@@ -15,6 +15,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { installmentDisplayStatus, isInstallmentOverdue } from "@/lib/insights";
 import { Avatar } from "@/components/ui/Avatar";
 import { ProgressRing, StatusBadge } from "@/components/ui";
+import { StylingDayCard } from "@/components/StylingDayCard";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 
 export function PortalHome() {
@@ -156,6 +157,9 @@ export function PortalHome() {
           )}
         </Link>
       </div>
+
+      {/* Styling day (only renders if staff created a styling operation) */}
+      <StylingDayCard clientId={client.id} />
 
       {/* Service progress */}
       {services.length > 0 && (
