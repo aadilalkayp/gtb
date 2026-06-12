@@ -1,0 +1,5 @@
+- [GTB OS Overview](project_gtb_overview.md) — Wedding transformation platform: clients, consultants, payments, scheduling. SRS v2.0 in progress.
+- [Tech Stack](project_tech_stack.md) — Vite+React on CF Pages, Next.js API on VPS, Supabase (DB+Auth+Storage), ZenStack, TanStack Query, Mailgun.
+- [Schema Decisions](project_schema_decisions.md) — Prisma 7 (verified live), single User auth model, money as Int, enum-literal collision gotcha.
+- [Local Dev](project_local_dev.md) — db push (not migrate), founder login bootstrap, server ports, Supabase connection.
+- [Build Status](project_build_status.md) — what's implemented vs remaining; update as work progresses.

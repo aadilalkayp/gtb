@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gtb/web", "dev"],
+      "autoPort": true,
+      "port": 5173
+    }
+  ]
+}
