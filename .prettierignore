@@ -1,0 +1,15 @@
+# Dependencies & build output
+node_modules/
+**/dist/
+**/.next/
+**/build/
+
+# Lockfile
+pnpm-lock.yaml
+
+# Generated code (ZenStack / Prisma) — never hand-edit or format
+packages/db/src/generated/
+packages/db/prisma/schema.prisma
+
+# Large reference spec (kept as authored)
+gtb_os_srs_v2.md

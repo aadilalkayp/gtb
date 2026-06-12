@@ -1,0 +1,43 @@
+{
+  "name": "@gtb/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./hooks": "./src/generated/hooks/index.ts",
+    "./zod": "./src/generated/zod/index.ts",
+    "./models": "./src/generated/models.ts"
+  },
+  "scripts": {
+    "generate": "zenstack generate",
+    "migrate": "prisma migrate dev --schema ./prisma/schema.prisma",
+    "migrate:deploy": "prisma migrate deploy --schema ./prisma/schema.prisma",
+    "push": "prisma db push --schema ./prisma/schema.prisma",
+    "studio": "prisma studio --schema ./prisma/schema.prisma",
+    "seed": "tsx ./prisma/seed.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "echo \"(lint placeholder)\""
+  },
+  "dependencies": {
+    "@gtb/shared": "workspace:*",
+    "@prisma/adapter-pg": "^7.8.0",
+    "@prisma/client": "^7.8.0",
+    "@zenstackhq/runtime": "^2.11.4",
+    "@zenstackhq/tanstack-query": "^2.11.4",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@tanstack/react-query": "^5.62.7",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "dotenv": "^16.4.7",
+    "prisma": "^7.8.0",
+    "react": "^19.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "zenstack": "^2.11.4"
+  }
+}

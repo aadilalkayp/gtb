@@ -1,0 +1,46 @@
+{
+  "name": "gtb-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GTB OS — Groom To Be / Glow To Be Operating System",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=10"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter \"./apps/*\" dev",
+    "dev:web": "pnpm --filter @gtb/web dev",
+    "dev:api": "pnpm --filter @gtb/api dev",
+    "build": "pnpm --filter @gtb/shared build && pnpm --filter @gtb/db build && pnpm --filter @gtb/api build && pnpm --filter @gtb/web build",
+    "db:generate": "pnpm --filter @gtb/db generate",
+    "db:migrate": "pnpm --filter @gtb/db migrate",
+    "db:studio": "pnpm --filter @gtb/db studio",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.4",
+    "eslint": "^9.39.4",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.6.0",
+    "prettier": "^3.8.4",
+    "prettier-plugin-tailwindcss": "^0.8.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.61.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "prisma",
+      "@prisma/client",
+      "@prisma/engines",
+      "zenstack",
+      "sharp",
+      "unrs-resolver"
+    ]
+  }
+}

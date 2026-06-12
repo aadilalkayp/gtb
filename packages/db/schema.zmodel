@@ -1,0 +1,822 @@
+// GTB OS data model + access policies.
+//
+// This is the single source of truth for the database. Run `pnpm db:generate`
+// to emit the Prisma schema (./prisma/schema.prisma), the Prisma client, zod
+// schemas, and the TanStack Query hooks consumed by the web app.
+//
+// Access-policy conventions:
+//   - auth() is the User identity (staff or client), see @@auth on User.
+//   - Policies only read scalar fields off auth(): auth().id and auth().role.
+//   - "Assigned staff" is expressed by traversing the queried model's relations
+//     (e.g. client.assignments) and comparing staffId == auth().id.
+//   - "Client self" is expressed as <...>.userId == auth().id.
+//   - Money is stored as whole INR rupees (Int) to keep JSON/runtime simple.
+
+// Prisma 7: connection URLs live in prisma.config.ts (CLI) and are supplied at
+// runtime via a driver adapter passed to PrismaClient — not in the schema.
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+plugin prisma {
+  provider = "@core/prisma"
+  output   = "./prisma/schema.prisma"
+}
+
+plugin hooks {
+  provider = "@zenstackhq/tanstack-query"
+  target   = "react"
+  version  = "v5"
+  output   = "./src/generated/hooks"
+}
+
+plugin zod {
+  provider = "@core/zod"
+  output   = "./src/generated/zod"
+}
+
+// ============================================================================
+// Enums
+// ============================================================================
+
+enum Role {
+  founder
+  ops_head
+  cro
+  coach
+  skincare_consultant
+  fitness_trainer
+  styling_consultant
+  media
+  client
+}
+
+enum ClientType {
+  groom
+  bride
+}
+
+enum ClientStatus {
+  lead
+  converted
+  active
+  completed
+  on_hold
+  cancelled
+}
+
+enum LeadPhase {
+  new
+  contacted
+  invited
+  registered
+  plan_selected
+  payment_submitted
+}
+
+enum ServiceType {
+  skincare
+  fitness
+  styling
+}
+
+enum SessionStatus {
+  scheduled
+  completed
+  delayed
+  missed
+  cancelled
+}
+
+enum InstallmentStatus {
+  pending
+  proof_submitted
+  approved
+  rejected
+  overdue
+  waived
+}
+
+enum PaymentMethod {
+  upi
+  bank_transfer
+  cash
+  other
+}
+
+enum AssignmentRole {
+  cro
+  coach
+  skincare_consultant
+  fitness_trainer
+  styling_consultant
+}
+
+enum StylingStatus {
+  upcoming
+  in_progress
+  completed
+}
+
+enum FollowUpType {
+  weekly_checkin
+  payment_reminder
+  progress_update
+  satisfaction_check
+}
+
+enum FollowUpStatus {
+  pending
+  completed
+  overdue
+}
+
+enum ExpenseStatus {
+  submitted
+  approved
+  rejected
+}
+
+enum DocumentType {
+  assessment_form
+  skincare_plan
+  fitness_plan
+  styling_guide
+  consultation_notes
+  payment_proof
+  payment_receipt
+  expense_receipt
+  client_photo
+}
+
+enum TaskPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum TaskStatus {
+  pending
+  in_progress
+  completed
+  cancelled
+}
+
+enum ContentStage {
+  planned
+  shooting
+  editing
+  review
+  posted
+}
+
+enum ContentType {
+  photo
+  video
+  reel
+  carousel
+  story
+  blog
+}
+
+enum ContentPlatform {
+  instagram
+  youtube
+  facebook
+  website
+  other
+}
+
+enum Campaign {
+  gtb
+  glow_to_be
+  general
+}
+
+enum ActivityAction {
+  created
+  updated
+  deleted
+  status_changed
+}
+
+// ============================================================================
+// Identity
+// ============================================================================
+
+/// Auth principal for both staff and clients. Linked to a Supabase auth user
+/// via authId. Staff rows have a staff role; client rows have role = client and
+/// a 1:1 Client profile.
+model User {
+  id        String  @id @default(uuid())
+  authId    String? @unique // Supabase auth uid; null until first login/registration
+  email     String  @unique
+  name      String
+  phone     String?
+  role      Role
+  avatarUrl String?
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  client            Client?            @relation("ClientUser")
+  convertedClients  Client[]           @relation("ConvertedBy")
+  assignments         Assignment[]     @relation("StaffAssignments")
+  assignmentsMade     Assignment[]     @relation("AssignmentAssigner")
+  installmentsApproved Installment[]   @relation("InstallmentApprover")
+  consultantRates     ConsultantRate[]
+  sessions          Session[]          @relation("ConsultantSessions")
+  followUps         FollowUp[]         @relation("CroFollowUps")
+  stylingOps        StylingOperation[] @relation("StylistOps")
+  tasksAssigned     Task[]             @relation("TaskAssignee")
+  tasksCreated      Task[]             @relation("TaskCreator")
+  expensesSubmitted Expense[]          @relation("ExpenseSubmitter")
+  expensesApproved  Expense[]          @relation("ExpenseApprover")
+  expensesAsPayee   Expense[]          @relation("ExpensePayee")
+  documentsUploaded Document[]         @relation("DocUploader")
+  contentItems      ContentItem[]      @relation("ContentOwner")
+  notifications     Notification[]     @relation("UserNotifications")
+  activityLogs      ActivityLog[]      @relation("ActivityActor")
+
+  @@auth
+
+  // Any authenticated user can read staff identities (needed for team displays,
+  // assignment dropdowns). Client identities are private to themselves + admins.
+  @@allow('read', auth().id == id)
+  // Any authenticated user can read staff identities (team displays, assignment
+  // pickers). Client User rows stay private to the client + admins. Expressed as
+  // a positive staff-role list because the bare literal `client` would collide
+  // with the `client` relation field in this model's scope.
+  @@allow('read', auth() != null && (role == founder || role == ops_head || role == cro || role == coach || role == skincare_consultant || role == fitness_trainer || role == styling_consultant || role == media))
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  // Only the founder manages user accounts; users may update their own profile
+  // (the API restricts which fields self-update can touch).
+  @@allow('create,delete', auth().role == founder)
+  @@allow('update', auth().role == founder || auth().id == id)
+}
+
+// ============================================================================
+// Clients & onboarding
+// ============================================================================
+
+model Client {
+  id                String        @id @default(uuid())
+  clientCode        String        @unique // human-friendly, e.g. "GTB1256"
+  name              String
+  phone             String
+  email             String
+  type              ClientType
+  weddingDate       DateTime
+  city              String
+  status            ClientStatus  @default(lead)
+  leadPhase         LeadPhase     @default(new)
+  avatarUrl         String?
+  notes             String?
+  cancellationReason String?
+  onHoldReason      String?
+
+  // Auth link (null while a pre-registration lead)
+  userId String? @unique
+  user   User?   @relation("ClientUser", fields: [userId], references: [id])
+
+  // Sales
+  leadSourceId   String?
+  leadSource     LeadSource? @relation(fields: [leadSourceId], references: [id])
+  convertedById  String?
+  convertedBy    User?       @relation("ConvertedBy", fields: [convertedById], references: [id])
+  conversionDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  assessment  Assessment?
+  clientPlan  ClientPlan?
+  assignments Assignment[]
+  sessions    Session[]
+  followUps   FollowUp[]
+  stylingOps  StylingOperation[]
+  documents   Document[]
+  expenses    Expense[]
+  tasks       Task[]
+
+  @@index([status])
+  @@index([type])
+  @@index([weddingDate])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', assignments?[staffId == auth().id && isActive])
+  @@allow('read', userId == auth().id)
+  @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro)
+  @@allow('update', auth().role == founder || auth().role == ops_head)
+  @@allow('update', assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
+  @@allow('update', userId == auth().id) // self; API whitelists fields
+  @@allow('delete', auth().role == founder)
+}
+
+/// Full onboarding assessment (SRS §6.2). 1:1 with Client.
+model Assessment {
+  id       String @id @default(uuid())
+  clientId String @unique
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  // General
+  age             Int?
+  gender          String?
+  profilePhotoUrl String?
+
+  // Skincare
+  skinType            String?
+  skinConcerns        String[]
+  skincareRoutine     String?
+  allergies           String?
+  dermatologicalNotes String?
+
+  // Fitness
+  heightCm         Int?
+  weightKg         Float?
+  fitnessLevel     String?
+  healthConditions String?
+  dietaryPreference String?
+  fitnessGoals     String[]
+
+  // Styling
+  bodyType          String?
+  stylePreferences  String[]
+  outfitBudgetRange String?
+  colorPreferences  String?
+  stylingNotes      String?
+
+  // Photos
+  fullBodyPhotoUrl String?
+  facePhotoUrl     String?
+
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+  @@allow('create,update', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update', client.userId == auth().id)
+  @@allow('update', client.assignments?[staffId == auth().id && isActive && (role == skincare_consultant || role == fitness_trainer || role == styling_consultant)])
+}
+
+model LeadSource {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  clients Client[]
+
+  @@allow('read', auth() != null)
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+}
+
+// ============================================================================
+// Plans
+// ============================================================================
+
+model Plan {
+  id              String     @id @default(uuid())
+  name            String
+  clientType      ClientType
+  durationMonths  Int
+  price           Int // whole INR
+  description     String?
+  installmentCount Int       @default(1)
+  isActive        Boolean    @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  services    PlanService[]
+  clientPlans ClientPlan[]
+
+  // Everyone authenticated can read plans (clients browse them at onboarding).
+  @@allow('read', auth() != null)
+  @@allow('create,update,delete', auth().role == founder)
+}
+
+model PlanService {
+  id             String      @id @default(uuid())
+  planId         String
+  plan           Plan        @relation(fields: [planId], references: [id], onDelete: Cascade)
+  serviceType    ServiceType
+  totalSessions  Int
+  startOffsetDays Int        // days before wedding this service starts
+  frequencyDays  Int?        // null => only first session auto-scheduled (e.g. styling)
+  notes          String?
+
+  @@allow('read', auth() != null)
+  @@allow('create,update,delete', auth().role == founder)
+}
+
+/// A client's enrollment in a plan (1:1 — one active plan per client, SRS A9).
+model ClientPlan {
+  id               String   @id @default(uuid())
+  clientId         String   @unique
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  planId           String
+  plan             Plan     @relation(fields: [planId], references: [id])
+  planNameSnapshot String   // plan name captured at enrollment
+  priceAtEnrollment Int
+  durationMonths   Int
+  enrolledAt       DateTime @default(now())
+
+  installments Installment[]
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+  @@allow('create,update', auth().role == founder || auth().role == ops_head || auth().role == cro)
+}
+
+model Installment {
+  id                String            @id @default(uuid())
+  clientPlanId      String
+  clientPlan        ClientPlan        @relation(fields: [clientPlanId], references: [id], onDelete: Cascade)
+  installmentNumber Int
+  amount            Int
+  dueDate           DateTime
+  status            InstallmentStatus @default(pending)
+  paymentMethod     PaymentMethod?
+  proofDocumentId   String?           @unique
+  proofDocument     Document?         @relation("InstallmentProof", fields: [proofDocumentId], references: [id])
+  approvedById      String?
+  approvedBy        User?             @relation("InstallmentApprover", fields: [approvedById], references: [id])
+  approvedAt        DateTime?
+  rejectionReason   String?
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([dueDate])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', clientPlan.client.assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
+  @@allow('read', clientPlan.client.userId == auth().id)
+  @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro)
+  // CRO/admins approve or reject; the client may update to attach a proof
+  // (API restricts the client to proof_submitted + proofDocument).
+  @@allow('update', auth().role == founder || auth().role == ops_head || auth().role == cro)
+  @@allow('update', clientPlan.client.userId == auth().id)
+}
+
+// ============================================================================
+// Assignments
+// ============================================================================
+
+model Assignment {
+  id           String         @id @default(uuid())
+  clientId     String
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  staffId      String
+  staff        User           @relation("StaffAssignments", fields: [staffId], references: [id])
+  role         AssignmentRole
+  assignedById String?
+  assignedBy   User?          @relation("AssignmentAssigner", fields: [assignedById], references: [id])
+  assignedAt   DateTime       @default(now())
+  unassignedAt DateTime?
+  isActive     Boolean        @default(true)
+
+  @@index([clientId, isActive])
+  @@index([staffId, isActive])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', staffId == auth().id)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+}
+
+// ============================================================================
+// Sessions
+// ============================================================================
+
+model Session {
+  id            String        @id @default(uuid())
+  clientId      String
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  serviceType   ServiceType
+  consultantId  String?
+  consultant    User?         @relation("ConsultantSessions", fields: [consultantId], references: [id])
+  sessionNumber Int
+  scheduledDate DateTime
+  actualDate    DateTime?
+  status        SessionStatus @default(scheduled)
+  notes         String?
+  rating        Int?          // 1-5, set by client
+  ratingFeedback String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  documents        Document[]
+  stylingOperation StylingOperation?
+
+  @@index([clientId])
+  @@index([consultantId])
+  @@index([scheduledDate])
+  @@index([status])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', consultantId == auth().id)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+  @@allow('create', auth().role == founder || auth().role == ops_head)
+  // Consultant updates their own sessions (complete, notes); admins update any;
+  // client updates only to leave a rating (API restricts fields).
+  @@allow('update', auth().role == founder || auth().role == ops_head)
+  @@allow('update', consultantId == auth().id)
+  @@allow('update', client.userId == auth().id)
+}
+
+// ============================================================================
+// Follow-ups (CRO tracking)
+// ============================================================================
+
+model FollowUp {
+  id            String         @id @default(uuid())
+  clientId      String
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  croId         String
+  cro           User           @relation("CroFollowUps", fields: [croId], references: [id])
+  type          FollowUpType
+  dueDate       DateTime
+  completedDate DateTime?
+  status        FollowUpStatus @default(pending)
+  notes         String?
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId])
+  @@index([croId, status])
+  @@index([dueDate])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', croId == auth().id)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive && role == coach])
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update', croId == auth().id)
+  @@allow('update', client.assignments?[staffId == auth().id && isActive && role == coach])
+}
+
+// ============================================================================
+// Styling operations
+// ============================================================================
+
+model StylingOperation {
+  id              String        @id @default(uuid())
+  clientId        String
+  client          Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  sessionId       String?       @unique
+  session         Session?      @relation(fields: [sessionId], references: [id])
+  stylistId       String?
+  stylist         User?         @relation("StylistOps", fields: [stylistId], references: [id])
+  stylingDate     DateTime?
+  stylingLocation String?
+  travelRequired  Boolean       @default(false)
+  travelDetails   String?
+  status          StylingStatus @default(upcoming)
+
+  // Checklist (SRS §10.2)
+  consultationDone       Boolean   @default(false)
+  consultationDoneAt     DateTime?
+  outfitFinalized        Boolean   @default(false)
+  outfitFinalizedAt      DateTime?
+  accessoriesFinalized   Boolean   @default(false)
+  accessoriesFinalizedAt DateTime?
+  guideDelivered         Boolean   @default(false)
+  guideDeliveredAt       DateTime?
+  finalConfirmation      Boolean   @default(false)
+  finalConfirmationAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([stylingDate])
+  @@index([status])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', stylistId == auth().id)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+  @@allow('create,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('update', auth().role == founder || auth().role == ops_head)
+  @@allow('update', stylistId == auth().id)
+}
+
+// ============================================================================
+// Documents
+// ============================================================================
+
+model Document {
+  id           String       @id @default(uuid())
+  clientId     String
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type         DocumentType
+  fileName     String
+  fileUrl      String
+  fileSize     Int
+  sessionId    String?
+  session      Session?     @relation(fields: [sessionId], references: [id])
+  uploadedById String
+  uploadedBy   User         @relation("DocUploader", fields: [uploadedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  installmentProof Installment? @relation("InstallmentProof")
+  expenseReceipt   Expense?     @relation("ExpenseReceipt")
+
+  @@index([clientId])
+  @@index([type])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  // Client sees own documents except internal consultation notes.
+  @@allow('read', client.userId == auth().id && type != consultation_notes)
+  @@allow('create', auth() != null)
+  @@allow('delete', auth().role == founder || auth().role == ops_head || uploadedById == auth().id)
+}
+
+// ============================================================================
+// Consultant rates & expenses
+// ============================================================================
+
+/// Per-session fee for a consultant, optionally specific to a service type.
+model ConsultantRate {
+  id          String      @id @default(uuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceType ServiceType
+  amount      Int
+  createdAt   DateTime    @default(now())
+
+  @@unique([userId, serviceType])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head || userId == auth().id)
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+}
+
+model ExpenseCategory {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  isActive  Boolean   @default(true)
+  createdAt DateTime  @default(now())
+
+  expenses Expense[]
+
+  @@allow('read', auth() != null && auth().role != client)
+  @@allow('create,update,delete', auth().role == founder)
+}
+
+model Expense {
+  id                String        @id @default(uuid())
+  categoryId        String
+  category          ExpenseCategory @relation(fields: [categoryId], references: [id])
+  title             String
+  amount            Int
+  date              DateTime
+  paidTo            String?
+  submittedById     String
+  submittedBy       User          @relation("ExpenseSubmitter", fields: [submittedById], references: [id])
+  // Optional links: a client-related expense, a consultant payout, a session fee.
+  clientId          String?
+  client            Client?       @relation(fields: [clientId], references: [id])
+  payeeId           String?
+  payee             User?         @relation("ExpensePayee", fields: [payeeId], references: [id])
+  sessionId         String?
+  status            ExpenseStatus @default(submitted)
+  approvedById      String?
+  approvedBy        User?         @relation("ExpenseApprover", fields: [approvedById], references: [id])
+  approvedAt        DateTime?
+  receiptDocumentId String?       @unique
+  receiptDocument   Document?     @relation("ExpenseReceipt", fields: [receiptDocumentId], references: [id])
+  notes             String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([date])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', submittedById == auth().id || payeeId == auth().id)
+  // Any staff member may submit an expense (clients may not).
+  @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro || auth().role == coach || auth().role == skincare_consultant || auth().role == fitness_trainer || auth().role == styling_consultant || auth().role == media)
+  @@allow('update', auth().role == founder || auth().role == ops_head)
+  // Submitter may edit their own expense while it is still pending submission.
+  @@allow('update', submittedById == auth().id && status == submitted)
+  @@allow('delete', auth().role == founder)
+}
+
+// ============================================================================
+// Media
+// ============================================================================
+
+model ContentItem {
+  id          String          @id @default(uuid())
+  title       String
+  contentType ContentType
+  campaign    Campaign
+  platform    ContentPlatform
+  ownerId     String?
+  owner       User?           @relation("ContentOwner", fields: [ownerId], references: [id])
+  deadline    DateTime?
+  status      ContentStage    @default(planned)
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+
+  @@allow('all', auth().role == founder || auth().role == media)
+}
+
+// ============================================================================
+// Tasks
+// ============================================================================
+
+model Task {
+  id           String       @id @default(uuid())
+  title        String
+  description  String?
+  assignedToId String
+  assignedTo   User         @relation("TaskAssignee", fields: [assignedToId], references: [id])
+  assignedById String
+  assignedBy   User         @relation("TaskCreator", fields: [assignedById], references: [id])
+  clientId     String?
+  client       Client?      @relation(fields: [clientId], references: [id])
+  dueDate      DateTime?
+  priority     TaskPriority @default(medium)
+  status       TaskStatus   @default(pending)
+
+  createdAt   DateTime  @default(now())
+  completedAt DateTime?
+
+  @@index([assignedToId, status])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', assignedToId == auth().id || assignedById == auth().id)
+  // Any staff member may create/assign tasks (clients may not).
+  @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro || auth().role == coach || auth().role == skincare_consultant || auth().role == fitness_trainer || auth().role == styling_consultant || auth().role == media)
+  @@allow('update', auth().role == founder || auth().role == ops_head)
+  @@allow('update', assignedToId == auth().id || assignedById == auth().id)
+  @@allow('delete', assignedById == auth().id || auth().role == founder || auth().role == ops_head)
+}
+
+// ============================================================================
+// Notifications & audit
+// ============================================================================
+
+model Notification {
+  id       String  @id @default(uuid())
+  userId   String
+  user     User    @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  type     String
+  title    String
+  body     String?
+  linkPath String?
+  isRead   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+
+  // Notifications are created by the server (unenhanced client); users read and
+  // mark their own as read.
+  @@allow('read,update', userId == auth().id)
+  @@allow('delete', userId == auth().id)
+}
+
+model ActivityLog {
+  id            String         @id @default(uuid())
+  entityType    String
+  entityId      String
+  action        ActivityAction
+  performedById String?
+  performedBy   User?          @relation("ActivityActor", fields: [performedById], references: [id])
+  summary       String?
+  changes       Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([createdAt])
+
+  // Audit log is read-only to admins; written by the server (unenhanced).
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+}
