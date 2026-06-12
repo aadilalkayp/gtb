@@ -299,6 +299,10 @@ Handy: `pm2 logs gtb-api` · `pm2 status` · `pm2 monit`.
 - **Forgot `pnpm db:generate`** → `tsc`/`vite`/`next build` fail on missing
   `@gtb/db` generated types or hooks. It is required on every fresh checkout (nothing
   runs it automatically).
+- **`ERR_PNPM_IGNORED_BUILDS` (prisma/zenstack/esbuild/sharp builds skipped)** → the
+  build-script allowlist must live in `pnpm-workspace.yaml` (`onlyBuiltDependencies`).
+  pnpm **11 ignores** the old `"pnpm"` field in `package.json`. If you hit this, you're
+  on a checkout from before that move — pull latest, then `pnpm install`.
 - **CORS errors in the browser** → `WEB_ORIGIN` doesn't exactly match the Pages origin,
   or CORS was also added in Nginx (remove it — the app owns CORS).
 - **Migrations** use `DIRECT_URL` (port 5432); the **runtime** uses the pooled

@@ -1,3 +1,14 @@
 packages:
   - "apps/*"
   - "packages/*"
+
+# Packages allowed to run install/build scripts. As of pnpm 10+ this lives here,
+# NOT in package.json's "pnpm" field (pnpm 11 ignores that field).
+onlyBuiltDependencies:
+  - esbuild
+  - prisma
+  - "@prisma/client"
+  - "@prisma/engines"
+  - zenstack
+  - sharp
+  - unrs-resolver
