@@ -13,8 +13,8 @@
 import "dotenv/config";
 import { prisma } from "../src/index.js";
 
-const FOUNDER_EMAIL = (process.env.SEED_FOUNDER_EMAIL ?? "aadil.alkp@gmail.com").toLowerCase();
-const FOUNDER_NAME = process.env.SEED_FOUNDER_NAME ?? "Founder";
+const FOUNDER_EMAIL = (process.env.SEED_FOUNDER_EMAIL ?? "ishaqk16@gmail.com").toLowerCase();
+const FOUNDER_NAME = process.env.SEED_FOUNDER_NAME ?? "Ishaq K";
 
 async function main() {
   // --- Founder ---
