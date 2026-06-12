@@ -31,16 +31,5 @@
     "prettier-plugin-tailwindcss": "^0.8.0",
     "typescript": "^5.7.2",
     "typescript-eslint": "^8.61.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "prisma",
-      "@prisma/client",
-      "@prisma/engines",
-      "zenstack",
-      "sharp",
-      "unrs-resolver"
-    ]
   }
 }
