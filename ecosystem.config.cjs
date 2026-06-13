@@ -19,8 +19,10 @@ module.exports = {
     {
       name: "gtb-api",
       cwd: apiDir,
-      // next is a direct dep of @gtb/api, so pnpm puts its bin here.
-      script: path.join(apiDir, "node_modules", ".bin", "next"),
+      // The .bin/next pnpm generates is a POSIX shell shim (#!/bin/sh), not JS — running
+      // it via the "node" interpreter below throws a SyntaxError on its shell syntax.
+      // Use Next's real JS entrypoint instead (#!/usr/bin/env node, which `node` strips).
+      script: path.join(apiDir, "node_modules", "next", "dist", "bin", "next"),
       args: "start --port 3001",
       interpreter: "node",
 

@@ -32,7 +32,8 @@ frontend both matter. Details below.
 
 ## 0. Prerequisites
 
-- Node **20+** and pnpm **10+** (`corepack enable && corepack prepare pnpm@10 --activate`)
+- Node **20+** and pnpm **11** — pinned via `packageManager` in `package.json`;
+  `corepack enable` activates that exact version automatically.
 - A domain with two subdomains, e.g. `app.yourdomain.com` (frontend) and
   `api.yourdomain.com` (backend)
 - A Supabase project
@@ -86,11 +87,11 @@ Both runtimes point at the same Supabase project.
 
 ```bash
 sudo apt update && sudo apt install -y nginx git
-corepack enable && corepack prepare pnpm@10 --activate   # if not already
+corepack enable && corepack prepare pnpm@11.6.0 --activate   # matches package.json's "packageManager"
 sudo npm i -g pm2
 ```
 
-### 2.2 Get the code & build
+### 2.2 Get the code & install
 
 ```bash
 sudo mkdir -p /var/www/gtb-os && sudo chown $USER:$USER /var/www/gtb-os
@@ -100,13 +101,16 @@ cd /var/www/gtb-os
 pnpm install --frozen-lockfile
 pnpm db:generate                         # MANDATORY — generates Prisma client + hooks
 pnpm --filter @gtb/db migrate:deploy     # safe to re-run; no-op if already applied
-pnpm --filter @gtb/api build             # produces apps/api/.next
 ```
 
 ### 2.3 Backend env
 
-Next.js auto-loads `.env` from the app directory at `next start`. Create
-`apps/api/.env` with production values:
+Create `apps/api/.env` with production values — **before building**. `next build`
+forces `NODE_ENV=production`, and `apps/api/src/lib/env.ts` validates required vars
+*eagerly at module load*; every API route imports it transitively, so a build with this
+file missing or incomplete fails with `Error: Missing required env var: ...` while
+"Collecting page data". This is a **separate file** from `packages/db/.env` (§1) — both
+are needed.
 
 ```bash
 # ---- Database ----
@@ -137,7 +141,11 @@ WEB_PUBLIC_URL="https://app.yourdomain.com"      # used in invite/registration e
 > The API sends `Access-Control-Allow-Credentials: true`, so a `*` origin won't work for
 > authenticated calls — list the real domain(s).
 
-### 2.4 Run under PM2
+### 2.4 Build & run under PM2
+
+```bash
+pnpm --filter @gtb/api build             # produces apps/api/.next — reads apps/api/.env
+```
 
 `ecosystem.config.cjs` is committed at the repo root — no editing needed (it resolves
 paths from its own location, so it works regardless of where you cloned the repo).
@@ -299,10 +307,20 @@ Handy: `pm2 logs gtb-api` · `pm2 status` · `pm2 monit`.
 - **Forgot `pnpm db:generate`** → `tsc`/`vite`/`next build` fail on missing
   `@gtb/db` generated types or hooks. It is required on every fresh checkout (nothing
   runs it automatically).
-- **`ERR_PNPM_IGNORED_BUILDS` (prisma/zenstack/esbuild/sharp builds skipped)** → the
-  build-script allowlist must live in `pnpm-workspace.yaml` (`onlyBuiltDependencies`).
-  pnpm **11 ignores** the old `"pnpm"` field in `package.json`. If you hit this, you're
-  on a checkout from before that move — pull latest, then `pnpm install`.
+- **`next build` fails with `Error: Missing required env var: DATABASE_URL`** (during
+  "Collecting page data", e.g. for `/api/clients/activate`) → `apps/api/.env` doesn't
+  exist yet or is missing that key. `apps/api/src/lib/env.ts` validates required vars
+  eagerly at module load under `NODE_ENV=production` (which `next build` always sets),
+  and every API route imports it transitively. Create `apps/api/.env` (§2.3) — a file
+  separate from `packages/db/.env` — then re-run the build.
+- **`ERR_PNPM_IGNORED_BUILDS` (prisma/zenstack/esbuild/sharp builds skipped)** → on
+  pnpm **11+** the allowlist is the `allowBuilds` (`name: true`) map in
+  `pnpm-workspace.yaml`; the old `onlyBuiltDependencies` list **and** the `package.json`
+  `"pnpm"` field are both ignored. The repo pins `pnpm@11.6.0` via `packageManager` to
+  keep this consistent. If a fresh checkout still blocks (builds were recorded as
+  skipped on an earlier install, so a no-op `pnpm install` won't re-run them), run
+  `pnpm approve-builds --all` once — it writes `allowBuilds` and runs the scripts
+  non-interactively.
 - **CORS errors in the browser** → `WEB_ORIGIN` doesn't exactly match the Pages origin,
   or CORS was also added in Nginx (remove it — the app owns CORS).
 - **Migrations** use `DIRECT_URL` (port 5432); the **runtime** uses the pooled
