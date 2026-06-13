@@ -2,23 +2,16 @@ packages:
   - "apps/*"
   - "packages/*"
 
-allowBuilds:
-  '@prisma/engines': true
-  esbuild: true
-  prisma: true
-  sharp: true
-  unrs-resolver: true
-  zenstack: true
-
-
 # Dependencies allowed to run install/build scripts. pnpm 11 replaced the old
 # `onlyBuiltDependencies` list (and the package.json "pnpm" field) with this
-# `allowBuilds` name -> bool map. `pnpm approve-builds --all` rewrites this block.
+# `allowBuilds` name -> bool map. `pnpm approve-builds --all` rewrites this block —
+# if it does, re-merge rather than letting a second `allowBuilds:` key sneak in
+# (pnpm's config parser rejects duplicate top-level keys).
 allowBuilds:
-  esbuild: true
-  prisma: true
   "@prisma/client": true
   "@prisma/engines": true
-  zenstack: true
+  esbuild: true
+  prisma: true
   sharp: true
   unrs-resolver: true
+  zenstack: true
