@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/auth/AuthProvider";
 import { Button, Field, Input } from "@/components/ui";
 
@@ -66,6 +66,15 @@ export function LoginPage({ portal }: { portal: "staff" | "client" }) {
               onChange={(e) => setPassword(e.target.value)}
             />
           </Field>
+
+          <p className="text-right text-sm">
+            <Link
+              to={isClientPortal ? "/portal/forgot-password" : "/forgot-password"}
+              className="font-medium text-primary hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </p>
 
           {error && <p className="text-sm text-danger">{error}</p>}
 

@@ -73,6 +73,12 @@ const SettingsPage = lazy(() =>
 const RegisterPage = lazy(() =>
   import("@/pages/portal/RegisterPage").then((m) => ({ default: m.RegisterPage })),
 );
+const ForgotPasswordPage = lazy(() =>
+  import("@/pages/auth/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })),
+);
+const ResetPasswordPage = lazy(() =>
+  import("@/pages/auth/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })),
+);
 const OnboardingWizard = lazy(() =>
   import("@/pages/portal/onboarding/OnboardingWizard").then((m) => ({
     default: m.OnboardingWizard,
@@ -111,6 +117,10 @@ export default function App() {
         <Route path="/portal/login" element={<LoginPage portal="client" />} />
         {/* Reached from the invite email; Supabase establishes the session from the link. */}
         <Route path="/portal/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage portal="staff" />} />
+        <Route path="/portal/forgot-password" element={<ForgotPasswordPage portal="client" />} />
+        {/* Reached from the recovery email; Supabase establishes the session from the link. */}
+        <Route path="/reset-password" element={<ResetPasswordPage />} />
 
         {/* Staff portal */}
         <Route element={<RequireAuth portal="staff" />}>
