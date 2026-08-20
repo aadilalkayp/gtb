@@ -4,19 +4,22 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Button, Field, Input } from "@/components/ui";
 
 export function LoginPage({ portal }: { portal: "staff" | "client" }) {
-  const { signIn, session, user, isClient } = useAuth();
+  const { signIn, session, loading, isClient } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
 
-  // Once authenticated + profile resolved, send to the right home.
+  // Once authenticated, send to the right home — even when the GTB profile
+  // hasn't loaded yet (MISC-5): a successful sign-in with no provisioned GTB
+  // user must not silently leave the form sitting there; the guard pages
+  // (RequireOnboarded / staff router) render the "no account" notice.
   useEffect(() => {
-    if (session && user) {
+    if (session && !loading) {
       navigate(isClient ? "/portal" : "/dashboard", { replace: true });
     }
-  }, [session, user, isClient, navigate]);
+  }, [session, loading, isClient, navigate]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

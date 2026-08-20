@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
+import { rescheduleSession } from "@gtb/db/server";
 import { SERVICE_TYPE_LABELS, formatDate, type ServiceType } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notify";
@@ -12,8 +13,8 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 }
 
 /**
- * Reschedule a session (SRS §9.4): set the new date, flip status to `delayed`,
- * and notify the client. Allowed: the session's consultant, ops_head, founder.
+ * Reschedule a session (SRS §9.4). DATA-2 (original date preserved + audit
+ * log) and MISC-3 (delayed only when moved later) live in rescheduleSession.
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
@@ -35,7 +36,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const session = await prisma.session.findUnique({
     where: { id: body.sessionId },
-    include: { client: { select: { userId: true } } },
+    select: { id: true, serviceType: true, sessionNumber: true, consultantId: true, client: { select: { userId: true } } },
   });
   if (!session) return json(req, { error: "Session not found" }, 404);
 
@@ -43,14 +44,20 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!isAdmin && session.consultantId !== authUser.id) {
     return json(req, { error: "Forbidden" }, 403);
   }
-  if (session.status === "completed" || session.status === "cancelled") {
-    return json(req, { error: "This session can no longer be rescheduled" }, 409);
-  }
 
-  await prisma.session.update({
-    where: { id: session.id },
-    data: { scheduledDate: newDate, status: "delayed" },
-  });
+  try {
+    await rescheduleSession({ sessionId: body.sessionId, newDate, actorId: authUser.id });
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === "NOT_FOUND") return json(req, { error: "Session not found" }, 404);
+    if (msg === "LOCKED") {
+      return json(req, { error: "This session can no longer be rescheduled" }, 409);
+    }
+    if (msg === "PAST_DATE") {
+      return json(req, { error: "The new date cannot be in the past" }, 400);
+    }
+    throw e;
+  }
 
   if (session.client.userId) {
     const label = SERVICE_TYPE_LABELS[session.serviceType as ServiceType];

@@ -32,6 +32,7 @@ import { useAuth } from "@/auth/AuthProvider";
 import { asDate, startOfDay, deriveAtRisk } from "@/lib/insights";
 import { StatCard } from "@/components/StatCard";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { EmptyState } from "@/components/EmptyState";
 import { useDashboardData, type DashboardMetrics } from "./useDashboardData";
 import {
@@ -47,9 +48,20 @@ import {
 
 export function DashboardPage() {
   const { user, role } = useAuth();
-  const { isLoading, metrics, raw } = useDashboardData();
+  const { isLoading, isError, error, metrics, raw } = useDashboardData();
 
   if (isLoading) return <FullPageSpinner />;
+
+  // CALC-8: never render "Everything's calm" on a failed fetch.
+  if (isError) {
+    return (
+      <div className="p-6">
+        <QueryErrorState
+          message={error instanceof Error ? error.message : "The dashboard queries failed."}
+        />
+      </div>
+    );
+  }
 
   const firstName = user?.name?.split(" ")[0] ?? "there";
   const hour = new Date().getHours();
@@ -105,9 +117,9 @@ function RoleView({
     case "ops_head":
       return <OpsView m={metrics} />;
     case "cro":
-      return <CroView m={metrics} raw={raw} />;
+      return <CroView m={metrics} raw={raw} userId={userId} />;
     case "coach":
-      return <CoachView m={metrics} />;
+      return <CoachView m={metrics} raw={raw} userId={userId} />;
     case "media":
       return <MediaView raw={raw} m={metrics} />;
     case "skincare_consultant":
@@ -357,16 +369,24 @@ function OpsView({ m }: { m: DashboardMetrics }) {
 function CroView({
   m,
   raw,
+  userId,
 }: {
   m: DashboardMetrics;
   raw: ReturnType<typeof useDashboardData>["raw"];
+  userId?: string;
 }) {
   const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+  // CALC-5: my performance = conversions I actually made, follow-ups that are
+  // mine, scoped to the period — not every client in the business.
   const myConversions = raw.clients.filter(
-    (c) => c.conversionDate && asDate(c.conversionDate) >= monthStart,
+    (c) =>
+      c.convertedById === userId &&
+      c.conversionDate &&
+      asDate(c.conversionDate) >= monthStart,
   ).length;
-  const completedFollowups = raw.followUps.filter((f) => f.status === "completed").length;
-  const totalFollowups = raw.followUps.length;
+  const myFollowUps = raw.followUps.filter((f) => f.croId === userId);
+  const completedFollowups = myFollowUps.filter((f) => f.status === "completed").length;
+  const totalFollowups = myFollowUps.length;
   const completionRate = totalFollowups
     ? Math.round((completedFollowups / totalFollowups) * 100)
     : 0;
@@ -461,7 +481,11 @@ function ConsultantView({
   const avgRating = rated.length
     ? (rated.reduce((t, s) => t + (s.rating ?? 0), 0) / rated.length).toFixed(1)
     : "—";
-  const pendingUploads = mine.filter((s) => s.status === "completed" && s._count.documents === 0);
+  // From the dedicated unwindowed query — a 2-month-old missing upload must
+  // not vanish just because the session left the dashboard's 45-day window.
+  const pendingUploads = raw.pendingUploads.filter(
+    (s) => s.consultantId === userId || !userId,
+  );
 
   return (
     <>
@@ -567,15 +591,30 @@ function ConsultantView({
 
 // ---- Coach ------------------------------------------------------------------
 
-function CoachView({ m }: { m: DashboardMetrics }) {
+function CoachView({
+  m,
+  raw,
+  userId,
+}: {
+  m: DashboardMetrics;
+  raw: ReturnType<typeof useDashboardData>["raw"];
+  userId?: string;
+}) {
+  // CALC-5: "My clients" = clients this coach is actively assigned to, not
+  // the business-wide active count.
+  const myClientIds = new Set(
+    raw.clients
+      .filter((c) => c.assignments?.some((a) => a.staffId === userId && a.role === "coach"))
+      .map((c) => c.id),
+  );
   return (
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard icon={Users} label="My clients" value={m.activeCount} accent="primary" />
+        <StatCard icon={Users} label="My clients" value={myClientIds.size} accent="primary" />
         <StatCard
           icon={ShieldAlert}
           label="At risk"
-          value={m.atRiskClients.length}
+          value={m.atRiskClients.filter((c) => myClientIds.has(c.id)).length}
           accent="danger"
         />
         <StatCard icon={ClipboardList} label="Open tasks" value={m.tasksPending} accent="info" />
@@ -590,11 +629,13 @@ function CoachView({ m }: { m: DashboardMetrics }) {
       <div className="grid gap-5 lg:grid-cols-2">
         <SectionCard title="Escalations / at risk" icon={ShieldAlert}>
           <AtRiskList
-            clients={m.atRiskClients.map((c) => ({
-              id: c.id,
-              name: c.name,
-              reasons: deriveAtRisk(c).reasons,
-            }))}
+            clients={m.atRiskClients
+              .filter((c) => myClientIds.has(c.id))
+              .map((c) => ({
+                id: c.id,
+                name: c.name,
+                reasons: deriveAtRisk(c).reasons,
+              }))}
           />
         </SectionCard>
         <SectionCard

@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
+import { rejectPaymentProof } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notify";
 import { corsHeaders, handleOptions } from "@/lib/cors";
@@ -13,9 +14,8 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 }
 
 /**
- * Reject a submitted payment proof (SRS §8.3 step 6). Records the reason and
- * notifies the client so they can re-upload (a rejected first installment sends
- * them back through the onboarding payment step).
+ * Reject a submitted payment proof (SRS §8.3 step 6). MISC-1: the rejected
+ * proof document link is kept for the audit trail (rejectPaymentProof).
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
@@ -34,16 +34,12 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const installment = await prisma.installment.findUnique({
     where: { id: installmentId },
-    include: {
-      clientPlan: {
-        select: { client: { select: { id: true, userId: true } } },
-      },
+    select: {
+      id: true,
+      clientPlan: { select: { client: { select: { id: true, userId: true } } } },
     },
   });
   if (!installment) return json(req, { error: "Installment not found" }, 404);
-  if (installment.status !== "proof_submitted") {
-    return json(req, { error: "Only a submitted proof can be rejected" }, 409);
-  }
 
   const client = installment.clientPlan.client;
   if (authUser.role === "cro") {
@@ -54,14 +50,16 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (!assigned) return json(req, { error: "You are not assigned to this client" }, 403);
   }
 
-  await prisma.installment.update({
-    where: { id: installment.id },
-    data: {
-      status: "rejected",
-      rejectionReason: reason.trim(),
-      proofDocumentId: null,
-    },
-  });
+  try {
+    await rejectPaymentProof({ installmentId, reason, actorId: authUser.id });
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (msg === "NOT_FOUND") return json(req, { error: "Installment not found" }, 404);
+    if (msg === "NOT_SUBMITTED") {
+      return json(req, { error: "Only a submitted proof can be rejected" }, 409);
+    }
+    throw e;
+  }
 
   if (client.userId) {
     await notifyUsers([client.userId], {

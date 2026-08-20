@@ -1,13 +1,24 @@
 # For detailed configuration reference documentation, visit:
 # https://supabase.com/docs/guides/local-development/cli/config
+#
+# GTB OS runs its OWN local Supabase stack, side-by-side with any other
+# Supabase project on this machine. It is fully isolated:
+#   - project_id "gtb"  → containers/volumes are named supabase_*_gtb and the
+#     docker network is supabase_network_gtb (never *_indexer or *_db).
+#   - All ports live in the 544xx range (API 54421 … analytics 54426) so they
+#     never collide with another project's default 5432x stack or the GTB test
+#     database on 54329 (tests/gtb-test-db container).
+# Start/stop from the repo root:  supabase start
+#   supabase status  → shows URL + anon + service_role keys (refresh .env from here)
+#   supabase stop    → stops, KEEPS data  ·  supabase stop --no-backup → wipes
 # A string used to distinguish different Supabase projects on the same host. Defaults to the
 # working directory name when running `supabase init`.
-project_id = "db"
+project_id = "gtb"
 
 [api]
 enabled = true
 # Port to use for the API URL.
-port = 54321
+port = 54421
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
 schemas = ["public", "graphql_public"]
@@ -32,9 +43,9 @@ enabled = false
 
 [db]
 # Port to use for the local database URL.
-port = 54322
+port = 54422
 # Port used by db diff command to initialize the shadow database.
-shadow_port = 54320
+shadow_port = 54423
 # Maximum amount of time to wait for health check when starting the local database.
 health_timeout = "2m"
 # The database major version to use. This has to be the same as your remote database's. Run `SHOW
@@ -44,7 +55,7 @@ major_version = 17
 [db.pooler]
 enabled = false
 # Port to use for the local connection pooler.
-port = 54329
+port = 54429
 # Specifies when a server connection can be reused by other clients.
 # Configure one of the supported pooler modes: `transaction`, `session`.
 pool_mode = "transaction"
@@ -64,11 +75,8 @@ enabled = true
 schema_paths = []
 
 [db.seed]
-# If enabled, seeds the database after migrations during a db reset.
-enabled = true
-# Specifies an ordered list of seed files to load during db reset.
-# Supports glob patterns relative to supabase directory: "./seeds/*.sql"
-sql_paths = ["./seed.sql"]
+# GTB seeds its data via Prisma (`pnpm --filter @gtb/db seed`) — no Supabase SQL seed.
+enabled = false
 
 [db.network_restrictions]
 # Enable management of network restrictions.
@@ -94,9 +102,9 @@ enabled = true
 [studio]
 enabled = true
 # Port to use for Supabase Studio.
-port = 54323
+port = 54424
 # External URL of the API server that frontend connects to.
-api_url = "http://127.0.0.1"
+api_url = "http://127.0.0.1:54421"
 # OpenAI API Key to use for Supabase AI in the Supabase Studio.
 openai_api_key = "env(OPENAI_API_KEY)"
 
@@ -105,7 +113,7 @@ openai_api_key = "env(OPENAI_API_KEY)"
 [inbucket]
 enabled = true
 # Port to use for the email testing server web interface.
-port = 54324
+port = 54425
 # Uncomment to expose additional ports for testing user applications that send emails.
 # smtp_port = 54325
 # pop3_port = 54326
@@ -156,11 +164,11 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://localhost:5173"
+site_url = "http://localhost:5175"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["http://localhost:5173", "http://localhost:5173/portal/register"]
+additional_redirect_urls = ["http://localhost:5175", "http://localhost:5175/portal/register"]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -378,7 +386,7 @@ enabled = true
 # `oneshot` — fallback mode if hot reload causes issues (e.g. in large repos or with symlinks).
 policy = "per_worker"
 # Port to attach the Chrome inspector for debugging edge functions.
-inspector_port = 8083
+inspector_port = 8084
 # The Deno major version to use.
 deno_version = 2
 
@@ -387,7 +395,7 @@ deno_version = 2
 
 [analytics]
 enabled = true
-port = 54327
+port = 54426
 # Configure one of the supported backends: `postgres`, `bigquery`.
 backend = "postgres"
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Sparkles, UserCheck } from "lucide-react";
 import { useFindManyClient, useFindManyUser, useFindManyAssignment } from "@gtb/db/hooks";
@@ -33,6 +33,9 @@ interface ClientRow {
   conversionDate: string | Date | null;
   clientPlan: {
     planNameSnapshot: string;
+    // SYS-4: the service rules snapshotted at enrollment drive the assignable
+    // roles; the live plan is only a fallback for pre-snapshot enrollments.
+    servicesSnapshot: unknown;
     plan: { services: { serviceType: string }[] };
   } | null;
   assignments: ActiveAssignment[];
@@ -130,10 +133,14 @@ function ClientAssignmentCard({
     return m;
   }, [client.assignments]);
 
-  const serviceTypes = useMemo(
-    () => [...new Set(client.clientPlan?.plan.services.map((s) => s.serviceType) ?? [])],
-    [client.clientPlan],
-  );
+  const serviceTypes = useMemo(() => {
+    const snapshot = client.clientPlan?.servicesSnapshot as
+      | { serviceType: string }[]
+      | null
+      | undefined;
+    const services = snapshot ?? client.clientPlan?.plan.services ?? [];
+    return [...new Set(services.map((s) => s.serviceType))];
+  }, [client.clientPlan]);
 
   const slots = useMemo(
     () => [
@@ -147,6 +154,13 @@ function ClientAssignmentCard({
   );
 
   const [sel, setSel] = useState<Record<string, string>>(currentByRole);
+  // Re-sync the selects when the server state changes (e.g. after save +
+  // refetch) — otherwise the UI can show a stale team until remount.
+  const currentKey = JSON.stringify(currentByRole);
+  useEffect(() => {
+    setSel(currentByRole);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentKey]);
   const [saving, setSaving] = useState(false);
   const [activating, setActivating] = useState(false);
   const [error, setError] = useState<string>();
@@ -161,9 +175,10 @@ function ClientAssignmentCard({
     setError(undefined);
     setDone(undefined);
     try {
-      const payload = slots
-        .filter((s) => sel[s.role])
-        .map((s) => ({ role: s.role, staffId: sel[s.role]! }));
+      // CALC-9: send EVERY slot — cleared slots as explicit nulls so the
+      // server deactivates them (previously they were dropped from the
+      // payload and unassignment silently did nothing).
+      const payload = slots.map((s) => ({ role: s.role, staffId: sel[s.role] ?? null }));
       await assignTeam(client.id, payload);
       setDone("Team saved.");
       onChanged();

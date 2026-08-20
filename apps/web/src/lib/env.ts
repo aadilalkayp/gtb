@@ -10,7 +10,7 @@ interface Env {
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL ?? "";
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
-const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3005";
 
 export const env: Env = {
   supabaseUrl,

@@ -213,14 +213,14 @@ enum ActivityAction {
 /// via authId. Staff rows have a staff role; client rows have role = client and
 /// a 1:1 Client profile.
 model User {
-  id        String  @id @default(uuid())
-  authId    String? @unique // Supabase auth uid; null until first login/registration
-  email     String  @unique
+  id        String  @id @default(uuid()) @deny('update', true)
+  authId    String? @unique @deny('read', auth().role != founder && auth().role != ops_head && auth().role != cro && auth().role != coach && auth().role != skincare_consultant && auth().role != fitness_trainer && auth().role != styling_consultant && auth().role != media) // Supabase auth uid; null until first login/registration
+  email     String  @unique @deny('update', auth().id == id && auth().role != founder) @deny('read', auth().role != founder && auth().role != ops_head && auth().role != cro && auth().role != coach && auth().role != skincare_consultant && auth().role != fitness_trainer && auth().role != styling_consultant && auth().role != media)
   name      String
-  phone     String?
-  role      Role
+  phone     String? @deny('read', auth().role != founder && auth().role != ops_head && auth().role != cro && auth().role != coach && auth().role != skincare_consultant && auth().role != fitness_trainer && auth().role != styling_consultant && auth().role != media)
+  role      Role @deny('update', auth().id == id && auth().role != founder)
   avatarUrl String?
-  isActive  Boolean @default(true)
+  isActive  Boolean @default(true) @deny('update', auth().id == id && auth().role != founder)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -257,9 +257,13 @@ model User {
   @@allow('read', auth() != null && (role == founder || role == ops_head || role == cro || role == coach || role == skincare_consultant || role == fitness_trainer || role == styling_consultant || role == media))
   @@allow('read', auth().role == founder || auth().role == ops_head)
   // Only the founder manages user accounts; users may update their own profile
-  // (the API restricts which fields self-update can touch).
-  @@allow('create,delete', auth().role == founder)
+  // (name/phone/avatarUrl only — privileged fields are founder-only).
+  @@allow('create', auth().role == founder)
   @@allow('update', auth().role == founder || auth().id == id)
+  // authId is nullable, and ZenStack field-level denies don't reliably fire on
+  // optional fields — so the auth-row hijack guard also lives at model level
+  // (post-update: fires only when the field actually changes).
+  @@deny('update', auth().id == id && auth().role != founder && future().authId != authId)
 }
 
 // ============================================================================
@@ -267,31 +271,33 @@ model User {
 // ============================================================================
 
 model Client {
-  id                String        @id @default(uuid())
-  clientCode        String        @unique // human-friendly, e.g. "GTB1256"
+  id                String        @id @default(uuid()) @deny('update', true)
+  clientCode        String        @unique @deny('update', userId != null && userId == auth().id) // human-friendly, e.g. "GTB1256"
   name              String
   phone             String
-  email             String
-  type              ClientType
-  weddingDate       DateTime
-  city              String
-  status            ClientStatus  @default(lead)
+  email             String @deny('update', userId != null && userId == auth().id)
+  type              ClientType @deny('update', userId != null && userId == auth().id)
+  // Wedding-date changes must recalculate the session schedule (SRS §24.1), so
+  // the only writer is the clients/wedding-date server route — never the gateway.
+  weddingDate       DateTime @deny('update', true)
+  city              String @deny('update', userId != null && userId == auth().id)
+  status            ClientStatus  @default(lead) @deny('update', userId != null && userId == auth().id)
   leadPhase         LeadPhase     @default(new)
   avatarUrl         String?
-  notes             String?
-  cancellationReason String?
-  onHoldReason      String?
+  notes             String? @deny('update', userId != null && userId == auth().id)
+  cancellationReason String? @deny('update', userId != null && userId == auth().id)
+  onHoldReason      String? @deny('update', userId != null && userId == auth().id)
 
   // Auth link (null while a pre-registration lead)
-  userId String? @unique
+  userId String? @unique @deny('update', userId != null && userId == auth().id)
   user   User?   @relation("ClientUser", fields: [userId], references: [id])
 
   // Sales
-  leadSourceId   String?
+  leadSourceId   String? @deny('update', userId != null && userId == auth().id)
   leadSource     LeadSource? @relation(fields: [leadSourceId], references: [id])
-  convertedById  String?
+  convertedById  String? @deny('update', userId != null && userId == auth().id)
   convertedBy    User?       @relation("ConvertedBy", fields: [convertedById], references: [id])
-  conversionDate DateTime?
+  conversionDate DateTime? @deny('update', userId != null && userId == auth().id)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -317,48 +323,68 @@ model Client {
   @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro)
   @@allow('update', auth().role == founder || auth().role == ops_head)
   @@allow('update', assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
-  @@allow('update', userId == auth().id) // self; API whitelists fields
-  @@allow('delete', auth().role == founder)
+  // Client self-service: profile fields (name/phone/avatarUrl) and forward-only
+  // leadPhase transitions (SEC-3). Never status/clientCode/conversionDate etc.
+  @@allow('update',
+    userId == auth().id && (
+      future().leadPhase == leadPhase ||
+      (future().leadPhase == contacted && leadPhase == new) ||
+      (future().leadPhase == invited && (leadPhase == new || leadPhase == contacted)) ||
+      (future().leadPhase == registered && (leadPhase == new || leadPhase == contacted || leadPhase == invited)) ||
+      (future().leadPhase == plan_selected && (leadPhase == new || leadPhase == contacted || leadPhase == invited || leadPhase == registered)) ||
+      (future().leadPhase == payment_submitted && (leadPhase == new || leadPhase == contacted || leadPhase == invited || leadPhase == registered || leadPhase == plan_selected))
+    ))
+  // DATA-1: no hard deletes — client data is retained for reporting (SRS §24.3);
+  // "removal" is the cancellation cascade (clients/cancel).
+  // The auth link is server-managed (clients/invite + auth resolution): no
+  // gateway caller may relink a client record to a different User (the gateway
+  // analogue of SEC-8 — an assigned CRO could otherwise hand a staff account
+  // every client-ownership grant). userId is nullable, so this lives at model
+  // level (field denies don't reliably fire on optional fields).
+  @@deny('update', future().userId != userId)
 }
 
 /// Full onboarding assessment (SRS §6.2). 1:1 with Client.
+// SEC-17: fields carry @allow('update') scoping which service's staff (or the
+// owning client) may write them; the client owns the whole form, consultants
+// are limited to their own service's fields, completedAt is client/admin-only.
 model Assessment {
-  id       String @id @default(uuid())
-  clientId String @unique
-  client   Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id       String @id @default(uuid()) @deny('update', true)
+  clientId String @unique @deny('update', true)
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
 
   // General
-  age             Int?
-  gender          String?
-  profilePhotoUrl String?
+  age             Int? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
+  gender          String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
+  profilePhotoUrl String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
 
   // Skincare
-  skinType            String?
-  skinConcerns        String[]
-  skincareRoutine     String?
-  allergies           String?
-  dermatologicalNotes String?
+  skinType            String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
+  skinConcerns        String[] @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
+  skincareRoutine     String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
+  allergies           String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
+  dermatologicalNotes String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
 
   // Fitness
-  heightCm         Int?
-  weightKg         Float?
-  fitnessLevel     String?
-  healthConditions String?
-  dietaryPreference String?
-  fitnessGoals     String[]
+  heightCm         Int? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
+  weightKg         Float? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
+  fitnessLevel     String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
+  healthConditions String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
+  dietaryPreference String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
+  fitnessGoals     String[] @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
 
   // Styling
-  bodyType          String?
-  stylePreferences  String[]
-  outfitBudgetRange String?
-  colorPreferences  String?
-  stylingNotes      String?
+  bodyType          String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
+  stylePreferences  String[] @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
+  outfitBudgetRange String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
+  colorPreferences  String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
+  stylingNotes      String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
 
   // Photos
-  fullBodyPhotoUrl String?
-  facePhotoUrl     String?
+  fullBodyPhotoUrl String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
+  facePhotoUrl     String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
 
-  completedAt DateTime?
+  completedAt DateTime? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -371,15 +397,16 @@ model Assessment {
 }
 
 model LeadSource {
-  id        String   @id @default(uuid())
+  id        String   @id @default(uuid()) @deny('update', true)
   name      String   @unique
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
 
   clients Client[]
 
-  @@allow('read', auth() != null)
-  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  // Marketing-channel names are internal — staff only (clients never pick one).
+  @@allow('read', auth() != null && auth().role != client)
+  @@allow('create,update', auth().role == founder || auth().role == ops_head)
 }
 
 // ============================================================================
@@ -387,7 +414,7 @@ model LeadSource {
 // ============================================================================
 
 model Plan {
-  id              String     @id @default(uuid())
+  id              String     @id @default(uuid()) @deny('update', true)
   name            String
   clientType      ClientType
   durationMonths  Int
@@ -402,13 +429,15 @@ model Plan {
   services    PlanService[]
   clientPlans ClientPlan[]
 
-  // Everyone authenticated can read plans (clients browse them at onboarding).
-  @@allow('read', auth() != null)
+  // Everyone authenticated can read plans (clients browse them at onboarding);
+  // clients see active plans only — inactive plans and their pricing stay
+  // internal (SEC-14).
+  @@allow('read', auth() != null && (auth().role != client || isActive))
   @@allow('create,update,delete', auth().role == founder)
 }
 
 model PlanService {
-  id             String      @id @default(uuid())
+  id             String      @id @default(uuid()) @deny('update', true)
   planId         String
   plan           Plan        @relation(fields: [planId], references: [id], onDelete: Cascade)
   serviceType    ServiceType
@@ -417,20 +446,26 @@ model PlanService {
   frequencyDays  Int?        // null => only first session auto-scheduled (e.g. styling)
   notes          String?
 
-  @@allow('read', auth() != null)
+  // Mirror the Plan read rule (SEC-14): clients must not enumerate the service
+  // composition of inactive plans or the opposite client type's offering.
+  @@allow('read', auth() != null && (auth().role != client || plan.isActive))
   @@allow('create,update,delete', auth().role == founder)
 }
 
 /// A client's enrollment in a plan (1:1 — one active plan per client, SRS A9).
 model ClientPlan {
-  id               String   @id @default(uuid())
-  clientId         String   @unique
-  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id               String   @id @default(uuid()) @deny('update', true)
+  clientId         String   @unique @deny('update', true)
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
   planId           String
   plan             Plan     @relation(fields: [planId], references: [id])
   planNameSnapshot String   // plan name captured at enrollment
   priceAtEnrollment Int
   durationMonths   Int
+  // SYS-4: the service rules captured at enrollment, so editing a plan never
+  // retroactively changes an enrolled client's schedule or assignable roles.
+  // JSON array of { serviceType, totalSessions, startOffsetDays, frequencyDays }.
+  servicesSnapshot Json?
   enrolledAt       DateTime @default(now())
 
   installments Installment[]
@@ -438,40 +473,60 @@ model ClientPlan {
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', client.assignments?[staffId == auth().id && isActive])
   @@allow('read', client.userId == auth().id)
-  @@allow('create,update', auth().role == founder || auth().role == ops_head || auth().role == cro)
+  // Enrollment happens exclusively through the clients/enroll server route
+  // (price + services snapshotted server-side). Gateway writes are admin-only
+  // correction paths — a CRO could otherwise rewrite priceAtEnrollment or the
+  // SYS-4 servicesSnapshot on any enrollment in the business.
+  @@allow('create,update', auth().role == founder || auth().role == ops_head)
 }
 
 model Installment {
-  id                String            @id @default(uuid())
-  clientPlanId      String
-  clientPlan        ClientPlan        @relation(fields: [clientPlanId], references: [id], onDelete: Cascade)
-  installmentNumber Int
-  amount            Int
-  dueDate           DateTime
+  id                String            @id @default(uuid()) @deny('update', true)
+  clientPlanId      String @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  clientPlan        ClientPlan        @relation(fields: [clientPlanId], references: [id], onDelete: Restrict)
+  installmentNumber Int @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  amount            Int @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  dueDate           DateTime @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
   status            InstallmentStatus @default(pending)
-  paymentMethod     PaymentMethod?
+  paymentMethod     PaymentMethod? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
   proofDocumentId   String?           @unique
   proofDocument     Document?         @relation("InstallmentProof", fields: [proofDocumentId], references: [id])
-  approvedById      String?
+  approvedById      String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
   approvedBy        User?             @relation("InstallmentApprover", fields: [approvedById], references: [id])
-  approvedAt        DateTime?
-  rejectionReason   String?
-  notes             String?
+  approvedAt        DateTime? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  rejectionReason   String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  notes             String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // STATE-4: the DB backstop for the double-approval race — an installment can
+  // only ever be approved once per (plan, number).
+  @@unique([clientPlanId, installmentNumber])
   @@index([status])
   @@index([dueDate])
+  // DATA-5: Postgres doesn't auto-index FKs; payment pages filter by plan.
+  @@index([clientPlanId])
 
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', clientPlan.client.assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
   @@allow('read', clientPlan.client.userId == auth().id)
-  @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro)
-  // CRO/admins approve or reject; the client may update to attach a proof
-  // (API restricts the client to proof_submitted + proofDocument).
-  @@allow('update', auth().role == founder || auth().role == ops_head || auth().role == cro)
-  @@allow('update', clientPlan.client.userId == auth().id)
+  // Writes mirror the read scope: a CRO touches only installments of clients
+  // they are actively assigned to — never arbitrary plans across the business.
+  @@allow('create', auth().role == founder || auth().role == ops_head)
+  @@allow('create', auth().role == cro && clientPlan.client.assignments?[staffId == auth().id && isActive && role == cro])
+  @@allow('update', auth().role == founder || auth().role == ops_head)
+  @@allow('update', auth().role == cro && clientPlan.client.assignments?[staffId == auth().id && isActive && role == cro])
+  // A CRO approving through the gateway cannot attribute the approval to
+  // someone else. Expressed against the post-write value only — comparing with
+  // the nullable pre-value trips ZenStack's null-comparison semantics and
+  // denies legitimate first approvals.
+  @@deny('update', auth().role == cro && future().approvedById != null && future().approvedById != auth().id)
+  // Clients have NO gateway write path: proof submission goes exclusively
+  // through the payments/submit-proof server route, which validates that the
+  // proof document belongs to the client and advances leadPhase atomically
+  // (SEC-2 + STATE-6 — a gateway path would let a client attach any document
+  // id, including another client's, as their payment proof).
 }
 
 // ============================================================================
@@ -479,9 +534,9 @@ model Installment {
 // ============================================================================
 
 model Assignment {
-  id           String         @id @default(uuid())
+  id           String         @id @default(uuid()) @deny('update', true)
   clientId     String
-  client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   staffId      String
   staff        User           @relation("StaffAssignments", fields: [staffId], references: [id])
   role         AssignmentRole
@@ -508,13 +563,16 @@ model Assignment {
 model Session {
   id            String        @id @default(uuid())
   clientId      String
-  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   serviceType   ServiceType
   consultantId  String?
   consultant    User?         @relation("ConsultantSessions", fields: [consultantId], references: [id])
   sessionNumber Int
   scheduledDate DateTime
   actualDate    DateTime?
+  // DATA-2: the first-scheduled date, preserved once a reschedule happens
+  // (SRS §9.4 "Original scheduled date is preserved in history for reporting").
+  originalScheduledDate DateTime?
   status        SessionStatus @default(scheduled)
   notes         String?
   rating        Int?          // 1-5, set by client
@@ -526,6 +584,10 @@ model Session {
   documents        Document[]
   stylingOperation StylingOperation?
 
+  // STATE-2: the DB backstop for the double-activation race — a session number
+  // per service can only exist once per client.
+  @@unique([clientId, serviceType, sessionNumber])
+
   @@index([clientId])
   @@index([consultantId])
   @@index([scheduledDate])
@@ -536,11 +598,20 @@ model Session {
   @@allow('read', client.assignments?[staffId == auth().id && isActive])
   @@allow('read', client.userId == auth().id)
   @@allow('create', auth().role == founder || auth().role == ops_head)
-  // Consultant updates their own sessions (complete, notes); admins update any;
-  // client updates only to leave a rating (API restricts fields).
+  // Session mutation is server-route-only for everyone below admin. ZenStack
+  // 2.22 cannot express field restrictions on this model (field-level denies
+  // and pre/post-update status references break ALL Session updates — runtime
+  // bug, see REMEDIATION_PLAN.md notes), so any gateway grant is an
+  // every-field grant. A consultant gateway path let consultants self-award
+  // ratings, self-complete sessions (skipping the payout expense + audit in
+  // sessions/complete), and rewrite clientId/scheduledDate. Consultants act
+  // through the server routes instead: sessions/complete, sessions/reschedule,
+  // sessions/cancel. Clients rate via sessions/rate (ownership + completed +
+  // 1-5 validated server-side; range also DB CHECK-enforced).
   @@allow('update', auth().role == founder || auth().role == ops_head)
-  @@allow('update', consultantId == auth().id)
-  @@allow('update', client.userId == auth().id)
+  // Record ids are immutable (SEC-19; model-level because field-level denies
+  // are unsafe on this model).
+  @@deny('update', future().id != id)
 }
 
 // ============================================================================
@@ -548,10 +619,13 @@ model Session {
 // ============================================================================
 
 model FollowUp {
-  id            String         @id @default(uuid())
-  clientId      String
-  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  croId         String
+  id            String         @id @default(uuid()) @deny('update', true)
+  // A follow-up never moves to another client, and only admins may reattribute
+  // it to a different CRO — a CRO could otherwise create-then-update past the
+  // SEC-16 assignment guard, or dump completion credit on a colleague.
+  clientId      String @deny('update', true)
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  croId         String @deny('update', auth().role != founder && auth().role != ops_head)
   cro           User           @relation("CroFollowUps", fields: [croId], references: [id])
   type          FollowUpType
   dueDate       DateTime
@@ -568,8 +642,12 @@ model FollowUp {
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', croId == auth().id)
   @@allow('read', client.assignments?[staffId == auth().id && isActive && role == coach])
-  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
-  @@allow('create,update', croId == auth().id)
+  @@allow('create', auth().role == founder || auth().role == ops_head)
+  // A CRO may only create follow-ups for a client they are actively assigned to
+  // (SEC-16), never for arbitrary clients.
+  @@allow('create', croId == auth().id && client.assignments?[staffId == auth().id && isActive && role == cro])
+  @@allow('update', auth().role == founder || auth().role == ops_head)
+  @@allow('update', croId == auth().id)
   @@allow('update', client.assignments?[staffId == auth().id && isActive && role == coach])
 }
 
@@ -578,9 +656,9 @@ model FollowUp {
 // ============================================================================
 
 model StylingOperation {
-  id              String        @id @default(uuid())
-  clientId        String
-  client          Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  id              String        @id @default(uuid()) @deny('update', true)
+  clientId        String @deny('update', true)
+  client          Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   sessionId       String?       @unique
   session         Session?      @relation(fields: [sessionId], references: [id])
   stylistId       String?
@@ -616,6 +694,10 @@ model StylingOperation {
   @@allow('create,delete', auth().role == founder || auth().role == ops_head)
   @@allow('update', auth().role == founder || auth().role == ops_head)
   @@allow('update', stylistId == auth().id)
+  // The assigned stylist works the checklist/status — they don't relink the
+  // operation to another session or hand it to a different stylist (both
+  // nullable FKs, so the guards are model-level).
+  @@deny('update', auth().role != founder && auth().role != ops_head && (future().sessionId != sessionId || future().stylistId != stylistId))
 }
 
 // ============================================================================
@@ -625,7 +707,7 @@ model StylingOperation {
 model Document {
   id           String       @id @default(uuid())
   clientId     String
-  client       Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client       Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   type         DocumentType
   fileName     String
   fileUrl      String
@@ -642,13 +724,20 @@ model Document {
 
   @@index([clientId])
   @@index([type])
+  // DATA-5: session-scoped document lookups (pending-upload checks).
+  @@index([sessionId])
 
   @@allow('read', auth().role == founder || auth().role == ops_head)
-  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  // Assigned staff see client documents, except the financial types that are
+  // restricted by SRS §16.1: payment_proof is CRO/Ops/Founder only,
+  // expense_receipt is Ops/Founder only (SEC-10).
+  @@allow('read', client.assignments?[staffId == auth().id && isActive] && (type != payment_proof || auth().role == cro) && type != expense_receipt)
   // Client sees own documents except internal consultation notes.
   @@allow('read', client.userId == auth().id && type != consultation_notes)
-  @@allow('create', auth() != null)
-  @@allow('delete', auth().role == founder || auth().role == ops_head || uploadedById == auth().id)
+  // Gateway creates are intentionally not allowed: every Document row must be
+  // created by the server upload route, which validates ownership and builds a
+  // traversal-safe storage key (SEC-5). Deletes are admin-only.
+  @@allow('delete', auth().role == founder || auth().role == ops_head)
 }
 
 // ============================================================================
@@ -657,7 +746,7 @@ model Document {
 
 /// Per-session fee for a consultant, optionally specific to a service type.
 model ConsultantRate {
-  id          String      @id @default(uuid())
+  id          String      @id @default(uuid()) @deny('update', true)
   userId      String
   user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   serviceType ServiceType
@@ -671,7 +760,7 @@ model ConsultantRate {
 }
 
 model ExpenseCategory {
-  id        String    @id @default(uuid())
+  id        String    @id @default(uuid()) @deny('update', true)
   name      String    @unique
   isActive  Boolean   @default(true)
   createdAt DateTime  @default(now())
@@ -683,7 +772,7 @@ model ExpenseCategory {
 }
 
 model Expense {
-  id                String        @id @default(uuid())
+  id                String        @id @default(uuid()) @deny('update', true)
   categoryId        String
   category          ExpenseCategory @relation(fields: [categoryId], references: [id])
   title             String
@@ -698,24 +787,36 @@ model Expense {
   payeeId           String?
   payee             User?         @relation("ExpensePayee", fields: [payeeId], references: [id])
   sessionId         String?
-  status            ExpenseStatus @default(submitted)
-  approvedById      String?
+  status            ExpenseStatus @default(submitted) @deny('update', submittedById == auth().id && auth().role != founder && auth().role != ops_head)
+  approvedById      String? @deny('update', submittedById == auth().id && auth().role != founder && auth().role != ops_head)
   approvedBy        User?         @relation("ExpenseApprover", fields: [approvedById], references: [id])
-  approvedAt        DateTime?
+  approvedAt        DateTime? @deny('update', submittedById == auth().id && auth().role != founder && auth().role != ops_head)
   receiptDocumentId String?       @unique
   receiptDocument   Document?     @relation("ExpenseReceipt", fields: [receiptDocumentId], references: [id])
   notes             String?
+  // FEAT-10: the rejector's reason lives here — it never overwrites the
+  // submitter's notes.
+  rejectionReason   String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([date])
+  // DATA-5: FK indexes for payout summaries (grouped by payee/submitter) and
+  // client/category expense filters.
+  @@index([submittedById])
+  @@index([payeeId])
+  @@index([clientId])
+  @@index([categoryId])
 
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', submittedById == auth().id || payeeId == auth().id)
   // Any staff member may submit an expense (clients may not).
   @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro || auth().role == coach || auth().role == skincare_consultant || auth().role == fitness_trainer || auth().role == styling_consultant || auth().role == media)
+  // SEC-6: only admins may create an expense that is not a self-submitted draft —
+  // no pre-approved expenses, no spoofed submitter.
+  @@deny('create', auth().role != founder && auth().role != ops_head && (status != submitted || submittedById != auth().id || approvedById != null || approvedAt != null))
   @@allow('update', auth().role == founder || auth().role == ops_head)
   // Submitter may edit their own expense while it is still pending submission.
   @@allow('update', submittedById == auth().id && status == submitted)
@@ -727,7 +828,7 @@ model Expense {
 // ============================================================================
 
 model ContentItem {
-  id          String          @id @default(uuid())
+  id          String          @id @default(uuid()) @deny('update', true)
   title       String
   contentType ContentType
   campaign    Campaign
@@ -743,7 +844,11 @@ model ContentItem {
 
   @@index([status])
 
-  @@allow('all', auth().role == founder || auth().role == media)
+  // The media team collaborates on the board (any media user moves cards), but
+  // destroying the content calendar is founder-only — 'all' handed every media
+  // account delete-everything rights.
+  @@allow('read,create,update', auth().role == founder || auth().role == media)
+  @@allow('delete', auth().role == founder)
 }
 
 // ============================================================================
@@ -751,12 +856,17 @@ model ContentItem {
 // ============================================================================
 
 model Task {
-  id           String       @id @default(uuid())
+  id           String       @id @default(uuid()) @deny('update', true)
   title        String
   description  String?
-  assignedToId String
+  // The assignee works the task; only admins or the creator move it to someone
+  // else — an assignee could otherwise dump work on a colleague.
+  assignedToId String @deny('update', auth().role != founder && auth().role != ops_head && assignedById != auth().id)
   assignedTo   User         @relation("TaskAssignee", fields: [assignedToId], references: [id])
-  assignedById String
+  // The creator attribution is immutable: an assignee rewriting it to
+  // themselves would acquire delete rights, and rewriting it to the founder
+  // forges "assigned by the founder".
+  assignedById String @deny('update', true)
   assignedBy   User         @relation("TaskCreator", fields: [assignedById], references: [id])
   clientId     String?
   client       Client?      @relation(fields: [clientId], references: [id])
@@ -768,13 +878,22 @@ model Task {
   completedAt DateTime?
 
   @@index([assignedToId, status])
+  @@index([clientId])
+  @@index([dueDate])
 
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', assignedToId == auth().id || assignedById == auth().id)
-  // Any staff member may create/assign tasks (clients may not).
+  // Any staff member may create/assign tasks (clients may not) — but always as
+  // themselves: a spoofed assignedById makes a task appear to come from the
+  // founder (same class as SEC-6's submittedById guard).
   @@allow('create', auth().role == founder || auth().role == ops_head || auth().role == cro || auth().role == coach || auth().role == skincare_consultant || auth().role == fitness_trainer || auth().role == styling_consultant || auth().role == media)
+  @@deny('create', auth().role != founder && auth().role != ops_head && assignedById != auth().id)
   @@allow('update', auth().role == founder || auth().role == ops_head)
   @@allow('update', assignedToId == auth().id || assignedById == auth().id)
+  // clientId is nullable, so its immutability guard is model-level: repointing
+  // a task at a client the caller has no access to leaks that client's name
+  // into their board.
+  @@deny('update', auth().role != founder && auth().role != ops_head && future().clientId != clientId)
   @@allow('delete', assignedById == auth().id || auth().role == founder || auth().role == ops_head)
 }
 
@@ -783,11 +902,14 @@ model Task {
 // ============================================================================
 
 model Notification {
-  id       String  @id @default(uuid())
-  userId   String
+  id       String  @id @default(uuid()) @deny('update', true)
+  // userId is immutable: re-pointing one's own notification at another user
+  // plants a trusted, system-looking message in the victim's feed (phishing
+  // primitive). Content fields are server-written and equally immutable.
+  userId   String @deny('update', true)
   user     User    @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
-  type     String
-  title    String
+  type     String @deny('update', true)
+  title    String @deny('update', true)
   body     String?
   linkPath String?
   isRead   Boolean @default(false)
@@ -797,8 +919,10 @@ model Notification {
   @@index([userId, isRead])
 
   // Notifications are created by the server (unenhanced client); users read and
-  // mark their own as read.
+  // mark their own as read. The only user-writable field is isRead — body and
+  // linkPath are nullable, so their immutability guard is model-level.
   @@allow('read,update', userId == auth().id)
+  @@deny('update', future().body != body || future().linkPath != linkPath)
   @@allow('delete', userId == auth().id)
 }
 

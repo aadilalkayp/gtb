@@ -25,7 +25,14 @@ export const env = {
     password: process.env.MAILGUN_SMTP_PASSWORD ?? "",
     from: process.env.MAIL_FROM ?? "GTB OS <no-reply@example.com>",
   },
-  webOrigin: (process.env.WEB_ORIGIN ?? "http://localhost:5173").split(",").map((o) => o.trim()),
-  webPublicUrl: process.env.WEB_PUBLIC_URL ?? "http://localhost:5173",
-  apiPublicUrl: process.env.API_PUBLIC_URL ?? "http://localhost:3001",
+  // SEC-13: the web origin must be explicitly configured in production — a
+  // localhost default would silently lock the app to the wrong host.
+  webOrigin:
+    process.env.NODE_ENV === "production" && !process.env.WEB_ORIGIN
+      ? (() => {
+          throw new Error("Missing required env var: WEB_ORIGIN");
+        })()
+      : (process.env.WEB_ORIGIN ?? "http://localhost:5175").split(",").map((o) => o.trim()),
+  webPublicUrl: process.env.WEB_PUBLIC_URL ?? "http://localhost:5175",
+  apiPublicUrl: process.env.API_PUBLIC_URL ?? "http://localhost:3005",
 } as const;

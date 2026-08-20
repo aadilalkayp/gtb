@@ -56,7 +56,8 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 export interface InviteResult {
   ok: boolean;
   emailed: boolean;
-  registrationUrl: string;
+  /** Present only as a dev fallback when mail is not configured (SEC-9). */
+  registrationUrl?: string;
   warning?: string;
   mailError?: string;
 }
@@ -96,6 +97,14 @@ export function rejectPayment(installmentId: string, reason: string): Promise<{ 
   return postJson("/api/payments/reject", { installmentId, reason });
 }
 
+/** Client submits a payment proof — advances leadPhase atomically (STATE-6). */
+export function submitPaymentProof(
+  installmentId: string,
+  proofDocumentId: string,
+): Promise<{ ok: boolean }> {
+  return postJson("/api/payments/submit-proof", { installmentId, proofDocumentId });
+}
+
 /** Create + invite a staff member (founder only). Also resends for pending staff. */
 export function inviteStaff(args: {
   name: string;
@@ -106,10 +115,10 @@ export function inviteStaff(args: {
   return postJson("/api/staff/invite", args);
 }
 
-/** Assign / reassign a client's team. */
+/** Assign / reassign a client's team. `staffId: null` clears the role. */
 export function assignTeam(
   clientId: string,
-  assignments: { role: string; staffId: string }[],
+  assignments: { role: string; staffId: string | null }[],
 ): Promise<{ ok: boolean }> {
   return postJson("/api/clients/assign", { clientId, assignments });
 }
@@ -119,6 +128,21 @@ export function activateClient(
   clientId: string,
 ): Promise<{ ok: boolean; sessionsCreated: number }> {
   return postJson("/api/clients/activate", { clientId });
+}
+
+/** Cancel a client (SYS-3): cancels future sessions, waives outstanding
+ *  installments, blocks portal login — one server transaction. */
+export function cancelClient(
+  clientId: string,
+  reason: string,
+  waiveOutstanding = true,
+): Promise<{ ok: boolean; sessionsCancelled: number; installmentsWaived: number }> {
+  return postJson("/api/clients/cancel", { clientId, reason, waiveOutstanding });
+}
+
+/** Complete a client (SYS-3): enforces all-closed sessions + settled payments. */
+export function completeClient(clientId: string): Promise<{ ok: boolean }> {
+  return postJson("/api/clients/complete", { clientId });
 }
 
 /** Mark a session completed (auto-creates the consultant payout, notifies client). */
@@ -132,6 +156,33 @@ export function completeSession(
 /** Reschedule a session to a new date (status → delayed, client notified). */
 export function rescheduleSession(sessionId: string, newDate: string): Promise<{ ok: boolean }> {
   return postJson("/api/sessions/reschedule", { sessionId, newDate });
+}
+
+/** Cancel a session or mark it missed (audit-logged; replaces the old gateway
+ *  status write, which Session policies no longer allow for consultants). */
+export function cancelSession(
+  sessionId: string,
+  outcome: "cancelled" | "missed",
+): Promise<{ ok: boolean }> {
+  return postJson("/api/sessions/cancel", { sessionId, outcome });
+}
+
+/** Change a client's wedding date (founder/ops): regenerates future sessions
+ *  from the enrollment snapshot and audit-logs the change (SRS §24.1). */
+export function updateWeddingDate(
+  clientId: string,
+  weddingDate: string,
+): Promise<{ ok: boolean; sessionsRescheduled: number }> {
+  return postJson("/api/clients/wedding-date", { clientId, weddingDate });
+}
+
+/** Client rates a completed session (server-validated, SRS §13.1). */
+export function rateSession(
+  sessionId: string,
+  rating: number,
+  ratingFeedback?: string,
+): Promise<{ ok: boolean; rating: number }> {
+  return postJson("/api/sessions/rate", { sessionId, rating, ratingFeedback });
 }
 
 /** Mint a short-lived signed URL to view a stored document. */

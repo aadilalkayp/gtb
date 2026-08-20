@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useUpdateInstallment, useUpdateClient } from "@gtb/db/hooks";
-import { formatINR, formatDate, LEAD_PHASE_ORDER, type LeadPhase } from "@gtb/shared";
+import { formatINR, formatDate } from "@gtb/shared";
+import { submitPaymentProof } from "@/lib/api";
 import { Button, StatusBadge } from "@/components/ui";
 import { FileUploadField } from "@/components/FileUploadField";
 import { cn } from "@/lib/utils";
@@ -25,8 +25,6 @@ export function PaymentStep({
   clientPlan: { planNameSnapshot: string; priceAtEnrollment: number; installments: Installment[] };
   onDone: () => void | Promise<void>;
 }) {
-  const updateInstallment = useUpdateInstallment();
-  const updateClient = useUpdateClient();
   const [doc, setDoc] = useState<UploadedDocument | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
@@ -42,16 +40,8 @@ export function PaymentStep({
     setSubmitting(true);
     setError(undefined);
     try {
-      await updateInstallment.mutateAsync({
-        where: { id: payable.id },
-        data: { status: "proof_submitted", proofDocumentId: doc.id },
-      });
-      if (LEAD_PHASE_ORDER[client.leadPhase as LeadPhase] < LEAD_PHASE_ORDER.payment_submitted) {
-        await updateClient.mutateAsync({
-          where: { id: client.id },
-          data: { leadPhase: "payment_submitted" },
-        });
-      }
+      // STATE-6: proof submission + leadPhase advance are atomic server-side.
+      await submitPaymentProof(payable.id, doc.id);
       await onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not submit your payment proof");

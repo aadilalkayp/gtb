@@ -5,9 +5,12 @@ export function corsHeaders(req: Request): Record<string, string> {
   const origin = req.headers.get("origin") ?? "";
   const isDev = process.env.NODE_ENV !== "production";
   const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-  // In dev, accept any localhost origin (Vite may use an auto-assigned port).
+  // SEC-13: only a configured origin (or a localhost origin in dev) is ever
+  // reflected. Unknown origins get the first configured origin, which the
+  // browser will refuse to honor — never `*`, never a reflected attacker origin,
+  // and credentials are only ever sent to an origin we explicitly trust.
   const allowed =
-    env.webOrigin.includes(origin) || (isDev && isLocalhost) ? origin : (env.webOrigin[0] ?? "*");
+    env.webOrigin.includes(origin) || (isDev && isLocalhost) ? origin : (env.webOrigin[0] ?? "");
   return {
     "Access-Control-Allow-Origin": allowed,
     "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { LoadMoreButton } from "@/components/LoadMoreButton";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, ChevronRight } from "lucide-react";
 import { useFindManyClient } from "@gtb/db/hooks";
@@ -15,6 +16,7 @@ import {
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
 import { Badge, Button, Modal, Spinner, StatusBadge } from "@/components/ui";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { InviteClientPanel } from "./InviteClientPanel";
 
 type StatusFilter = "all" | (typeof CLIENT_STATUSES)[number];
@@ -32,17 +34,27 @@ export function ClientsPage() {
   const staffRole = (role && role !== "client" ? role : null) as StaffRole | null;
   const canCreate = can(staffRole, "client.create");
 
-  const [filter, setFilter] = useState<StatusFilter>("all");
+  const [filter, setFilterState] = useState<StatusFilter>("all");
   const [invite, setInvite] = useState<InviteTarget | null>(null);
 
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  function setFilter(f: StatusFilter) {
+    setFilterState(f);
+    setPage(0); // a grown page size must not carry over to the next filter
+  }
   const {
     data: clients,
     isLoading,
+    isError,
+    error,
     refetch,
   } = useFindManyClient({
     where: filter === "all" ? undefined : { status: filter },
     include: { leadSource: true },
     orderBy: { createdAt: "desc" },
+    take: (page + 1) * PAGE_SIZE,
   });
 
   return (
@@ -81,6 +93,11 @@ export function ClientsPage() {
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <QueryErrorState
+            message={error instanceof Error ? error.message : undefined}
+            onRetry={() => void refetch()}
+          />
         ) : !clients?.length ? (
           <div className="card p-12 text-center text-sm text-muted-foreground">
             {filter === "all"
@@ -141,6 +158,9 @@ export function ClientsPage() {
               );
             })}
           </div>
+        )}
+        {!isLoading && !isError && (clients?.length ?? 0) >= (page + 1) * PAGE_SIZE && (
+          <LoadMoreButton onClick={() => setPage((p) => p + 1)} />
         )}
       </div>
 

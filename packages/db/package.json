@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./hooks": "./src/generated/hooks/index.ts",
     "./zod": "./src/generated/zod/index.ts",
+    "./server": "./src/server/index.ts",
     "./models": "./src/generated/models.ts"
   },
   "scripts": {
@@ -18,6 +19,7 @@
     "push": "prisma db push --schema ./prisma/schema.prisma",
     "studio": "prisma studio --schema ./prisma/schema.prisma",
     "seed": "tsx ./prisma/seed.ts",
+    "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "echo \"(lint placeholder)\""
   },
@@ -38,6 +40,7 @@
     "react": "^19.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.2",
+    "vitest": "^4.1.10",
     "zenstack": "^2.11.4"
   }
 }

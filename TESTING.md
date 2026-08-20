@@ -8,18 +8,21 @@ Spec: [`gtb_os_srs_v2.md`](./gtb_os_srs_v2.md).
 
 ## 0. Setup & gotchas (do these once)
 
-- [ ] `pnpm dev` running → web on **http://localhost:5173**, API on **http://localhost:3001**.
-- [ ] Local Supabase running (`supabase start`).
+- [ ] `pnpm dev` running → web on **http://localhost:5175**, API on **http://localhost:3005**.
+- [ ] GTB's local Supabase running: `supabase start` from the repo root (config
+  in `supabase/config.toml`; ports 54421/54422/54424 — see README "Local
+  development"). `supabase status` prints the anon/service_role keys to put in
+  the `.env` files.
 - [ ] **Invite links must redirect to the app.** In `supabase/config.toml`:
   ```toml
   [auth]
-  site_url = "http://localhost:5173"
-  additional_redirect_urls = ["http://localhost:5173", "http://localhost:5173/portal/register"]
+  site_url = "http://localhost:5175"
+  additional_redirect_urls = ["http://localhost:5175", "http://localhost:5175/portal/register"]
   ```
   then `supabase stop && supabase start`. Without this, invite links land on
   `127.0.0.1:3000` (Supabase's default) and look broken.
   - _Stuck with an existing link?_ Rewrite its host/path to
-    `http://localhost:5173/portal/register#<the-whole-#hash>` and open it (valid ~1h).
+    `http://localhost:5175/portal/register#<the-whole-#hash>` and open it (valid ~1h).
 - [ ] Founder can log in: a Supabase auth user with the seeded founder email
   (`aadil.alkp@gmail.com`) + password; first login links by email.
 

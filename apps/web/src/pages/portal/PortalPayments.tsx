@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { useFindUniqueClient, useUpdateInstallment, useUpdateClient } from "@gtb/db/hooks";
-import { formatINR, formatDate, LEAD_PHASE_ORDER, type LeadPhase } from "@gtb/shared";
+import { Link } from "react-router-dom";
+import { useFindUniqueClient } from "@gtb/db/hooks";
+import { formatINR, formatDate } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
+import { submitPaymentProof, type UploadedDocument } from "@/lib/api";
 import { installmentDisplayStatus } from "@/lib/insights";
-import type { UploadedDocument } from "@/lib/api";
 import { FileUploadField } from "@/components/FileUploadField";
 import { EmptyState } from "@/components/EmptyState";
 import { Button, ProgressRing, StatusBadge } from "@/components/ui";
@@ -15,8 +16,6 @@ const PAYABLE = new Set(["pending", "overdue", "rejected"]);
 export function PortalPayments() {
   const { user } = useAuth();
   const clientId = user?.client?.id;
-  const updateInstallment = useUpdateInstallment();
-  const updateClient = useUpdateClient();
 
   const {
     data: client,
@@ -66,20 +65,8 @@ export function PortalPayments() {
     setSubmitting(true);
     setError(undefined);
     try {
-      await updateInstallment.mutateAsync({
-        where: { id: payable.id },
-        data: { status: "proof_submitted", proofDocumentId: doc.id },
-      });
-      if (
-        client &&
-        client.status === "lead" &&
-        LEAD_PHASE_ORDER[client.leadPhase as LeadPhase] < LEAD_PHASE_ORDER.payment_submitted
-      ) {
-        await updateClient.mutateAsync({
-          where: { id: client.id },
-          data: { leadPhase: "payment_submitted" },
-        });
-      }
+      // STATE-6: proof submission + leadPhase advance are atomic server-side.
+      await submitPaymentProof(payable.id, doc.id);
       setDoc(null);
       await refetch();
     } catch (e) {
@@ -169,9 +156,12 @@ export function PortalPayments() {
         </section>
       )}
       {payable && client.status === "lead" && (
-        <p className="text-center text-sm text-muted-foreground">
-          Finish your onboarding to submit your first payment.
-        </p>
+        <Link
+          to="/portal/onboarding"
+          className="block rounded-lg border border-border bg-muted/40 p-4 text-center text-sm text-primary hover:bg-muted"
+        >
+          Finish your onboarding to submit your first payment →
+        </Link>
       )}
     </div>
   );

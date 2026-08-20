@@ -9,7 +9,7 @@ import {
   useFindManyTask,
 } from "@gtb/db/hooks";
 import { formatINR, humanize, type ServiceType, SERVICE_TYPE_LABELS } from "@gtb/shared";
-import { asDate, isInstallmentOverdue, downloadCsv } from "@/lib/insights";
+import { asDate, isInstallmentOverdue, istYearMonth, downloadCsv } from "@/lib/insights";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -28,38 +28,51 @@ const PERIOD_LABELS: Record<Period, string> = {
   all: "All time",
 };
 
+// MISC-9: period boundaries and month buckets use the IST calendar month —
+// local getters shift a month at boundaries for viewers west of UTC.
 function periodStart(p: Period): Date {
-  const now = new Date();
+  const { year, month } = istYearMonth(new Date());
   switch (p) {
     case "this_month":
-      return new Date(now.getFullYear(), now.getMonth(), 1);
+      return new Date(Date.UTC(year, month, 1));
     case "last_3":
-      return new Date(now.getFullYear(), now.getMonth() - 2, 1);
+      return new Date(Date.UTC(year, month - 2, 1));
     case "last_6":
-      return new Date(now.getFullYear(), now.getMonth() - 5, 1);
+      return new Date(Date.UTC(year, month - 5, 1));
     case "ytd":
-      return new Date(now.getFullYear(), 0, 1);
+      return new Date(Date.UTC(year, 0, 1));
     case "all":
-      return new Date(2000, 0, 1);
+      return new Date(Date.UTC(2000, 0, 1));
   }
 }
 
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 function monthsInRange(start: Date): { key: string; label: string; year: number; month: number }[] {
   const out: { key: string; label: string; year: number; month: number }[] = [];
-  const now = new Date();
+  const now = istYearMonth(new Date());
   // Cap at 12 months for chart readability.
+  const startYm = istYearMonth(start);
+  const floorYm = { year: now.year, month: now.month - 11 };
   const cur = new Date(
-    Math.max(start.getTime(), new Date(now.getFullYear(), now.getMonth() - 11, 1).getTime()),
+    Math.max(
+      Date.UTC(startYm.year, startYm.month, 1),
+      Date.UTC(floorYm.year, floorYm.month, 1),
+    ),
   );
-  cur.setDate(1);
-  while (cur <= now) {
+  const end = Date.UTC(now.year, now.month, 1);
+  while (cur.getTime() <= end) {
+    const year = cur.getUTCFullYear();
+    const month = cur.getUTCMonth();
     out.push({
-      key: `${cur.getFullYear()}-${cur.getMonth()}`,
-      label: cur.toLocaleString("en-IN", { month: "short" }),
-      year: cur.getFullYear(),
-      month: cur.getMonth(),
+      key: `${year}-${month}`,
+      // CALC-12: include the year so a range spanning a year boundary never
+      // shows two identical month ticks.
+      label: `${MONTH_SHORT[month]} '${String(year).slice(2)}`,
+      year,
+      month,
     });
-    cur.setMonth(cur.getMonth() + 1);
+    cur.setUTCMonth(cur.getUTCMonth() + 1);
   }
   return out;
 }
@@ -455,11 +468,19 @@ function CollectionsReport({
   inRange: (d: string | Date | null) => boolean;
 }) {
   const allInstallments = clients.flatMap((c) => c.clientPlan?.installments ?? []);
+  // CALC-4: collection rate = approved amount among installments DUE in the
+  // period / amount due in the period — one set, so it can never exceed 100%
+  // from early payments or understate from late collections.
+  const dueInPeriod = allInstallments.filter((i) => inRange(i.dueDate));
+  const collectedOnDue = dueInPeriod
+    .filter((i) => i.status === "approved")
+    .reduce((t, i) => t + i.amount, 0);
+  const due = dueInPeriod.reduce((t, i) => t + i.amount, 0);
+  const rate = due ? Math.round((collectedOnDue / due) * 100) : 0;
+  // "Collected (period)" stays the cash view — approvals that landed in range.
   const collected = allInstallments
     .filter((i) => i.status === "approved" && inRange(i.approvedAt))
     .reduce((t, i) => t + i.amount, 0);
-  const due = allInstallments.filter((i) => inRange(i.dueDate)).reduce((t, i) => t + i.amount, 0);
-  const rate = due ? Math.round((collected / due) * 100) : 0;
 
   const outstanding = clients
     .map((c) => {
@@ -534,10 +555,13 @@ function SalesReport({
   inRange: (d: string | Date | null) => boolean;
 }) {
   const leads = clients.filter((c) => inRange(c.createdAt));
+  // CALC-3: one definition for both the number and the label — SRS §20.3
+  // "converted / total leads per period". A lead that was cancelled still
+  // counts in the denominator (it was a lead in the period); only leads
+  // actually converted in the period count as conversions.
+  const convertedInPeriod = leads.filter((c) => c.conversionDate && inRange(c.conversionDate));
+  const convRate = leads.length ? Math.round((convertedInPeriod.length / leads.length) * 100) : 0;
   const conversions = clients.filter((c) => inRange(c.conversionDate));
-  const convRate = leads.length
-    ? Math.round((leads.filter((c) => c.status !== "lead").length / leads.length) * 100)
-    : 0;
   const dealValue = conversions.reduce((t, c) => t + (c.clientPlan?.priceAtEnrollment ?? 0), 0);
   const avgDeal = conversions.length ? Math.round(dealValue / conversions.length) : 0;
 
@@ -577,7 +601,7 @@ function SalesReport({
           label="Conversion rate"
           value={`${convRate}%`}
           accent="success"
-          footnote={`${conversions.length} of ${leads.length} leads`}
+          footnote={`${convertedInPeriod.length} of ${leads.length} leads`}
         />
         <StatCard
           icon={TrendingUp}
@@ -914,6 +938,6 @@ function OperationsReport({
 // ---- helpers ----------------------------------------------------------------
 
 function sameMonth(d: string | Date, year: number, month: number): boolean {
-  const x = asDate(d);
-  return x.getFullYear() === year && x.getMonth() === month;
+  const p = istYearMonth(asDate(d)); // MISC-9: IST month bucketing
+  return p.year === year && p.month === month;
 }

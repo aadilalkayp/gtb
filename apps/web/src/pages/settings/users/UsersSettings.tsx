@@ -85,7 +85,7 @@ export function UsersSettings() {
         phone: u.phone || undefined,
         role: u.role,
       });
-      setResendResult({ name: u.name, url: res.registrationUrl });
+      setResendResult(res.registrationUrl ? { name: u.name, url: res.registrationUrl } : null);
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to resend invite");
     } finally {
@@ -274,28 +274,32 @@ function InviteStaffModal({ onClose, onDone }: { onClose: () => void; onDone: ()
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success/15 text-success">
               <Check className="h-4 w-4" />
             </span>
-            {result.emailed ? "Invitation emailed" : "Account created — share this link"}
+            {result.emailed ? "Invitation emailed" : "Account created"}
           </p>
-          <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
-            <code className="flex-1 truncate text-xs text-muted-foreground">
-              {result.registrationUrl}
-            </code>
-            <button
-              onClick={() => {
-                void navigator.clipboard.writeText(result.registrationUrl);
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              }}
-              className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-muted"
-            >
-              {copied ? (
-                <Check className="h-3.5 w-3.5 text-success" />
-              ) : (
-                <Copy className="h-3.5 w-3.5" />
-              )}
-              {copied ? "Copied" : "Copy"}
-            </button>
-          </div>
+          {result.registrationUrl && (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
+              <code className="flex-1 truncate text-xs text-muted-foreground">
+                {result.registrationUrl}
+              </code>
+              <button
+                onClick={() => {
+                  if (result.registrationUrl) {
+                    void navigator.clipboard.writeText(result.registrationUrl);
+                  }
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                }}
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-muted"
+              >
+                {copied ? (
+                  <Check className="h-3.5 w-3.5 text-success" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )}
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          )}
         </div>
       ) : (
         <form id="staff-invite-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">

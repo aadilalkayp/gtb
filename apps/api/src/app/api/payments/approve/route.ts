@@ -1,8 +1,10 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
+import { approveInstallment, PaymentConflictError } from "@gtb/db/server";
 import { PAYMENT_METHODS, type PaymentMethod } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers, getAdminUserIds } from "@/lib/notify";
+import { createPaymentReceipt } from "@/lib/receipt";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
@@ -14,9 +16,14 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 }
 
 /**
- * Approve (or manually record) a payment (SRS §8.3 / §8.5). Marks the installment
- * approved with a payment method; the client's first-ever approval converts them
- * Lead → Converted (SRS §6.1 step 9) and notifies admins to assign a team.
+ * Approve (or manually record) a payment (SRS §8.3 / §8.5). Marks the
+ * installment approved; the client's first-ever approval converts them
+ * Lead → Converted and notifies admins to assign a team.
+ *
+ * STATE-1: the write is a conditional update inside a transaction (see
+ * approveInstallment) — concurrent double-approvals can't double-write or
+ * double-convert, and a crash can't leave an approved-but-never-converted
+ * client.
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
@@ -35,75 +42,89 @@ export async function POST(req: NextRequest): Promise<Response> {
     return json(req, { error: "A valid paymentMethod is required" }, 400);
   }
 
-  const installment = await prisma.installment.findUnique({
-    where: { id: installmentId },
-    include: {
-      clientPlan: {
-        select: {
-          clientId: true,
-          client: { select: { id: true, status: true, name: true } },
-        },
-      },
-    },
-  });
-  if (!installment) return json(req, { error: "Installment not found" }, 404);
-  if (installment.status === "approved") {
-    return json(req, { error: "This installment is already approved" }, 409);
-  }
-  if (installment.status === "waived") {
-    return json(req, { error: "This installment was waived" }, 409);
-  }
-
-  const client = installment.clientPlan.client;
-
   // CROs may only act on clients they are actively assigned to.
   if (authUser.role === "cro") {
+    const installment = await prisma.installment.findUnique({
+      where: { id: installmentId },
+      select: { clientPlan: { select: { client: { select: { id: true } } } } },
+    });
+    if (!installment) return json(req, { error: "Installment not found" }, 404);
     const assigned = await prisma.assignment.findFirst({
-      where: { clientId: client.id, staffId: authUser.id, role: "cro", isActive: true },
+      where: { clientId: installment.clientPlan.client.id, staffId: authUser.id, role: "cro", isActive: true },
       select: { id: true },
     });
     if (!assigned) return json(req, { error: "You are not assigned to this client" }, 403);
   }
 
-  // Is this the client's first approved payment? (decided before we write)
-  const priorApproved = await prisma.installment.count({
-    where: {
-      clientPlan: { clientId: client.id },
-      status: "approved",
-      id: { not: installment.id },
-    },
-  });
-  const isFirstApproval = priorApproved === 0;
-  const shouldConvert = isFirstApproval && client.status === "lead";
-
-  await prisma.installment.update({
-    where: { id: installment.id },
-    data: {
-      status: "approved",
-      paymentMethod: paymentMethod as PaymentMethod,
-      approvedById: authUser.id,
-      approvedAt: new Date(),
-      rejectionReason: null,
-      ...(notes ? { notes } : {}),
-    },
-  });
-
-  if (shouldConvert) {
-    await prisma.client.update({
-      where: { id: client.id },
-      data: { status: "converted", conversionDate: new Date(), convertedById: authUser.id },
+  let result;
+  try {
+    result = await approveInstallment({
+      installmentId,
+      paymentMethod: paymentMethod as string,
+      notes,
+      actorId: authUser.id,
     });
+  } catch (e) {
+    if (e instanceof PaymentConflictError) {
+      return json(req, { error: e.message }, 409);
+    }
+    if ((e as Error).message === "NOT_FOUND") {
+      return json(req, { error: "Installment not found" }, 404);
+    }
+    throw e;
+  }
+
+  if (result.converted) {
     const admins = await getAdminUserIds();
     await notifyUsers(
       admins.filter((id) => id !== authUser.id),
       {
         type: "client_converted",
         title: "New converted client",
-        body: `${client.name} has paid and is ready for team assignment.`,
+        body: `${result.client.name} has paid and is ready for team assignment.`,
         linkPath: "/assignments",
       },
     );
   }
 
-  return json(req, { ok: true, converted: shouldConvert });
+  // FEAT-1: generate + store the payment receipt PDF (SRS §8.7). Best-effort —
+  // a storage failure must not fail the approval itself.
+  try {
+    const installment = await prisma.installment.findUnique({
+      where: { id: installmentId },
+      include: {
+        clientPlan: {
+          select: { clientId: true, planNameSnapshot: true, client: { select: { name: true, clientCode: true } } },
+        },
+      },
+    });
+    if (installment) {
+      const stored = await createPaymentReceipt({
+        clientName: installment.clientPlan.client.name,
+        clientCode: installment.clientPlan.client.clientCode,
+        planName: installment.clientPlan.planNameSnapshot,
+        installmentNumber: installment.installmentNumber,
+        amount: installment.amount,
+        paymentMethod: paymentMethod as string,
+        paidAt: new Date(),
+        receiptId: installment.id,
+      });
+      if (stored) {
+        await prisma.document.create({
+          data: {
+            clientId: installment.clientPlan.clientId,
+            type: "payment_receipt",
+            fileName: `payment-receipt-${installment.installmentNumber}.pdf`,
+            fileUrl: stored.fileUrl,
+            fileSize: stored.fileSize,
+            uploadedById: authUser.id,
+          },
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[GTB OS] Receipt generation failed:", e instanceof Error ? e.message : e);
+  }
+
+  return json(req, { ok: true, converted: result.converted });
 }

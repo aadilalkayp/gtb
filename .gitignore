@@ -18,6 +18,12 @@ packages/db/.zenstack/
 .env.local
 .env.*.local
 
+# Local Supabase (CLI runtime state — never commit)
+supabase/.temp/
+supabase/.branches/
+**/supabase/.temp/
+**/supabase/.branches/
+
 # Logs
 *.log
 npm-debug.log*

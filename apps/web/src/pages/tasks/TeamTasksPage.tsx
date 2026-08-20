@@ -41,6 +41,8 @@ interface TaskRow {
   priority: string;
   dueDate: Date | string | null;
   clientId: string | null;
+  assignedToId: string;
+  assignedById: string;
   assignedTo: { id: string; name: string };
   client: { id: string; name: string } | null;
 }
@@ -59,6 +61,8 @@ const PRIORITY_META: Record<TaskPriority, { tone: Tone; bar: string }> = {
 };
 
 export function TeamTasksPage() {
+  const { user, role } = useAuth();
+  const isAdmin = role === "founder" || role === "ops_head";
   const [showNew, setShowNew] = useState(false);
   const [dragOver, setDragOver] = useState<TaskStatus | null>(null);
   const draggingId = useRef<string | null>(null);
@@ -165,6 +169,15 @@ export function TeamTasksPage() {
                       task={t}
                       onDragStart={() => (draggingId.current = t.id)}
                       onMove={(s) => void moveTo(t.id, s)}
+                      onCancel={() => {
+                        // FEAT-8: cancel = assigner, assignee, or admin (schema
+                        // gates the same set).
+                        if (t.assignedById === user?.id || t.assignedToId === user?.id || isAdmin) {
+                          void moveTo(t.id, "cancelled");
+                        } else {
+                          window.alert("Only the task's assigner, assignee, or an admin can cancel it.");
+                        }
+                      }}
                     />
                   ))}
                   {!items.length && (
@@ -196,10 +209,12 @@ function TaskCard({
   task: t,
   onDragStart,
   onMove,
+  onCancel,
 }: {
   task: TaskRow;
   onDragStart: () => void;
   onMove: (status: TaskStatus) => void;
+  onCancel: () => void;
 }) {
   const meta = PRIORITY_META[t.priority as TaskPriority] ?? PRIORITY_META.medium;
   const due = t.dueDate ? daysUntil(t.dueDate) : null;
@@ -264,6 +279,15 @@ function TaskCard({
                 → {c.label}
               </button>
             ))}
+            {(t.status === "pending" || t.status === "in_progress") && (
+              // FEAT-8: tasks in flight can be cancelled (assigner/admin)
+              <button
+                onClick={onCancel}
+                className="rounded-md bg-danger/10 px-2 py-1 text-[11px] font-medium text-danger hover:bg-danger/20"
+              >
+                Cancel
+              </button>
+            )}
           </div>
         </div>
       </div>

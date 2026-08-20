@@ -21,11 +21,28 @@ const zenHandler = NextRequestHandler({
 
 type Ctx = { params: Promise<{ path: string[] }> };
 
+// ZenStack applies field-level READ policies to find* results but not to
+// groupBy/aggregate output (verified against @zenstackhq/server 2.22) — a
+// client could `groupBy` User.email/phone and reconstruct the staff directory
+// that SEC-11 hides. Block the aggregation verbs on any model that carries
+// field-level read denies.
+const FIELD_READ_PROTECTED_MODELS = new Set(["user"]);
+const AGGREGATION_OPS = new Set(["groupBy", "aggregate"]);
+
 async function handler(req: NextRequest, ctx: Ctx): Promise<Response> {
   const path = req.nextUrl.pathname;
   const user = await resolveAuthUser(req);
   if (!user) {
     console.warn(`[model] ${req.method} ${path} — no auth user resolved`);
+  }
+
+  const { path: segments } = await ctx.params;
+  const [model, op] = [segments[0]?.toLowerCase(), segments[1]];
+  if (model && op && FIELD_READ_PROTECTED_MODELS.has(model) && AGGREGATION_OPS.has(op)) {
+    return withCors(
+      req,
+      Response.json({ error: `Operation ${op} is not available on ${model}` }, { status: 403 }),
+    );
   }
 
   const res = await zenHandler(req, ctx);

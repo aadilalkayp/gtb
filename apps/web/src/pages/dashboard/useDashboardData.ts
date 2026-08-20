@@ -13,6 +13,8 @@ import {
   startOfDay,
   isSameDay,
   isInstallmentOverdue,
+  istDayOfMonth,
+  istYearMonth,
   deriveAtRisk,
   lastMonths,
 } from "@/lib/insights";
@@ -36,9 +38,11 @@ interface ClientRow {
   leadPhase: string;
   weddingDate: string | Date;
   conversionDate: string | Date | null;
+  convertedById: string | null;
   createdAt: string | Date;
   clientPlan: { priceAtEnrollment: number; installments: InstallmentLite[] } | null;
   assignments: { role: string; staffId: string }[];
+  _count: { sessions: number }; // lifetime completed sessions (server-side)
 }
 interface SessionRow {
   id: string;
@@ -84,6 +88,14 @@ interface ContentRow {
   status: string;
   deadline: string | Date | null;
 }
+export interface PendingUploadRow {
+  id: string;
+  serviceType: string;
+  sessionNumber: number;
+  consultantId: string | null;
+  status: string;
+  client: { id: string; name: string; clientCode: string; type: string };
+}
 
 // ---- Derived shapes --------------------------------------------------------
 
@@ -114,6 +126,12 @@ export interface WeddingEntry {
 const inDays = (n: number) => new Date(Date.now() + n * 24 * 60 * 60 * 1000);
 
 export function useDashboardData() {
+  // PERF-1: freeze the window boundary at mount. A fresh `inDays(-45)` on every
+  // render produces a new millisecond-precision Date, which changes the query
+  // key each render and drives the session hook into an infinite refetch loop.
+  // Flooring to start-of-day also keeps the key stable across the day.
+  const sessionsSince = useMemo(() => startOfDay(inDays(-45)), []);
+
   const clientsQ = useFindManyClient({
     select: {
       id: true,
@@ -124,6 +142,7 @@ export function useDashboardData() {
       leadPhase: true,
       weddingDate: true,
       conversionDate: true,
+      convertedById: true, // CALC-5: per-CRO conversion attribution
       createdAt: true,
       clientPlan: {
         select: {
@@ -134,6 +153,12 @@ export function useDashboardData() {
         },
       },
       assignments: { where: { isActive: true }, select: { role: true, staffId: true } },
+      // Lifetime completed-session count: the session query below is windowed
+      // to 45 days, so "has this client ever completed a session?" must come
+      // from the server — otherwise a long-dormant client with a future
+      // session on the books reads as "just started" and is skipped by the
+      // at-risk / no-activity rules (the exact population they exist for).
+      _count: { select: { sessions: { where: { status: "completed" } } } },
     },
     orderBy: { weddingDate: "asc" },
   });
@@ -144,7 +169,29 @@ export function useDashboardData() {
       client: { select: { id: true, name: true, clientCode: true, type: true } },
       _count: { select: { documents: true } },
     },
+    // PERF-1: server-side window — the dashboard only ever reasons about
+    // upcoming sessions, today's agenda, and the last-45-days of activity
+    // (at-risk "no activity 7+ days" is unaffected: a client whose last
+    // session is older than the window IS at risk).
+    where: { scheduledDate: { gte: sessionsSince } },
     orderBy: { scheduledDate: "asc" },
+  });
+
+  // Completed sessions with no document, regardless of age: the windowed
+  // session query above would silently drop a 2-month-old pending upload —
+  // the item would just vanish instead of being resolved.
+  const pendingUploadsQ = useFindManySession({
+    select: {
+      id: true,
+      serviceType: true,
+      sessionNumber: true,
+      consultantId: true,
+      status: true,
+      client: { select: { id: true, name: true, clientCode: true, type: true } },
+    },
+    where: { status: "completed", documents: { none: {} } },
+    orderBy: { actualDate: "desc" },
+    take: 100,
   });
 
   const followUpsQ = useFindManyFollowUp({
@@ -167,6 +214,7 @@ export function useDashboardData() {
 
   const clients = (clientsQ.data ?? []) as unknown as ClientRow[];
   const sessions = (sessionsQ.data ?? []) as unknown as SessionRow[];
+  const pendingUploadRows = (pendingUploadsQ.data ?? []) as unknown as PendingUploadRow[];
   const followUps = (followUpsQ.data ?? []) as unknown as FollowUpRow[];
   const stylingOps = (stylingQ.data ?? []) as unknown as StylingRow[];
   const tasks = (tasksQ.data ?? []) as unknown as TaskRow[];
@@ -178,12 +226,38 @@ export function useDashboardData() {
     avatarUrl: string | null;
   }[];
 
-  const isLoading = clientsQ.isLoading || sessionsQ.isLoading;
+  // PERF-2: the dashboard renders nothing until EVERY query has loaded — no
+  // more partial-load flash with empty widgets.
+  const isLoading =
+    clientsQ.isLoading ||
+    sessionsQ.isLoading ||
+    pendingUploadsQ.isLoading ||
+    followUpsQ.isLoading ||
+    stylingQ.isLoading ||
+    tasksQ.isLoading ||
+    contentQ.isLoading ||
+    teamQ.isLoading;
+  // CALC-8: a failed dashboard query must never render as "all clear".
+  const isError =
+    clientsQ.isError ||
+    sessionsQ.isError ||
+    pendingUploadsQ.isError ||
+    followUpsQ.isError ||
+    stylingQ.isError ||
+    tasksQ.isError ||
+    contentQ.isError ||
+    teamQ.isError;
+  const error =
+    clientsQ.error ?? sessionsQ.error ?? pendingUploadsQ.error ?? followUpsQ.error ?? stylingQ.error ?? tasksQ.error ?? contentQ.error ?? teamQ.error;
 
   const metrics = useMemo(() => {
     const today = startOfDay();
     const in7 = startOfDay(inDays(7));
-    const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    // MISC-9: month bucketing must use IST parts — local getters on the
+    // UTC-midnight-of-IST-day anchor shift a day (and at month boundaries, a
+    // month) for any viewer west of UTC.
+    const { year: curYear, month: curMonth } = istYearMonth(new Date());
+    const dayOfMonth = istDayOfMonth(new Date());
 
     const sessionsByClient = new Map<string, SessionRow[]>();
     for (const s of sessions) {
@@ -204,28 +278,35 @@ export function useDashboardData() {
         rating: s.rating,
       })),
       installments: c.clientPlan?.installments ?? [],
+      totalCompletedSessions: c._count?.sessions ?? undefined,
     }));
 
     const active = clients.filter((c) => c.status === "active");
     const allInstallments = clients.flatMap((c) => c.clientPlan?.installments ?? []);
 
-    const inThisMonth = (d: string | Date | null) => d != null && asDate(d) >= monthStart;
     const inMonth = (d: string | Date | null, year: number, month: number) => {
       if (d == null) return false;
-      const x = asDate(d);
-      return x.getFullYear() === year && x.getMonth() === month;
+      const p = istYearMonth(d);
+      return p.year === year && p.month === month;
     };
+    const inThisMonth = (d: string | Date | null) => inMonth(d, curYear, curMonth);
 
     const monthCollections = allInstallments
       .filter((i) => i.status === "approved" && inThisMonth(i.approvedAt))
       .reduce((t, i) => t + i.amount, 0);
 
-    const prevMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    // CALC-10: compare the same day-window — the PREVIOUS month's collections
+    // through the same day-of-month ("so far vs so far"). The prior version
+    // ended the window at *this* month's day-of-month, which put the entire
+    // current month inside the "previous month" bucket and double-counted it.
+    const prevAnchor = new Date(Date.UTC(curYear, curMonth - 1, 1));
+    const [prevYear, prevMonthIdx] = [prevAnchor.getUTCFullYear(), prevAnchor.getUTCMonth()];
     const prevCollections = allInstallments
+      .filter((i) => i.status === "approved" && i.approvedAt != null)
       .filter(
         (i) =>
-          i.status === "approved" &&
-          inMonth(i.approvedAt, prevMonth.getFullYear(), prevMonth.getMonth()),
+          inMonth(i.approvedAt, prevYear, prevMonthIdx) &&
+          istDayOfMonth(i.approvedAt as string | Date) <= dayOfMonth,
       )
       .reduce((t, i) => t + i.amount, 0);
 
@@ -267,7 +348,12 @@ export function useDashboardData() {
       0,
     );
     const leadsThisMonth = clients.filter((c) => inThisMonth(c.createdAt));
-    const convertedFromMonth = leadsThisMonth.filter((c) => c.status !== "lead");
+    // CALC-11: a conversion is a client with a conversionDate in the period —
+    // not "status != lead" (a lead created this month then cancelled is NOT a
+    // conversion).
+    const convertedFromMonth = leadsThisMonth.filter(
+      (c) => c.conversionDate != null && inThisMonth(c.conversionDate),
+    );
     const conversionRate = leadsThisMonth.length
       ? convertedFromMonth.length / leadsThisMonth.length
       : 0;
@@ -345,10 +431,10 @@ export function useDashboardData() {
       .filter((w) => w.days >= 0)
       .sort((a, b) => a.days - b.days);
 
-    // Pending plan/guide uploads — completed sessions with no document.
-    const pendingUploads = sessions.filter(
-      (s) => s.status === "completed" && s._count.documents === 0,
-    );
+    // Pending plan/guide uploads — completed sessions with no document, from
+    // the dedicated unwindowed query (the 45-day session window would silently
+    // drop older unresolved uploads).
+    const pendingUploads = pendingUploadRows;
 
     // Unassigned converted clients (no active consultant assignment).
     const unassigned = clients.filter(
@@ -452,12 +538,14 @@ export function useDashboardData() {
       tasksPending: tasks.filter((t) => t.status === "pending" || t.status === "in_progress")
         .length,
     };
-  }, [clients, sessions, followUps, stylingOps, tasks, content, team]);
+  }, [clients, sessions, pendingUploadRows, followUps, stylingOps, tasks, content, team]);
 
   return {
     isLoading,
+    isError,
+    error,
     metrics,
-    raw: { clients, sessions, followUps, stylingOps, tasks, content, team },
+    raw: { clients, sessions, pendingUploads: pendingUploadRows, followUps, stylingOps, tasks, content, team },
   };
 }
 

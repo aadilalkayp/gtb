@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarDays, List, CalendarCheck } from "lucide-react";
-import { useFindManySession, useUpdateSession } from "@gtb/db/hooks";
+import { useFindManySession } from "@gtb/db/hooks";
 import {
   SERVICE_TYPES,
   SERVICE_TYPE_LABELS,
@@ -10,10 +10,11 @@ import {
   type ServiceType,
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
-import { completeSession, rescheduleSession } from "@/lib/api";
+import { cancelSession, completeSession, rescheduleSession } from "@/lib/api";
 import { startOfDay, asDate } from "@/lib/insights";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { MonthCalendar, type CalendarEvent } from "@/components/MonthCalendar";
 import { FileUploadField } from "@/components/FileUploadField";
 import {
@@ -76,7 +77,7 @@ export function ConsultationsPage() {
     { kind: "complete"; session: SessionRow } | { kind: "reschedule"; session: SessionRow } | null
   >(null);
 
-  const { data, isLoading, refetch } = useFindManySession({
+  const { data, isLoading, isError, error, refetch } = useFindManySession({
     include: {
       consultant: { select: { name: true } },
       client: { select: { id: true, name: true, clientCode: true } },
@@ -125,10 +126,19 @@ export function ConsultationsPage() {
       onClick: canAct(s) ? () => setAction({ kind: "complete", session: s }) : undefined,
     }));
 
-  const updateSession = useUpdateSession();
-
   async function setStatus(s: SessionRow, status: "cancelled" | "missed") {
-    await updateSession.mutateAsync({ where: { id: s.id }, data: { status } });
+    // FEAT-12: cancelling is destructive (no undo) — require confirmation.
+    if (
+      status === "cancelled" &&
+      !window.confirm(
+        `Cancel ${s.client.name}'s ${SERVICE_TYPE_LABELS[s.serviceType as ServiceType]} session #${s.sessionNumber}? This can't be undone.`,
+      )
+    ) {
+      return;
+    }
+    // Server route (not the gateway): consultants have no gateway Session write
+    // path, and the route records the audit row the gateway write skipped.
+    await cancelSession(s.id, status);
     await refetch();
   }
 
@@ -209,6 +219,11 @@ export function ConsultationsPage() {
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <QueryErrorState
+            message={error instanceof Error ? error.message : undefined}
+            onRetry={() => void refetch()}
+          />
         ) : view === "calendar" ? (
           <MonthCalendar events={calendarEvents} />
         ) : !filtered.length ? (

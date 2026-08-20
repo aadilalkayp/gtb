@@ -1,5 +1,15 @@
 import type { SendMailInput } from "./mailer.js";
 
+/** Escape user-provided strings before interpolating them into HTML (SEC-15). */
+function esc(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 /** Minimal branded wrapper so all transactional emails look consistent. */
 function layout(heading: string, bodyHtml: string): string {
   return `<!doctype html>
@@ -22,7 +32,7 @@ function layout(heading: string, bodyHtml: string): string {
 }
 
 function button(href: string, label: string): string {
-  return `<a href="${href}" style="display:inline-block;background:#1c1917;color:#fafaf9;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600">${label}</a>`;
+  return `<a href="${esc(href)}" style="display:inline-block;background:#1c1917;color:#fafaf9;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600">${esc(label)}</a>`;
 }
 
 export function inviteEmail(args: {
@@ -36,15 +46,15 @@ export function inviteEmail(args: {
   const html = layout(
     "You're invited to your client portal",
     `
-    <p style="margin:0 0 14px;font-size:14px;line-height:1.6">Hi ${clientName},</p>
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.6">Hi ${esc(clientName)},</p>
     <p style="margin:0 0 20px;font-size:14px;line-height:1.6">
-      Your <strong>${brand}</strong> journey is ready to begin. Click below to set your
+      Your <strong>${esc(brand)}</strong> journey is ready to begin. Click below to set your
       password and complete a short onboarding assessment so your team can build your plan.
     </p>
     <p style="margin:0 0 22px">${button(registrationUrl, "Set up my account")}</p>
     <p style="margin:0;font-size:12px;line-height:1.6;color:#78716c">
       This link expires in 7 days. If the button doesn't work, copy and paste this URL into your browser:<br>
-      <span style="color:#44403c;word-break:break-all">${registrationUrl}</span>
+      <span style="color:#44403c;word-break:break-all">${esc(registrationUrl)}</span>
     </p>
   `,
   );
@@ -71,15 +81,15 @@ export function staffInviteEmail(args: {
   const html = layout(
     "Welcome to the team",
     `
-    <p style="margin:0 0 14px;font-size:14px;line-height:1.6">Hi ${staffName},</p>
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.6">Hi ${esc(staffName)},</p>
     <p style="margin:0 0 20px;font-size:14px;line-height:1.6">
-      You've been added to <strong>GTB OS</strong> as <strong>${roleLabel}</strong>.
+      You've been added to <strong>GTB OS</strong> as <strong>${esc(roleLabel)}</strong>.
       Set your password to access your dashboard.
     </p>
     <p style="margin:0 0 22px">${button(registrationUrl, "Set my password")}</p>
     <p style="margin:0;font-size:12px;line-height:1.6;color:#78716c">
       If the button doesn't work, copy and paste this URL into your browser:<br>
-      <span style="color:#44403c;word-break:break-all">${registrationUrl}</span>
+      <span style="color:#44403c;word-break:break-all">${esc(registrationUrl)}</span>
     </p>
   `,
   );

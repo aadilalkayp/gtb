@@ -1,18 +1,22 @@
 import { useMemo, useState } from "react";
+import { LoadMoreButton } from "@/components/LoadMoreButton";
 import { Link } from "react-router-dom";
 import { Plus, Receipt, Wallet, Clock, CheckCircle2, Banknote, ExternalLink } from "lucide-react";
 import {
+  useAggregateExpense,
+  useCountExpense,
   useFindManyExpense,
   useCreateExpense,
   useUpdateExpense,
   useFindManyExpenseCategory,
   useFindManyClient,
 } from "@gtb/db/hooks";
-import { formatINR, formatDate, humanize } from "@gtb/shared";
+import { formatINR, formatDate, humanize, istMonthStart } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { getDocumentUrl } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { StatCard } from "@/components/StatCard";
 import { FileUploadField } from "@/components/FileUploadField";
 import {
@@ -38,6 +42,7 @@ interface ExpenseRow {
   status: string;
   paidTo: string | null;
   notes: string | null;
+  rejectionReason: string | null;
   payeeId: string | null;
   receiptDocumentId: string | null;
   category: { id: string; name: string };
@@ -46,47 +51,74 @@ interface ExpenseRow {
   client: { id: string; name: string; clientCode: string } | null;
 }
 
-function isThisMonth(d: Date | string): boolean {
-  const date = new Date(d);
-  const now = new Date();
-  return date.getFullYear() === now.getFullYear() && date.getMonth() === now.getMonth();
-}
-
 export function ExpensesPage() {
   const { user, role } = useAuth();
   const isAdmin = role === "founder" || role === "ops_head";
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilterState] = useState<Filter>("all");
   const [showNew, setShowNew] = useState(false);
   const [rejecting, setRejecting] = useState<ExpenseRow | null>(null);
 
-  const { data, isLoading, refetch } = useFindManyExpense({
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
+
+  function setFilter(f: Filter) {
+    setFilterState(f);
+    setPage(0);
+  }
+
+  // PERF-1: the pill filter is a server-side WHERE — filtering the fetched page
+  // in JS meant the "Pending" tab could never reach approvals older than the
+  // first page.
+  const { data, isLoading, isError, error, refetch } = useFindManyExpense({
     include: {
       category: { select: { id: true, name: true } },
       submittedBy: { select: { id: true, name: true } },
       payee: { select: { id: true, name: true } },
       client: { select: { id: true, name: true, clientCode: true } },
     },
+    ...(filter === "all" ? {} : { where: { status: filter } }),
     orderBy: { date: "desc" },
+    take: (page + 1) * PAGE_SIZE,
   });
 
   const updateExpense = useUpdateExpense();
   const expenses = (data ?? []) as unknown as ExpenseRow[];
 
-  const stats = useMemo(() => {
-    const thisMonth = expenses.filter((e) => isThisMonth(e.date));
-    const approvedMonth = thisMonth.filter((e) => e.status === "approved");
-    const pending = expenses.filter((e) => e.status === "submitted");
-    const payoutsMonth = approvedMonth.filter((e) => e.payeeId);
-    const sum = (rows: ExpenseRow[]) => rows.reduce((t, e) => t + e.amount, 0);
-    return {
-      approvedMonth: sum(approvedMonth),
-      pendingCount: pending.length,
-      pendingSum: sum(pending),
-      payoutsMonth: sum(payoutsMonth),
-    };
-  }, [expenses]);
+  // The stat cards are money numbers — they must aggregate over the whole
+  // table server-side, not over whichever 50-row page happens to be loaded.
+  const monthStart = useMemo(() => istMonthStart(), []);
+  const monthEnd = useMemo(
+    () => istMonthStart(new Date(monthStart.getTime() + 35 * 24 * 60 * 60 * 1000)),
+    [monthStart],
+  );
+  const monthWindow = { gte: monthStart, lt: monthEnd };
+  const approvedMonthQ = useAggregateExpense({
+    _sum: { amount: true },
+    where: { status: "approved", date: monthWindow },
+  });
+  const pendingSumQ = useAggregateExpense({
+    _sum: { amount: true },
+    where: { status: "submitted" },
+  });
+  const pendingCountQ = useCountExpense({ where: { status: "submitted" } });
+  const payoutsMonthQ = useAggregateExpense({
+    _sum: { amount: true },
+    where: { status: "approved", date: monthWindow, payeeId: { not: null } },
+  });
+  const stats = {
+    approvedMonth: approvedMonthQ.data?._sum?.amount ?? 0,
+    pendingCount: pendingCountQ.data ?? 0,
+    pendingSum: pendingSumQ.data?._sum?.amount ?? 0,
+    payoutsMonth: payoutsMonthQ.data?._sum?.amount ?? 0,
+  };
+  const refetchStats = () => {
+    void approvedMonthQ.refetch();
+    void pendingSumQ.refetch();
+    void pendingCountQ.refetch();
+    void payoutsMonthQ.refetch();
+  };
 
-  const visible = filter === "all" ? expenses : expenses.filter((e) => e.status === filter);
+  const visible = expenses;
 
   async function approve(e: ExpenseRow) {
     await updateExpense.mutateAsync({
@@ -94,6 +126,7 @@ export function ExpensesPage() {
       data: { status: "approved", approvedById: user?.id, approvedAt: new Date() },
     });
     await refetch();
+    refetchStats();
   }
 
   return (
@@ -148,6 +181,11 @@ export function ExpensesPage() {
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <QueryErrorState
+            message={error instanceof Error ? error.message : undefined}
+            onRetry={() => void refetch()}
+          />
         ) : !visible.length ? (
           <EmptyState
             icon={Receipt}
@@ -170,6 +208,10 @@ export function ExpensesPage() {
         )}
       </div>
 
+      {!isLoading && !isError && expenses.length >= (page + 1) * PAGE_SIZE && (
+        <LoadMoreButton onClick={() => setPage((p) => p + 1)} />
+      )}
+
       {showNew && (
         <SubmitExpenseModal
           submittedById={user?.id ?? ""}
@@ -177,6 +219,7 @@ export function ExpensesPage() {
           onDone={() => {
             setShowNew(false);
             void refetch();
+            refetchStats();
           }}
         />
       )}
@@ -187,6 +230,7 @@ export function ExpensesPage() {
           onDone={() => {
             setRejecting(null);
             void refetch();
+            refetchStats();
           }}
         />
       )}
@@ -245,6 +289,11 @@ function ExpenseRowItem({
           {` · by ${e.submittedBy.name}`}
           {e.notes && ` — ${e.notes}`}
         </p>
+        {e.status === "rejected" && e.rejectionReason && (
+          <p className="mt-0.5 rounded-md bg-danger/10 px-2 py-1 text-xs text-danger">
+            Rejected: {e.rejectionReason}
+          </p>
+        )}
       </div>
 
       <span className="text-sm font-semibold tabular-nums">{formatINR(e.amount)}</span>
@@ -306,7 +355,10 @@ function SubmitExpenseModal({
   const [error, setError] = useState<string>();
 
   async function submit() {
-    const amt = Math.round(Number(amount));
+    // FEAT-10: whole rupees only — a paise input is rejected, not silently
+    // rounded away.
+    const amt = Number(amount);
+    if (!Number.isInteger(amt)) return setError("Amount must be whole rupees (no paise).");
     if (!categoryId) return setError("Pick a category.");
     if (!title.trim()) return setError("Add a short title.");
     if (!amt || amt <= 0) return setError("Enter a valid amount.");
@@ -434,9 +486,11 @@ function RejectExpenseModal({
     if (!reason.trim()) return setError("Add a reason so the submitter knows why.");
     setError(undefined);
     try {
+      // FEAT-10: the rejection reason lives in its own field — the submitter's
+      // notes are never overwritten.
       await updateExpense.mutateAsync({
         where: { id: expense.id },
-        data: { status: "rejected", notes: reason.trim() },
+        data: { status: "rejected", rejectionReason: reason.trim() },
       });
       onDone();
     } catch (e) {

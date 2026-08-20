@@ -14,7 +14,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 
 interface AssignInput {
   role: string;
-  staffId: string;
+  staffId: string | null; // null = unassign the role (CALC-9)
 }
 
 /**
@@ -37,7 +37,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     return json(req, { error: "clientId and assignments[] are required" }, 400);
   }
   for (const a of assignments) {
-    if (!a?.staffId || !ASSIGNMENT_ROLES.includes(a.role as AssignmentRole)) {
+    if (!a?.staffId && !ASSIGNMENT_ROLES.includes(a?.role as AssignmentRole)) {
+      return json(req, { error: "Each assignment needs a valid role" }, 400);
+    }
+    if (a?.staffId && !ASSIGNMENT_ROLES.includes(a.role as AssignmentRole)) {
       return json(req, { error: "Each assignment needs a valid role and staffId" }, 400);
     }
   }
@@ -51,8 +54,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     return json(req, { error: "Assign a team only after the client is converted" }, 409);
   }
 
-  // All target staff must exist and be active.
-  const staffIds = [...new Set(assignments.map((a) => a.staffId))];
+  // All target staff must exist and be active (nulls are unassignments).
+  const staffIds = [...new Set(assignments.map((a) => a.staffId).filter(Boolean))] as string[];
   const staff = await prisma.user.findMany({
     where: { id: { in: staffIds }, isActive: true },
     select: { id: true },
@@ -61,29 +64,46 @@ export async function POST(req: NextRequest): Promise<Response> {
     return json(req, { error: "One or more staff members are invalid or inactive" }, 400);
   }
 
-  await prisma.$transaction(async (tx) => {
-    for (const a of assignments) {
-      const existing = await tx.assignment.findFirst({
-        where: { clientId: client.id, role: a.role as AssignmentRole, isActive: true },
-        select: { id: true, staffId: true },
-      });
-      if (existing?.staffId === a.staffId) continue; // unchanged
-      if (existing) {
-        await tx.assignment.update({
-          where: { id: existing.id },
-          data: { isActive: false, unassignedAt: new Date() },
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const a of assignments) {
+        if (!a.staffId) {
+          // CALC-9: explicit unassignment — deactivate the active holder.
+          await tx.assignment.updateMany({
+            where: { clientId: client.id, role: a.role as AssignmentRole, isActive: true },
+            data: { isActive: false, unassignedAt: new Date() },
+          });
+          continue;
+        }
+        const existing = await tx.assignment.findFirst({
+          where: { clientId: client.id, role: a.role as AssignmentRole, isActive: true },
+          select: { id: true, staffId: true },
+        });
+        if (existing?.staffId === a.staffId) continue; // unchanged
+        if (existing) {
+          await tx.assignment.update({
+            where: { id: existing.id },
+            data: { isActive: false, unassignedAt: new Date() },
+          });
+        }
+        await tx.assignment.create({
+          data: {
+            clientId: client.id,
+            staffId: a.staffId,
+            role: a.role as AssignmentRole,
+            assignedById: authUser.id,
+          },
         });
       }
-      await tx.assignment.create({
-        data: {
-          clientId: client.id,
-          staffId: a.staffId,
-          role: a.role as AssignmentRole,
-          assignedById: authUser.id,
-        },
-      });
+    });
+  } catch (e) {
+    // STATE-4 backstop: the partial unique index (one ACTIVE assignment per
+    // client+role) rejects a concurrent reassignment — surface it, don't 500.
+    if ((e as { code?: string }).code === "P2002") {
+      return json(req, { error: "This role was just reassigned — try again" }, 409);
     }
-  });
+    throw e;
+  }
 
   return json(req, { ok: true });
 }

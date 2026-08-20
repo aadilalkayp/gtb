@@ -34,6 +34,9 @@ interface ClientNode {
     rating?: number | null;
   }[];
   installments: { dueDate: string | Date; status: string }[];
+  /** Lifetime completed-session count from the server (the session list is a
+   *  recent window — see AtRiskInput.totalCompletedSessions). */
+  totalCompletedSessions?: number;
 }
 
 interface SessionNode {
@@ -67,7 +70,8 @@ export interface AlertInput {
 export function deriveAlerts(input: AlertInput): AlertItem[] {
   const today = startOfDay();
   const tomorrow = startOfDay(new Date(today.getTime() + 24 * 60 * 60 * 1000));
-  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  // IST-anchored so this rule and deriveAtRisk can never disagree by a day.
+  const sevenDaysAgo = startOfDay(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
   const out: AlertItem[] = [];
 
   // Payment due today — pending installment with due_date = today.
@@ -174,7 +178,9 @@ export function deriveAlerts(input: AlertInput): AlertItem[] {
       items: atRisk,
     });
 
-  // No activity 7+ days — active clients with no completed session in 7+ days.
+  // No activity 7+ days — active clients with no completed session in 7+ days
+  // (CALC-2: freshly-activated clients whose first session hasn't happened yet
+  // are never flagged — no more false positives polluting the dashboard).
   const stale = input.clients
     .filter((c) => c.status === "active")
     .filter((c) => {
@@ -182,7 +188,19 @@ export function deriveAlerts(input: AlertInput): AlertItem[] {
         .filter((s) => s.status === "completed")
         .map((s) => asDate(s.actualDate ?? s.scheduledDate).getTime())
         .sort((a, b) => b - a)[0];
-      return !last || last < sevenDaysAgo.getTime();
+      if (last && last >= sevenDaysAgo.getTime()) return false;
+      // No completed session in 7+ days: still skip if the program just
+      // started (upcoming scheduled sessions exist).
+      const hasUpcoming = c.sessions.some((s) => {
+        const open = s.status === "scheduled" || s.status === "delayed";
+        return open && asDate(s.scheduledDate).getTime() >= today.getTime();
+      });
+      // "Ever completed" must come from the server count when provided: the
+      // fetched session list is a recent window, so a long-dormant client has
+      // zero completed sessions IN THE WINDOW while having many overall.
+      const hasAnyCompleted =
+        (c.totalCompletedSessions ?? c.sessions.filter((s) => s.status === "completed").length) > 0;
+      return hasAnyCompleted || !hasUpcoming;
     })
     .map((c) => ({
       label: c.name,

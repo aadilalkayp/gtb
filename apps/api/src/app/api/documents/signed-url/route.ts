@@ -12,8 +12,11 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 
 /**
  * Mint a short-lived signed URL for a stored document, mirroring the Document
- * read policy (admins, actively-assigned staff, or the owning client — but never
- * a client viewing internal consultation notes).
+ * read policy and SRS §16.1's visibility matrix:
+ *   - admins see everything;
+ *   - the owning client sees their own docs except consultation_notes;
+ *   - assigned staff see docs except payment_proof (CRO/Ops/Founder only) and
+ *     expense_receipt (Ops/Founder only).
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
@@ -47,8 +50,16 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const isAdmin = authUser.role === "founder" || authUser.role === "ops_head";
   const isAssigned = doc.client.assignments.length > 0;
-  const isOwner = doc.client.userId === authUser.id && doc.type !== "consultation_notes";
-  if (!isAdmin && !isAssigned && !isOwner) {
+  const isOwner = doc.client.userId === authUser.id;
+
+  // SEC-10: the same matrix the schema enforces for reads — a signed URL must
+  // never out-permit the row-level read policy.
+  const financialRestricted =
+    (doc.type === "payment_proof" && authUser.role !== "cro") ||
+    doc.type === "expense_receipt";
+  const visibleToOwner = isOwner && doc.type !== "consultation_notes";
+  const visibleToStaff = isAssigned && !financialRestricted;
+  if (!isAdmin && !visibleToOwner && !visibleToStaff) {
     return json(req, { error: "Forbidden" }, 403);
   }
 

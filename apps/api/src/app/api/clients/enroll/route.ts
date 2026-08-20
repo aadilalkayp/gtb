@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
-import { generateInstallments, LEAD_PHASE_ORDER } from "@gtb/shared";
+import { enrollClientInPlan, EnrollmentConflictError } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 
@@ -13,12 +13,10 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 }
 
 /**
- * Enroll a client in a plan (SRS §6.1 step 5 + §8.2).
- *
- * Creates the ClientPlan (with a price/name snapshot) and the generated
- * installment schedule. Runs server-side because the schema restricts
- * ClientPlan/Installment creation to staff — here we additionally allow the
- * client to enroll themselves during onboarding, validated by ownership.
+ * Enroll a client in a plan (SRS §6.1 step 5 + §8.2). Creates the ClientPlan
+ * (with a price/name snapshot) and the generated installment schedule.
+ * STATE-7: creation + leadPhase advance are one transaction, and the
+ * double-enroll race returns 409 (EnrollmentConflictError) instead of a 500.
  */
 export async function POST(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
@@ -35,67 +33,33 @@ export async function POST(req: NextRequest): Promise<Response> {
     return json(req, { error: "clientId and planId are required" }, 400);
   }
 
-  const client = await prisma.client.findUnique({
-    where: { id: clientId },
-    include: { clientPlan: { select: { id: true } } },
-  });
-  if (!client) return json(req, { error: "Client not found" }, 404);
-
-  const isOwner = client.userId === authUser.id;
+  // Ownership / staff check happens inside enrollClientInPlan for the client
+  // path; staff (founder/ops/cro) may enroll anyone.
   const isStaff = STAFF_ENROLLERS.has(authUser.role);
-  if (!isOwner && !isStaff) return json(req, { error: "Forbidden" }, 403);
-
-  if (client.status !== "lead") {
-    return json(req, { error: "Client is no longer a lead" }, 409);
-  }
-  if (client.clientPlan) {
-    return json(req, { error: "Client is already enrolled in a plan" }, 409);
-  }
-
-  const plan = await prisma.plan.findUnique({
-    where: { id: planId },
-    include: { services: true },
-  });
-  if (!plan || !plan.isActive) {
-    return json(req, { error: "Plan not available" }, 404);
-  }
-  if (plan.clientType !== client.type) {
-    return json(req, { error: "Plan does not match the client's program" }, 409);
-  }
-
-  const enrolledAt = new Date();
-  const installments = generateInstallments(
-    plan.price,
-    plan.installmentCount,
-    plan.durationMonths,
-    enrolledAt,
-  );
-
-  const clientPlan = await prisma.clientPlan.create({
-    data: {
-      clientId: client.id,
-      planId: plan.id,
-      planNameSnapshot: plan.name,
-      priceAtEnrollment: plan.price,
-      durationMonths: plan.durationMonths,
-      enrolledAt,
-      installments: {
-        create: installments.map((i) => ({
-          installmentNumber: i.installmentNumber,
-          amount: i.amount,
-          dueDate: i.dueDate,
-        })),
-      },
-    },
-    include: { installments: { orderBy: { installmentNumber: "asc" } } },
-  });
-
-  if (LEAD_PHASE_ORDER[client.leadPhase] < LEAD_PHASE_ORDER.plan_selected) {
-    await prisma.client.update({
-      where: { id: client.id },
-      data: { leadPhase: "plan_selected" },
+  if (!isStaff) {
+    const client = await prisma.client.findUnique({
+      where: { id: clientId },
+      select: { id: true, userId: true },
     });
+    if (!client) return json(req, { error: "Client not found" }, 404);
+    if (client.userId !== authUser.id) return json(req, { error: "Forbidden" }, 403);
   }
 
-  return json(req, { clientPlan });
+  try {
+    const clientPlan = await enrollClientInPlan({ clientId, planId, actorId: authUser.id });
+    return json(req, { clientPlan });
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (e instanceof EnrollmentConflictError) return json(req, { error: e.message }, 409);
+    if (msg === "NOT_FOUND") return json(req, { error: "Client not found" }, 404);
+    if (msg === "NOT_LEAD") return json(req, { error: "Client is no longer a lead" }, 409);
+    if (msg === "NO_ASSESSMENT") {
+      return json(req, { error: "The assessment must be completed before selecting a plan" }, 409);
+    }
+    if (msg === "PLAN_UNAVAILABLE") return json(req, { error: "Plan not available" }, 404);
+    if (msg === "PLAN_MISMATCH") {
+      return json(req, { error: "Plan does not match the client's program" }, 409);
+    }
+    throw e;
+  }
 }

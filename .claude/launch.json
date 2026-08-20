@@ -6,7 +6,7 @@
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@gtb/web", "dev"],
       "autoPort": true,
-      "port": 5173
+      "port": 5175
     }
   ]
 }

@@ -74,22 +74,24 @@ export function InviteClientPanel({
         )}
       </div>
 
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
-        <code className="flex-1 truncate text-xs text-muted-foreground">
-          {result.registrationUrl}
-        </code>
-        <button
-          onClick={copyLink}
-          className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground hover:bg-muted"
-        >
-          {copied ? (
-            <Check className="h-3.5 w-3.5 text-success" />
-          ) : (
-            <Copy className="h-3.5 w-3.5" />
-          )}
+      {result.registrationUrl && (
+        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
+          <code className="flex-1 truncate text-xs text-muted-foreground">
+            {result.registrationUrl}
+          </code>
+          <button
+            onClick={copyLink}
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground hover:bg-muted"
+          >
+            {copied ? (
+              <Check className="h-3.5 w-3.5 text-success" />
+            ) : (
+              <Copy className="h-3.5 w-3.5" />
+            )}
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
+      )}
 
       {result.warning && (
         <p className="flex items-start gap-1.5 text-xs text-[hsl(35_92%_38%)]">

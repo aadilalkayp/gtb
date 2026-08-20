@@ -37,19 +37,28 @@ export async function resolveAuthUser(req: Request): Promise<AuthUser | undefine
     select: { id: true, role: true, isActive: true },
   });
 
-  // 2. Link a pre-provisioned account by email on first login.
+  // 2. Link a pre-provisioned account by email on first login. Requires the
+  // Supabase identity to have a CONFIRMED email (SEC-7): an attacker who
+  // registered the invitee's email with public sign-up must first prove
+  // ownership of that inbox before they can claim the pre-provisioned row.
   if (!user && email) {
     const pending = await prisma.user.findFirst({
       where: { email, authId: null },
       select: { id: true },
     });
     if (pending) {
-      user = await prisma.user.update({
-        where: { id: pending.id },
-        data: { authId },
-        select: { id: true, role: true, isActive: true },
-      });
-      console.info(`[auth] linked email=${email} to authId=${authId}`);
+      if (!data.user.email_confirmed_at) {
+        console.warn(
+          `[auth] refusing to link unconfirmed email=${email} to pre-provisioned user ${pending.id}`,
+        );
+      } else {
+        user = await prisma.user.update({
+          where: { id: pending.id },
+          data: { authId },
+          select: { id: true, role: true, isActive: true },
+        });
+        console.info(`[auth] linked email=${email} to authId=${authId}`);
+      }
     }
   }
 

@@ -1,7 +1,9 @@
 import { useMemo, useState } from "react";
+import { LoadMoreButton } from "@/components/LoadMoreButton";
 import { Link } from "react-router-dom";
 import { Plus, PhoneCall, AlertTriangle, Clock } from "lucide-react";
 import {
+  useCountFollowUp,
   useFindManyFollowUp,
   useUpdateFollowUp,
   useCreateFollowUp,
@@ -15,9 +17,10 @@ import {
   type FollowUpType,
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
-import { startOfDay, asDate } from "@/lib/insights";
+import { startOfDay } from "@/lib/insights";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import {
   Badge,
   Button,
@@ -37,6 +40,7 @@ interface FollowUpRow {
   id: string;
   type: string;
   dueDate: Date | string;
+  completedDate: Date | string | null; // CALC-1: recency is the completion date
   status: string;
   notes: string | null;
   croId: string;
@@ -44,15 +48,48 @@ interface FollowUpRow {
 }
 
 export function CroTrackingPage() {
-  const { user } = useAuth();
-  const [tab, setTab] = useState<TabId>("today");
+  const { user, role } = useAuth();
+  const [tab, setTabState] = useState<TabId>("today");
   const [completing, setCompleting] = useState<FollowUpRow | null>(null);
   const [showNew, setShowNew] = useState(false);
 
-  const { data, isLoading, refetch } = useFindManyFollowUp({
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 100;
+
+  function setTab(t: TabId) {
+    setTabState(t);
+    setPage(0);
+  }
+
+  // Day anchors are IST-pinned and stable for the whole day, so they're safe
+  // inside query args (unlike a raw `new Date()`, whose millisecond precision
+  // changes the query key every render).
+  const today = useMemo(() => startOfDay(), []);
+  const tomorrow = useMemo(() => new Date(today.getTime() + 24 * 60 * 60 * 1000), [today]);
+  const sevenDaysAgo = useMemo(
+    () => startOfDay(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)),
+    [],
+  );
+
+  // PERF-1: each tab is its own server-side WHERE. The old version fetched the
+  // first N follow-ups by ASCENDING due date — i.e. the oldest history — so
+  // past ~100 rows "Due today" rendered empty while rows existed, and the
+  // no-contact banner (computed from whatever completions happened to be in
+  // that window) flagged clients who WERE contacted.
+  const tabWhere = {
+    today: { status: { not: "completed" }, dueDate: { gte: today, lt: tomorrow } },
+    overdue: { status: { not: "completed" }, dueDate: { lt: today } },
+    upcoming: { status: { not: "completed" }, dueDate: { gte: tomorrow } },
+    done: { status: "completed" },
+  } as const;
+  const { data, isLoading, isError, error, refetch } = useFindManyFollowUp({
     include: { client: { select: { id: true, name: true, clientCode: true } } },
-    orderBy: { dueDate: "asc" },
+    where: tabWhere[tab],
+    orderBy: tab === "done" ? { completedDate: "desc" } : { dueDate: "asc" },
+    take: (page + 1) * PAGE_SIZE,
   });
+  const todayCountQ = useCountFollowUp({ where: tabWhere.today });
+  const overdueCountQ = useCountFollowUp({ where: tabWhere.overdue });
   const updateFollowUp = useUpdateFollowUp();
 
   // Active clients for the no-contact alert + new follow-up picker.
@@ -62,45 +99,45 @@ export function CroTrackingPage() {
     orderBy: { name: "asc" },
   });
 
+  // Recent contacts come from a dedicated query over ALL completions in the
+  // last 7 days — never from the paginated tab window.
+  const { data: recentContacts } = useFindManyFollowUp({
+    where: { status: "completed", completedDate: { gte: sevenDaysAgo } },
+    select: { clientId: true },
+  });
+
   const followUps = (data ?? []) as unknown as FollowUpRow[];
-  const today = startOfDay();
 
-  const groups = useMemo(() => {
-    const pending = followUps.filter((f) => f.status !== "completed");
-    return {
-      today: pending.filter((f) => startOfDay(asDate(f.dueDate)).getTime() === today.getTime()),
-      overdue: pending.filter((f) => startOfDay(asDate(f.dueDate)).getTime() < today.getTime()),
-      upcoming: pending.filter((f) => startOfDay(asDate(f.dueDate)).getTime() > today.getTime()),
-      done: followUps.filter((f) => f.status === "completed").reverse(),
-    };
-  }, [followUps, today]);
-
-  // Clients not contacted in 7+ days: no follow-up completed in the last 7 days.
+  // Clients not contacted in 7+ days: no follow-up COMPLETED in the last 7 days
+  // (CALC-1 — recency is the completion date, not the due date: a follow-up
+  // completed today but due 10 days ago is a contact, not a gap).
   const notContacted = useMemo(() => {
-    if (!activeClients) return [];
-    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    if (!activeClients || !recentContacts) return [];
     const recentByClient = new Set(
-      followUps
-        .filter((f) => f.status === "completed" && asDate(f.dueDate).getTime() >= sevenDaysAgo)
-        .map((f) => f.client.id),
+      (recentContacts as { clientId: string }[]).map((f) => f.clientId),
     );
     return activeClients.filter((c) => !recentByClient.has(c.id));
-  }, [activeClients, followUps]);
+  }, [activeClients, recentContacts]);
 
   const tabs: TabDef<TabId>[] = [
-    { id: "today", label: "Due today", count: groups.today.length },
-    { id: "overdue", label: "Overdue", count: groups.overdue.length },
+    { id: "today", label: "Due today", count: todayCountQ.data ?? 0 },
+    { id: "overdue", label: "Overdue", count: overdueCountQ.data ?? 0 },
     { id: "upcoming", label: "Upcoming" },
     { id: "done", label: "Completed" },
   ];
 
+  const refetchCounts = () => {
+    void todayCountQ.refetch();
+    void overdueCountQ.refetch();
+  };
+
   async function snooze(f: FollowUpRow) {
-    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
     await updateFollowUp.mutateAsync({ where: { id: f.id }, data: { dueDate: tomorrow } });
     await refetch();
+    refetchCounts();
   }
 
-  const visible = groups[tab];
+  const visible = followUps;
 
   return (
     <div className="p-6">
@@ -143,6 +180,11 @@ export function CroTrackingPage() {
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <QueryErrorState
+            message={error instanceof Error ? error.message : undefined}
+            onRetry={() => void refetch()}
+          />
         ) : !visible.length ? (
           <EmptyState
             icon={PhoneCall}
@@ -169,22 +211,27 @@ export function CroTrackingPage() {
                     {f.notes && ` — ${f.notes}`}
                   </p>
                 </div>
-                {f.status !== "completed" && f.croId === user?.id && (
-                  <div className="flex gap-1.5">
-                    <Button size="sm" onClick={() => setCompleting(f)}>
-                      Complete
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => void snooze(f)}>
-                      <Clock className="h-4 w-4" /> Snooze
-                    </Button>
-                  </div>
-                )}
+                {f.status !== "completed" &&
+                  (f.croId === user?.id || role === "founder" || role === "ops_head") && (
+                    <div className="flex gap-1.5">
+                      <Button size="sm" onClick={() => setCompleting(f)}>
+                        Complete
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => void snooze(f)}>
+                        <Clock className="h-4 w-4" /> Snooze
+                      </Button>
+                    </div>
+                  )}
                 {f.status === "completed" && <Badge tone="success">Done</Badge>}
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {!isLoading && !isError && followUps.length >= (page + 1) * PAGE_SIZE && (
+        <LoadMoreButton onClick={() => setPage((p) => p + 1)} />
+      )}
 
       {completing && (
         <CompleteFollowUpModal
@@ -193,6 +240,7 @@ export function CroTrackingPage() {
           onDone={() => {
             setCompleting(null);
             void refetch();
+            refetchCounts();
           }}
         />
       )}

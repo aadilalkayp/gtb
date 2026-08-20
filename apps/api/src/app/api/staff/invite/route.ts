@@ -3,7 +3,7 @@ import { prisma } from "@gtb/db";
 import { STAFF_ROLES, STAFF_ROLE_LABELS, type StaffRole } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { sendMail } from "@/lib/mailer";
+import { sendMail, mailConfigured } from "@/lib/mailer";
 import { staffInviteEmail } from "@/lib/emails";
 import { env } from "@/lib/env";
 import { corsHeaders, handleOptions } from "@/lib/cors";
@@ -34,6 +34,9 @@ export async function POST(req: NextRequest): Promise<Response> {
   const email = body.email?.trim().toLowerCase();
   const role = body.role as StaffRole | undefined;
   if (!name || !email) return json(req, { error: "name and email are required" }, 400);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return json(req, { error: "A valid email is required" }, 400); // MISC-7
+  }
   if (!role || !STAFF_ROLES.includes(role)) {
     return json(req, { error: "A valid staff role is required" }, 400);
   }
@@ -46,6 +49,13 @@ export async function POST(req: NextRequest): Promise<Response> {
   if (!user) {
     user = await prisma.user.create({
       data: { name, email, phone: body.phone?.trim() || null, role },
+    });
+  } else if (user.role !== role) {
+    // MISC-7: a re-invite with a changed role must apply it, not silently keep
+    // the old one.
+    user = await prisma.user.update({
+      where: { id: user.id },
+      data: { role, ...(name ? { name } : {}) },
     });
   }
 
@@ -81,11 +91,17 @@ export async function POST(req: NextRequest): Promise<Response> {
     }),
   );
 
+  // SEC-9: same as clients/invite — the invite link (which authenticates as the
+  // invitee) is emailed only; returned in the response just as a dev fallback
+  // when mail is not configured.
+  const linkInResponse = !mailConfigured;
+
   return json(req, {
     ok: true,
     userId: user.id,
     emailed: mail.sent,
-    registrationUrl,
+    ...(linkInResponse ? { registrationUrl } : {}),
+    ...(!linkInResponse ? { emailedHint: "Registration link sent by email" } : {}),
     ...(warning ? { warning } : {}),
   });
 }

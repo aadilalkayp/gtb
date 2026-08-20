@@ -62,6 +62,47 @@ pnpm dev
   it's unset, invites still work — the registration link is returned to the staff
   UI to copy and share manually.
 
+### Local development (Supabase CLI)
+
+GTB OS runs its **own** local Supabase stack, fully isolated from any other
+Supabase project on this machine:
+
+- Containers/volumes are named `supabase_*_gtb` on the `supabase_network_gtb`
+  network (project_id `gtb` in `supabase/config.toml`).
+- Every port lives in the **544xx** range so it can run side-by-side with another
+  project's default 5432x stack (and with the test DB on 54329).
+
+```bash
+# Start (config lives in supabase/config.toml at the repo root)
+supabase start
+
+# See the URLs + anon/service_role keys — copy them into the .env files:
+supabase status
+#   API URL:        http://127.0.0.1:54421
+#   DB URL:         postgresql://postgres:postgres@127.0.0.1:54422/postgres
+#   Studio:         http://127.0.0.1:54424
+#   Inbucket email: http://127.0.0.1:54425
+```
+
+No `supabase` CLI installed? Either `npm i -g supabase`, `brew install
+supabase/tap/supabase`, or run every command with `npx supabase …` instead.
+
+Then in the repo root: create the `client-documents` bucket (Studio → Storage),
+`pnpm db:generate && pnpm db:migrate && pnpm --filter @gtb/db seed`, create the
+founder's Supabase auth user (Studio → Authentication, email
+`aadil.alkp@gmail.com`), and `pnpm dev`.
+
+**Stop it when you're done** (it's a dozen containers — don't leave them running):
+
+```bash
+supabase stop          # stops, KEEPS your data (resume with supabase start)
+supabase stop --no-backup   # stops and wipes data + volumes
+```
+
+> The automated test suite does **not** use Supabase at all — it runs against a
+> disposable Postgres container (`gtb-test-db`, port 54329):
+> `pnpm --filter @gtb/db test`
+
 See [`gtb_os_srs_v2.md`](./gtb_os_srs_v2.md) for the full specification.
 
 ## Required environment variables

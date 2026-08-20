@@ -3,7 +3,7 @@ import { prisma } from "@gtb/db";
 import { CLIENT_TYPE_LABELS, LEAD_PHASE_ORDER } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { sendMail } from "@/lib/mailer";
+import { sendMail, mailConfigured } from "@/lib/mailer";
 import { inviteEmail } from "@/lib/emails";
 import { env } from "@/lib/env";
 import { corsHeaders, handleOptions } from "@/lib/cors";
@@ -50,6 +50,15 @@ export async function POST(req: NextRequest): Promise<Response> {
   let userId = client.userId;
   if (!userId) {
     const existing = await prisma.user.findUnique({ where: { email } });
+    // SEC-8: never link a client record to a staff (or other-role) account —
+    // that would hand the staffer every client-ownership check.
+    if (existing && existing.role !== "client") {
+      return json(
+        req,
+        { error: "This email belongs to a staff account — invite it as a client separately" },
+        409,
+      );
+    }
     const user =
       existing ??
       (await prisma.user.create({
@@ -116,10 +125,17 @@ export async function POST(req: NextRequest): Promise<Response> {
     inviteEmail({ to: client.email, clientName: client.name, brand, registrationUrl }),
   );
 
+  // SEC-9: an invitation link authenticates as the invitee. In normal
+  // operation the link goes only by email; it is returned in the API response
+  // solely as a dev fallback when mail is not configured (a logged-in CRO must
+  // never be able to copy a magic link that logs them in as the client).
+  const linkInResponse = !mailConfigured;
+
   return json(req, {
     ok: true,
     emailed: mail.sent,
-    registrationUrl,
+    ...(linkInResponse ? { registrationUrl } : {}),
+    ...(!linkInResponse ? { emailedHint: "Registration link sent by email" } : {}),
     ...(warning ? { warning } : {}),
     ...(mail.error && mail.error !== "mail_not_configured" ? { mailError: mail.error } : {}),
   });

@@ -1,14 +1,22 @@
 import { z } from "zod";
 
-/** Empty string / null → undefined, then coerce to a number. For optional numeric inputs. */
-const optionalNumber = z.preprocess(
+// MISC-8: sane human bounds so nonsense values can't enter the record.
+const age = z.preprocess(
   (v) => (v === "" || v === null || v === undefined ? undefined : v),
-  z.coerce.number().positive().optional(),
+  z.coerce.number().int().min(10).max(100).optional(),
+);
+const heightCm = z.preprocess(
+  (v) => (v === "" || v === null || v === undefined ? undefined : v),
+  z.coerce.number().min(100).max(250).optional(),
+);
+const weightKg = z.preprocess(
+  (v) => (v === "" || v === null || v === undefined ? undefined : v),
+  z.coerce.number().min(30).max(300).optional(),
 );
 
 export const assessmentSchema = z.object({
   // General
-  age: optionalNumber,
+  age,
   gender: z.enum(["male", "female", "other"]),
   // Skincare
   skinType: z.enum(["oily", "dry", "combination", "sensitive", "normal"]),
@@ -18,8 +26,8 @@ export const assessmentSchema = z.object({
   dermatologicalNotes: z.string().optional(),
   // Fitness
   fitnessLevel: z.enum(["beginner", "intermediate", "advanced"]),
-  heightCm: optionalNumber,
-  weightKg: optionalNumber,
+  heightCm,
+  weightKg,
   healthConditions: z.string().optional(),
   dietaryPreference: z.enum(["vegetarian", "vegan", "non_veg", "other"]).optional(),
   fitnessGoals: z.array(z.string()).default([]),

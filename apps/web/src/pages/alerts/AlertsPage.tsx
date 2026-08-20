@@ -15,6 +15,7 @@ import {
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { cn } from "@/lib/utils";
 import { useDashboardData } from "@/pages/dashboard/useDashboardData";
 import type { AlertItem, AlertSeverity } from "@/lib/alerts";
@@ -40,8 +41,25 @@ const SEVERITY: Record<AlertSeverity, { ring: string; chip: string; label: strin
 };
 
 export function AlertsPage() {
-  const { isLoading, metrics } = useDashboardData();
+  const { isLoading, isError, error, metrics } = useDashboardData();
   if (isLoading) return <FullPageSpinner />;
+
+  // CALC-8: "All clear" must never be shown when the queries actually failed.
+  if (isError) {
+    return (
+      <div className="p-6">
+        <PageHeader
+          title="Alerts"
+          subtitle="Everything that needs attention, derived live from the latest data."
+        />
+        <div className="mt-8">
+          <QueryErrorState
+            message={error instanceof Error ? error.message : "The alerts queries failed."}
+          />
+        </div>
+      </div>
+    );
+  }
 
   const alerts = metrics.alerts;
   const totalItems = alerts.reduce((t, a) => t + a.count, 0);

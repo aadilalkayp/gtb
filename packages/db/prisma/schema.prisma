@@ -250,7 +250,7 @@ model Client {
 model Assessment {
   id                  String    @id() @default(uuid())
   clientId            String    @unique()
-  client              Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client              Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
   age                 Int?
   gender              String?
   profilePhotoUrl     String?
@@ -315,12 +315,13 @@ model PlanService {
 model ClientPlan {
   id                String        @id() @default(uuid())
   clientId          String        @unique()
-  client            Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client            Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   planId            String
   plan              Plan          @relation(fields: [planId], references: [id])
   planNameSnapshot  String
   priceAtEnrollment Int
   durationMonths    Int
+  servicesSnapshot  Json?
   enrolledAt        DateTime      @default(now())
   installments      Installment[]
 }
@@ -328,7 +329,7 @@ model ClientPlan {
 model Installment {
   id                String            @id() @default(uuid())
   clientPlanId      String
-  clientPlan        ClientPlan        @relation(fields: [clientPlanId], references: [id], onDelete: Cascade)
+  clientPlan        ClientPlan        @relation(fields: [clientPlanId], references: [id], onDelete: Restrict)
   installmentNumber Int
   amount            Int
   dueDate           DateTime
@@ -344,14 +345,16 @@ model Installment {
   createdAt         DateTime          @default(now())
   updatedAt         DateTime          @updatedAt()
 
+  @@unique([clientPlanId, installmentNumber])
   @@index([status])
   @@index([dueDate])
+  @@index([clientPlanId])
 }
 
 model Assignment {
   id           String         @id() @default(uuid())
   clientId     String
-  client       Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client       Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   staffId      String
   staff        User           @relation("StaffAssignments", fields: [staffId], references: [id])
   role         AssignmentRole
@@ -366,24 +369,26 @@ model Assignment {
 }
 
 model Session {
-  id               String            @id() @default(uuid())
-  clientId         String
-  client           Client            @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  serviceType      ServiceType
-  consultantId     String?
-  consultant       User?             @relation("ConsultantSessions", fields: [consultantId], references: [id])
-  sessionNumber    Int
-  scheduledDate    DateTime
-  actualDate       DateTime?
-  status           SessionStatus     @default(scheduled)
-  notes            String?
-  rating           Int?
-  ratingFeedback   String?
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt()
-  documents        Document[]
-  stylingOperation StylingOperation?
+  id                    String            @id() @default(uuid())
+  clientId              String
+  client                Client            @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  serviceType           ServiceType
+  consultantId          String?
+  consultant            User?             @relation("ConsultantSessions", fields: [consultantId], references: [id])
+  sessionNumber         Int
+  scheduledDate         DateTime
+  actualDate            DateTime?
+  originalScheduledDate DateTime?
+  status                SessionStatus     @default(scheduled)
+  notes                 String?
+  rating                Int?
+  ratingFeedback        String?
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt()
+  documents             Document[]
+  stylingOperation      StylingOperation?
 
+  @@unique([clientId, serviceType, sessionNumber])
   @@index([clientId])
   @@index([consultantId])
   @@index([scheduledDate])
@@ -393,7 +398,7 @@ model Session {
 model FollowUp {
   id            String         @id() @default(uuid())
   clientId      String
-  client        Client         @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client        Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   croId         String
   cro           User           @relation("CroFollowUps", fields: [croId], references: [id])
   type          FollowUpType
@@ -411,7 +416,7 @@ model FollowUp {
 model StylingOperation {
   id                     String        @id() @default(uuid())
   clientId               String
-  client                 Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client                 Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   sessionId              String?       @unique()
   session                Session?      @relation(fields: [sessionId], references: [id])
   stylistId              String?
@@ -441,7 +446,7 @@ model StylingOperation {
 model Document {
   id               String       @id() @default(uuid())
   clientId         String
-  client           Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client           Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
   type             DocumentType
   fileName         String
   fileUrl          String
@@ -456,6 +461,7 @@ model Document {
 
   @@index([clientId])
   @@index([type])
+  @@index([sessionId])
 }
 
 /// Per-session fee for a consultant, optionally specific to a service type.
@@ -500,11 +506,16 @@ model Expense {
   receiptDocumentId String?         @unique()
   receiptDocument   Document?       @relation("ExpenseReceipt", fields: [receiptDocumentId], references: [id])
   notes             String?
+  rejectionReason   String?
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt()
 
   @@index([status])
   @@index([date])
+  @@index([submittedById])
+  @@index([payeeId])
+  @@index([clientId])
+  @@index([categoryId])
 }
 
 model ContentItem {
@@ -541,6 +552,8 @@ model Task {
   completedAt  DateTime?
 
   @@index([assignedToId, status])
+  @@index([clientId])
+  @@index([dueDate])
 }
 
 model Notification {

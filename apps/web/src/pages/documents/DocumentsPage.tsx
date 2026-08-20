@@ -1,9 +1,12 @@
 import { useMemo, useState } from "react";
+import { LoadMoreButton } from "@/components/LoadMoreButton";
 import { FolderOpen, Plus, Search } from "lucide-react";
 import { useFindManyDocument, useFindManyClient } from "@gtb/db/hooks";
 import { DOCUMENT_TYPES, humanize, type DocumentType } from "@gtb/shared";
+import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
+import { QueryErrorState } from "@/components/QueryErrorState";
 import { DocumentRow } from "@/components/DocumentRow";
 import { FileUploadField } from "@/components/FileUploadField";
 import { Button, Field, Input, Modal, Select, Spinner } from "@/components/ui";
@@ -18,29 +21,46 @@ interface DocRow {
 }
 
 export function DocumentsPage() {
-  const [type, setType] = useState<"all" | DocumentType>("all");
+  const [type, setTypeState] = useState<"all" | DocumentType>("all");
   const [query, setQuery] = useState("");
   const [showUpload, setShowUpload] = useState(false);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 50;
 
-  const { data, isLoading, refetch } = useFindManyDocument({
+  function setType(t: "all" | DocumentType) {
+    setTypeState(t);
+    setPage(0);
+  }
+
+  // PERF-1: filter + search are server-side. Filtering the fetched page in JS
+  // meant (a) a document beyond the first page was unfindable by search, and
+  // (b) an active filter shrank the visible list below PAGE_SIZE, which hid
+  // the "Load more" button and made the remaining pages unreachable.
+  const search = useDebouncedValue(query.trim());
+  const where = useMemo(() => {
+    const clauses: Record<string, unknown>[] = [];
+    if (type !== "all") clauses.push({ type });
+    if (search) {
+      clauses.push({
+        OR: [
+          { fileName: { contains: search, mode: "insensitive" } },
+          { client: { name: { contains: search, mode: "insensitive" } } },
+          { client: { clientCode: { contains: search, mode: "insensitive" } } },
+        ],
+      });
+    }
+    return clauses.length ? { AND: clauses } : undefined;
+  }, [type, search]);
+
+  const { data, isLoading, isError, error, refetch } = useFindManyDocument({
     include: { client: { select: { id: true, name: true, clientCode: true } } },
+    ...(where ? { where } : {}),
     orderBy: { createdAt: "desc" },
+    take: (page + 1) * PAGE_SIZE,
   });
 
   const docs = (data ?? []) as unknown as DocRow[];
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return docs.filter((d) => {
-      if (type !== "all" && d.type !== type) return false;
-      if (!q) return true;
-      return (
-        d.fileName.toLowerCase().includes(q) ||
-        d.client.name.toLowerCase().includes(q) ||
-        d.client.clientCode.toLowerCase().includes(q)
-      );
-    });
-  }, [docs, type, query]);
+  const filtered = docs;
 
   return (
     <div className="p-6">
@@ -83,12 +103,17 @@ export function DocumentsPage() {
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-muted-foreground" />
           </div>
+        ) : isError ? (
+          <QueryErrorState
+            message={error instanceof Error ? error.message : undefined}
+            onRetry={() => void refetch()}
+          />
         ) : !filtered.length ? (
           <EmptyState
             icon={FolderOpen}
-            title={docs.length ? "No matching documents" : "No documents yet"}
+            title={type !== "all" || search ? "No matching documents" : "No documents yet"}
             hint={
-              docs.length
+              type !== "all" || search
                 ? "Try a different type or search term."
                 : "Plans and receipts uploaded across the system show up here."
             }
@@ -99,6 +124,9 @@ export function DocumentsPage() {
               <DocumentRow key={d.id} doc={d} meta={d.client.name} />
             ))}
           </div>
+        )}
+        {!isLoading && !isError && (filtered.length ?? 0) >= (page + 1) * PAGE_SIZE && (
+          <LoadMoreButton onClick={() => setPage((p) => p + 1)} />
         )}
       </div>
 

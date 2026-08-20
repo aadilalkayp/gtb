@@ -10,7 +10,7 @@ export default defineConfig({
     },
   },
   server: {
-    port: Number(process.env.PORT) || 5173,
+    port: Number(process.env.PORT) || 5175,
   },
   build: {
     rollupOptions: {

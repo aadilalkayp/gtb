@@ -8,6 +8,7 @@ import {
   Phone,
   Mail,
   PauseCircle,
+  Pencil,
   PlayCircle,
   XCircle,
   CheckCircle2,
@@ -30,12 +31,14 @@ import {
   type ServiceType,
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
+import { cancelClient, completeClient, updateWeddingDate } from "@/lib/api";
 import { deriveAtRisk, installmentDisplayStatus, averageRating } from "@/lib/insights";
 import { Avatar } from "@/components/ui/Avatar";
 import {
   Badge,
   Button,
   Field,
+  Input,
   Modal,
   ProgressRing,
   Select,
@@ -59,6 +62,7 @@ export function ClientProfilePage() {
   const [tab, setTab] = useState<TabId>("overview");
   const [statusAction, setStatusAction] = useState<"hold" | "cancel" | "complete" | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [showWeddingEdit, setShowWeddingEdit] = useState(false);
 
   const {
     data: client,
@@ -168,6 +172,16 @@ export function ClientProfilePage() {
                 <CalendarHeart className="h-4 w-4" />
                 {formatDate(client.weddingDate)}
                 {days >= 0 && <span className="font-medium text-foreground">({days}d)</span>}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setShowWeddingEdit(true)}
+                    className="text-muted-foreground hover:text-foreground"
+                    title="Change wedding date"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </span>
               <span className="flex items-center gap-1.5">
                 <MapPin className="h-4 w-4" /> {client.city}
@@ -446,13 +460,20 @@ export function ClientProfilePage() {
           outstanding={Math.max(total - paid, 0)}
           onClose={() => setStatusAction(null)}
           onConfirm={async (reason) => {
-            const data =
-              statusAction === "hold"
-                ? { status: "on_hold" as const, onHoldReason: reason }
-                : statusAction === "cancel"
-                  ? { status: "cancelled" as const, cancellationReason: reason }
-                  : { status: "completed" as const };
-            await updateClient.mutateAsync({ where: { id: client.id }, data });
+            if (statusAction === "cancel") {
+              // SYS-3: the server cascade (future sessions cancelled, installments
+              // waived, portal login blocked) — one transaction.
+              await cancelClient(client.id, reason);
+            } else if (statusAction === "complete") {
+              // SYS-3: server-enforced preconditions (all sessions closed, no
+              // mandatory outstanding payments).
+              await completeClient(client.id);
+            } else {
+              await updateClient.mutateAsync({
+                where: { id: client.id },
+                data: { status: "on_hold", onHoldReason: reason },
+              });
+            }
             setStatusAction(null);
             await refetch();
           }}
@@ -467,6 +488,19 @@ export function ClientProfilePage() {
             setShowUpload(false);
             void refetch();
           }}
+        />
+      )}
+
+      {showWeddingEdit && (
+        <WeddingDateModal
+          clientName={client.name}
+          currentDate={client.weddingDate}
+          onClose={() => setShowWeddingEdit(false)}
+          onDone={() => {
+            setShowWeddingEdit(false);
+            void refetch();
+          }}
+          clientId={client.id}
         />
       )}
     </div>
@@ -638,6 +672,87 @@ function StatusChangeModal({
         )}
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>
+    </Modal>
+  );
+}
+
+/** FEAT-5 (SRS §24.1): change the wedding date through the server route, which
+ *  regenerates future sessions from the enrollment snapshot and audit-logs the
+ *  change — the gateway write this replaces silently left the old schedule. */
+function WeddingDateModal({
+  clientId,
+  clientName,
+  currentDate,
+  onClose,
+  onDone,
+}: {
+  clientId: string;
+  clientName: string;
+  currentDate: string | Date;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [date, setDate] = useState(() => {
+    const d = new Date(currentDate);
+    return Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+  });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const [result, setResult] = useState<number>();
+
+  async function save() {
+    if (!date) {
+      setError("Pick a date.");
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      const res = await updateWeddingDate(clientId, date);
+      setResult(res.sessionsRescheduled);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not update the wedding date");
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={result != null ? onDone : onClose}
+      title={`Change ${clientName}'s wedding date`}
+      size="sm"
+      footer={
+        result != null ? (
+          <Button onClick={onDone}>Done</Button>
+        ) : (
+          <>
+            <Button variant="outline" onClick={onClose}>
+              Back
+            </Button>
+            <Button onClick={save} loading={busy}>
+              Update date
+            </Button>
+          </>
+        )
+      }
+    >
+      {result != null ? (
+        <p className="text-sm text-muted-foreground">
+          Wedding date updated — {result} future session{result === 1 ? "" : "s"} rescheduled.
+        </p>
+      ) : (
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Future sessions are rescheduled around the new date; completed and cancelled sessions
+            are untouched. The team is notified.
+          </p>
+          <Field label="Wedding date" required>
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          {error && <p className="text-sm text-danger">{error}</p>}
+        </div>
+      )}
     </Modal>
   );
 }

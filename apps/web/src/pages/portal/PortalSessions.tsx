@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useFindManySession, useUpdateSession } from "@gtb/db/hooks";
+import { useFindManySession } from "@gtb/db/hooks";
 import {
   SERVICE_TYPES,
   SERVICE_TYPE_LABELS,
@@ -8,6 +8,7 @@ import {
   type ServiceType,
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
+import { rateSession } from "@/lib/api";
 import { RatingStars, RatingInput } from "@/components/RatingStars";
 import { EmptyState } from "@/components/EmptyState";
 import { Button, Modal, Spinner, StatusBadge, Tabs, Textarea, type TabDef } from "@/components/ui";
@@ -179,10 +180,10 @@ function RateSessionModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const updateSession = useUpdateSession();
   const [stars, setStars] = useState<number | null>(null);
   const [feedback, setFeedback] = useState("");
   const [error, setError] = useState<string>();
+  const [saving, setSaving] = useState(false);
 
   async function submit() {
     if (!stars) {
@@ -190,14 +191,13 @@ function RateSessionModal({
       return;
     }
     setError(undefined);
+    setSaving(true);
     try {
-      await updateSession.mutateAsync({
-        where: { id: sessionId },
-        data: { rating: stars, ratingFeedback: feedback.trim() || null },
-      });
+      await rateSession(sessionId, stars, feedback.trim() || undefined);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not save your rating");
+      setSaving(false);
     }
   }
 
@@ -212,7 +212,7 @@ function RateSessionModal({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={submit} loading={updateSession.isPending}>
+          <Button onClick={submit} loading={saving}>
             Submit
           </Button>
         </>
