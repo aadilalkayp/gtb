@@ -93,7 +93,7 @@ export function StylingOperationsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Styling Operations"
         subtitle="Outfits, accessories, travel, and the delivery checklist."
@@ -130,7 +130,7 @@ export function StylingOperationsPage() {
             hint="Create one to start tracking outfits, travel, and delivery."
           />
         ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
+          <div className="stagger-children grid gap-4 lg:grid-cols-2">
             {ops.map((op) => {
               const checked = CHECKLIST.filter((c) => op[c.key]).length;
               const canEdit = isAdmin || op.stylistId === user?.id;
@@ -155,7 +155,7 @@ export function StylingOperationsPage() {
                         <span>
                           {op.stylingDate ? formatDate(op.stylingDate) : "Date TBC"}
                           {dl != null && dl >= 0 && dl <= 7 && (
-                            <span className="ml-1 font-medium text-[hsl(35_92%_38%)]">
+                            <span className="ml-1 font-medium text-warning">
                               ({dl === 0 ? "today" : `in ${dl}d`})
                             </span>
                           )}
@@ -185,7 +185,7 @@ export function StylingOperationsPage() {
                   <div className="mt-3">
                     <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
                       <span>Checklist</span>
-                      <span className="font-medium">
+                      <span className="font-num font-medium">
                         {checked}/{CHECKLIST.length}
                       </span>
                     </div>
@@ -204,7 +204,9 @@ export function StylingOperationsPage() {
                             key={item.key}
                             className={cn(
                               "flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm",
-                              canEdit ? "cursor-pointer hover:bg-muted/60" : "cursor-default",
+                              canEdit
+                                ? "cursor-pointer transition-colors hover:bg-muted/60"
+                                : "cursor-default",
                             )}
                           >
                             <input

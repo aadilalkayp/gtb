@@ -111,7 +111,7 @@ export function NewClientPage() {
 
   if (created) {
     return (
-      <div className="p-6">
+      <div className="page">
         <PageHeader title="Lead created" subtitle={`${created.name} · ${created.clientCode}`} />
         <div className="mt-6 max-w-xl space-y-5">
           <div className="card flex items-start gap-3 p-4">
@@ -151,10 +151,10 @@ export function NewClientPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="page">
       <Link
         to="/clients"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" /> Leads
       </Link>
@@ -214,9 +214,7 @@ export function NewClientPage() {
 
         {duplicateClients.length > 0 && (
           <div className="rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-sm">
-            <p className="font-medium text-[hsl(35_92%_38%)]">
-              Possible duplicate clients found
-            </p>
+            <p className="font-medium text-warning">Possible duplicate clients found</p>
             <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
               {duplicateClients.map((d) => (
                 <li key={d.id}>

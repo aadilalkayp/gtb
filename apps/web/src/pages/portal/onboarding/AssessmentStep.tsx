@@ -48,7 +48,7 @@ function PillCheckboxes({
       {options.map((o) => (
         <label key={o.value} className="cursor-pointer">
           <input type="checkbox" value={o.value} {...register(name)} className="peer sr-only" />
-          <span className="inline-block rounded-full border border-border px-3 py-1 text-sm text-muted-foreground transition-colors peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40">
+          <span className="inline-block rounded-full border border-border px-3 py-1 text-sm text-muted-foreground transition-colors duration-150 hover:border-border-strong hover:text-foreground peer-checked:border-primary peer-checked:bg-primary/10 peer-checked:text-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40">
             {o.label}
           </span>
         </label>

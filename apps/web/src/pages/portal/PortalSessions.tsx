@@ -64,8 +64,8 @@ export function PortalSessions() {
   }
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-semibold">My sessions</h1>
+    <div className="animate-fade-up space-y-5">
+      <h1 className="font-display text-2xl font-semibold tracking-display">My sessions</h1>
 
       {tabs.length > 1 && <Tabs tabs={tabs} active={filter} onChange={setFilter} />}
 

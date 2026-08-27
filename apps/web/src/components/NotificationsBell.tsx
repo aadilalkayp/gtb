@@ -67,7 +67,7 @@ export function NotificationsBell() {
     <div ref={wrapRef} className="relative">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+        className="relative flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
         aria-label={unread ? `Notifications (${unread} unread)` : "Notifications"}
       >
         <Bell className="h-[18px] w-[18px]" />
@@ -79,7 +79,7 @@ export function NotificationsBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-80 overflow-hidden rounded-card border border-border bg-surface shadow-lg">
+        <div className="absolute right-0 top-11 z-50 w-80 origin-top-right animate-scale-in overflow-hidden rounded-card border border-border bg-surface shadow-lg">
           <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
             <p className="text-sm font-semibold">Notifications</p>
             {unread > 0 && (
@@ -102,7 +102,7 @@ export function NotificationsBell() {
                   key={n.id}
                   onClick={() => openItem(n)}
                   className={cn(
-                    "flex w-full items-start gap-2.5 px-4 py-3 text-left hover:bg-muted/60",
+                    "flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-muted/60",
                     !n.isRead && "bg-info/5",
                   )}
                 >

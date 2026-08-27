@@ -49,20 +49,20 @@ export function MonthCalendar({ events }: { events: CalendarEvent[] }) {
         <div className="flex gap-1">
           <button
             onClick={() => setCursor(new Date(year, month - 1, 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
             aria-label="Previous month"
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <button
             onClick={() => setCursor(new Date())}
-            className="rounded-lg px-2 text-xs font-medium text-muted-foreground hover:bg-muted"
+            className="rounded-lg px-2 text-xs font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
           >
             Today
           </button>
           <button
             onClick={() => setCursor(new Date(year, month + 1, 1))}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
             aria-label="Next month"
           >
             <ChevronRight className="h-4 w-4" />
@@ -88,6 +88,8 @@ export function MonthCalendar({ events }: { events: CalendarEvent[] }) {
               className={cn(
                 "min-h-[88px] border-b border-r border-border p-1.5 last:border-r-0 [&:nth-child(7n)]:border-r-0",
                 !date && "bg-muted/20",
+                date && "transition-colors hover:bg-muted/50",
+                today && "bg-primary/5 ring-1 ring-inset ring-primary/20",
               )}
             >
               {date && (
@@ -108,7 +110,7 @@ export function MonthCalendar({ events }: { events: CalendarEvent[] }) {
                         className={cn(
                           "block w-full truncate rounded px-1.5 py-0.5 text-left text-[11px] font-medium text-white",
                           e.color,
-                          e.onClick && "hover:opacity-85",
+                          e.onClick && "transition-opacity duration-150 hover:opacity-85",
                         )}
                         title={e.label}
                       >

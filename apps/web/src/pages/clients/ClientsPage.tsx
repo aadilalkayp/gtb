@@ -15,7 +15,7 @@ import {
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { PageHeader } from "@/components/PageHeader";
-import { Badge, Button, Modal, Spinner, StatusBadge } from "@/components/ui";
+import { Badge, Button, Modal, PillFilter, Spinner, StatusBadge } from "@/components/ui";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { InviteClientPanel } from "./InviteClientPanel";
 
@@ -58,7 +58,7 @@ export function ClientsPage() {
   });
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Clients"
         subtitle="Leads and active clients across both programs."
@@ -71,24 +71,17 @@ export function ClientsPage() {
         }
       />
 
-      <div className="mt-5 flex flex-wrap gap-1">
-        {FILTERS.map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={
-              "rounded-full px-3 py-1 text-sm font-medium transition-colors " +
-              (filter === f
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted")
-            }
-          >
-            {f === "all" ? "All" : CLIENT_STATUS_LABELS[f]}
-          </button>
-        ))}
-      </div>
+      <PillFilter
+        className="mt-6"
+        options={FILTERS.map((f) => ({
+          id: f,
+          label: f === "all" ? "All" : CLIENT_STATUS_LABELS[f],
+        }))}
+        active={filter}
+        onChange={setFilter}
+      />
 
-      <div className="mt-5">
+      <div className="mt-6">
         {isLoading ? (
           <div className="flex justify-center py-16">
             <Spinner className="h-6 w-6 text-muted-foreground" />
@@ -110,7 +103,10 @@ export function ClientsPage() {
               const isLead = c.status === "lead";
               const alreadyInvited = LEAD_PHASE_ORDER[c.leadPhase] >= LEAD_PHASE_ORDER.invited;
               return (
-                <div key={c.id} className="flex items-center gap-4 px-4 py-3">
+                <div
+                  key={c.id}
+                  className="flex items-center gap-4 px-5 py-3.5 transition-colors hover:bg-muted/50"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <Link
@@ -149,7 +145,7 @@ export function ClientsPage() {
 
                   <Link
                     to={`/clients/${c.id}`}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
                     aria-label="Open client"
                   >
                     <ChevronRight className="h-4 w-4" />

@@ -99,6 +99,10 @@ const PortalDocuments = lazy(() =>
 const PortalProfile = lazy(() =>
   import("@/pages/portal/PortalProfile").then((m) => ({ default: m.PortalProfile })),
 );
+const PortalScan = lazy(() =>
+  import("@/pages/portal/PortalScan").then((m) => ({ default: m.PortalScan })),
+);
+const ScanPage = lazy(() => import("@/pages/scan/ScanPage").then((m) => ({ default: m.ScanPage })));
 
 /** Sends users to their portal home based on auth state. */
 function IndexRedirect() {
@@ -117,6 +121,8 @@ export default function App() {
         <Route path="/portal/login" element={<LoginPage portal="client" />} />
         {/* Reached from the invite email; Supabase establishes the session from the link. */}
         <Route path="/portal/register" element={<RegisterPage />} />
+        {/* Wedding Readiness Scan — the public lead-gen funnel (no auth). */}
+        <Route path="/scan" element={<ScanPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage portal="staff" />} />
         <Route path="/portal/forgot-password" element={<ForgotPasswordPage portal="client" />} />
         {/* Reached from the recovery email; Supabase establishes the session from the link. */}
@@ -161,6 +167,7 @@ export default function App() {
               <Route element={<ClientLayout />}>
                 <Route path="/portal" element={<PortalHome />} />
                 <Route path="/portal/sessions" element={<PortalSessions />} />
+                <Route path="/portal/scan" element={<PortalScan />} />
                 <Route path="/portal/payments" element={<PortalPayments />} />
                 <Route path="/portal/documents" element={<PortalDocuments />} />
                 <Route path="/portal/profile" element={<PortalProfile />} />

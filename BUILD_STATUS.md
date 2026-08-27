@@ -36,7 +36,8 @@ from the data (no background jobs required).
 | Reports                                                 | §20   | ✅     | `/reports` — revenue/collections/sales/performance/expenses/operations, charts + CSV export                                        |
 | Media                                                   | §21   | ✅     | `/media` (content kanban, filters by campaign/platform/owner)                                                                      |
 | Settings / admin                                        | §22   | ✅     | Team & Users (+ `/api/staff/invite`), Plans, Lead Sources, Expense Categories                                                      |
-| Client portal                                           | §19.6 | ✅     | `/portal`, `/portal/{sessions,payments,documents,profile}`                                                                         |
+| Client portal                                           | §19.6 | ✅     | `/portal`, `/portal/{sessions,payments,documents,profile,scan}`                                                                    |
+| Wedding Readiness Scan (companion funnel)               | —     | ✅     | Public `/scan` funnel → lead w/ LeadSource "Readiness Scan"; `/portal/scan` (rescan + progress + roadmap); Scans tab on `/clients/:id`; `/api/scan/{start,claim,report,photo-url}`; Gemini adapter (`apps/api/src/lib/gemini.ts`, stub when `GEMINI_API_KEY` unset); daily purge + reminders in `/api/cron/daily`. Needs private bucket `scan-photos`. |
 
 ---
 

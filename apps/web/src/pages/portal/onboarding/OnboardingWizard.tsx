@@ -76,7 +76,7 @@ export function OnboardingWizard() {
           </div>
           <button
             onClick={() => void signOut()}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-1.5 rounded-lg text-sm text-muted-foreground transition-colors duration-150 hover:text-foreground active:scale-[0.98]"
           >
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:inline">Sign out</span>
@@ -84,13 +84,13 @@ export function OnboardingWizard() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      <main className="mx-auto max-w-2xl animate-fade-up px-4 py-8">
         {stepKey === "done" ? (
           <DoneScreen onContinue={() => navigate("/portal")} />
         ) : (
           <>
             <div className="mb-6">
-              <h1 className="text-xl font-semibold">
+              <h1 className="font-display text-2xl font-semibold tracking-display">
                 Welcome, {user?.name?.split(" ")[0] ?? "there"} 👋
               </h1>
               <p className="mt-0.5 text-sm text-muted-foreground">
@@ -128,7 +128,7 @@ export function OnboardingWizard() {
 
 function DoneScreen({ onContinue }: { onContinue: () => void }) {
   return (
-    <div className="card flex flex-col items-center gap-4 p-10 text-center">
+    <div className="card flex animate-scale-in flex-col items-center gap-4 p-10 text-center">
       <span className="flex h-14 w-14 items-center justify-center rounded-full bg-success/15 text-success">
         <PartyPopper className="h-7 w-7" />
       </span>

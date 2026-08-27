@@ -8,7 +8,11 @@ import {
 import { cn } from "@/lib/utils";
 
 const fieldBase =
-  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50";
+  "w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-foreground shadow-xs " +
+  "placeholder:text-muted-foreground/70 transition-[border-color,box-shadow] duration-150 " +
+  "hover:border-border-strong " +
+  "focus-visible:outline-none focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-ring/10 " +
+  "disabled:opacity-50 disabled:shadow-none";
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement>>(
   ({ className, ...props }, ref) => (

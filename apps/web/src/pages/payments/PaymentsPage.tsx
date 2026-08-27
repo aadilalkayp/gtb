@@ -15,7 +15,17 @@ import { approvePayment, rejectPayment, getDocumentUrl } from "@/lib/api";
 import { isInstallmentOverdue } from "@/lib/insights";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { PageHeader } from "@/components/PageHeader";
-import { Button, Field, Modal, Select, Spinner, StatusBadge, Textarea } from "@/components/ui";
+import {
+  Button,
+  Field,
+  Modal,
+  Select,
+  Spinner,
+  StatusBadge,
+  Tabs,
+  Textarea,
+  type TabDef,
+} from "@/components/ui";
 
 type Tab = "review" | "pending" | "all";
 
@@ -77,42 +87,26 @@ export function PaymentsPage() {
   const rows = (data ?? []) as unknown as Row[];
   const visible = rows;
 
-  const tabs: { id: Tab; label: string; count?: number }[] = [
+  const tabs: TabDef<Tab>[] = [
     { id: "review", label: "To review", count: reviewCountQ.data ?? 0 },
     { id: "pending", label: "Awaiting payment", count: pendingCountQ.data ?? 0 },
     { id: "all", label: "All" },
   ];
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Payments"
         subtitle="Review payment proofs, approve, and record payments."
       />
 
       {flash && (
-        <div className="mt-4 rounded-lg bg-success/10 px-4 py-2 text-sm text-success">{flash}</div>
+        <div className="animate-fade-in mt-4 rounded-lg bg-success/10 px-4 py-2 text-sm text-success">
+          {flash}
+        </div>
       )}
 
-      <div className="mt-5 flex gap-1 border-b border-border">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={
-              "flex items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors " +
-              (tab === t.id
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground")
-            }
-          >
-            {t.label}
-            {t.count != null && t.count > 0 && (
-              <span className="rounded-full bg-muted px-1.5 text-xs">{t.count}</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs tabs={tabs} active={tab} onChange={setTab} className="mt-5" />
 
       <div className="mt-5">
         {isLoading ? (
@@ -135,7 +129,10 @@ export function PaymentsPage() {
               // approved installments as overdue.
               const overdue = isInstallmentOverdue(r);
               return (
-                <div key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                <div
+                  key={r.id}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/50"
+                >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <Link
@@ -155,7 +152,7 @@ export function PaymentsPage() {
                     </p>
                   </div>
 
-                  <span className="font-semibold">{formatINR(r.amount)}</span>
+                  <span className="font-num font-semibold">{formatINR(r.amount)}</span>
                   <StatusBadge status={r.status} />
 
                   <div className="flex items-center gap-1.5">

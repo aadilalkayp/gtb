@@ -191,6 +191,84 @@ export async function getDocumentUrl(documentId: string): Promise<string> {
   return url;
 }
 
+// ---------------------------------------------------------------------------
+// Wedding Readiness Scan
+// ---------------------------------------------------------------------------
+
+export interface ScanReport {
+  scanId: string;
+  status: string;
+  createdAt: string;
+  daysToWedding: number;
+  weddingDate: string;
+  scores: { skin: number; hair: number; beard: number; style: number; readiness: number } | null;
+  focusAreas: { area: string; weight: number }[];
+  highlights: string[];
+  suggestions: string[];
+  claimed: boolean;
+  roadmap: {
+    id: string;
+    kind: string;
+    category: string;
+    title: string;
+    description: string | null;
+    dueDate: string;
+    weekNumber: number | null;
+    isDone: boolean;
+  }[];
+}
+
+export interface ScanTeaser {
+  readinessScore: number;
+  daysToWedding: number;
+}
+
+/** Start a scan. Anonymous callers get a scanId + teaser; a logged-in client's
+ *  rescan attaches to their record and returns the full report directly. */
+export async function startScan(args: {
+  file: File;
+  weddingDate?: string;
+  type?: "groom" | "bride";
+}): Promise<{ scanId?: string; teaser?: ScanTeaser; report?: ScanReport }> {
+  const form = new FormData();
+  form.append("file", args.file);
+  if (args.weddingDate) form.append("weddingDate", args.weddingDate);
+  if (args.type) form.append("type", args.type);
+  const res = await authedFetch(`${env.apiUrl}/api/scan/start`, { method: "POST", body: form });
+  const json = (await res.json().catch(() => null)) as
+    | { scanId?: string; teaser?: ScanTeaser; report?: ScanReport; error?: string }
+    | null;
+  if (!res.ok) throw new Error(json?.error || `Scan failed (${res.status})`);
+  return json ?? {};
+}
+
+/** Claim an anonymous scan with contact details — unlocks the full report. */
+export function claimScan(args: {
+  scanId: string;
+  name: string;
+  email: string;
+  phone: string;
+  city?: string;
+}): Promise<{ ok: boolean; report: ScanReport }> {
+  return postJson("/api/scan/claim", args);
+}
+
+/** Fetch a scan report by scanId (anonymous funnel read path). */
+export async function fetchScanReport(scanId: string): Promise<ScanReport> {
+  const res = await authedFetch(
+    `${env.apiUrl}/api/scan/report?scanId=${encodeURIComponent(scanId)}`,
+  );
+  const json = (await res.json().catch(() => null)) as { report?: ScanReport; error?: string } | null;
+  if (!res.ok || !json?.report) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json.report;
+}
+
+/** Mint a signed URL for a scan photo (staff 360° / portal history). */
+export async function getScanPhotoUrl(scanId: string): Promise<string> {
+  const { url } = await postJson<{ url: string }>("/api/scan/photo-url", { scanId });
+  return url;
+}
+
 /** Upload a client document (payment proof, photo) via the server storage route. */
 export async function uploadClientDocument(args: {
   clientId: string;

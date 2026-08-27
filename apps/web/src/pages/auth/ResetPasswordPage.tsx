@@ -105,13 +105,17 @@ function Shell({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="card w-full max-w-sm p-8">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-primary/5 blur-3xl"
+      />
+      <div className="card relative w-full max-w-sm animate-scale-in p-8 shadow-lg">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar text-sm font-bold text-sidebar-foreground">
+          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 font-display text-sm font-bold text-primary-foreground">
             GTB
           </div>
-          <h1 className="text-lg font-semibold">{title}</h1>
+          <h1 className="font-display text-2xl font-semibold tracking-display">{title}</h1>
           {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
         </div>
         {children}

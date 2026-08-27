@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import { runDailyJobs } from "@gtb/db/server";
+import { runScanJobs } from "@/lib/scanJobs";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
@@ -25,5 +26,6 @@ export async function GET(req: NextRequest): Promise<Response> {
   }
 
   const report = await runDailyJobs();
-  return json(req, { ok: true, at: new Date().toISOString(), report });
+  const scanReport = await runScanJobs();
+  return json(req, { ok: true, at: new Date().toISOString(), report: { ...report, ...scanReport } });
 }

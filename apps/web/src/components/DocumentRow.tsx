@@ -42,7 +42,7 @@ export function DocumentRow({
   return (
     <button
       onClick={open}
-      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/50"
+      className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50"
     >
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
         <Icon className="h-4 w-4" />

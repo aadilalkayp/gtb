@@ -52,8 +52,9 @@ import { RatingStars } from "@/components/RatingStars";
 import { DocumentRow } from "@/components/DocumentRow";
 import { FileUploadField } from "@/components/FileUploadField";
 import { InviteClientPanel } from "./InviteClientPanel";
+import { ClientScansTab } from "./ClientScansTab";
 
-type TabId = "overview" | "sessions" | "payments" | "documents" | "assessment";
+type TabId = "overview" | "sessions" | "payments" | "documents" | "assessment" | "scans";
 
 export function ClientProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -107,7 +108,7 @@ export function ClientProfilePage() {
   if (isLoading) return <FullPageSpinner />;
   if (!client) {
     return (
-      <div className="p-6">
+      <div className="page">
         <p className="text-sm text-muted-foreground">Client not found or not visible to you.</p>
       </div>
     );
@@ -127,6 +128,7 @@ export function ClientProfilePage() {
     { id: "payments", label: "Payments", count: installments.length },
     { id: "documents", label: "Documents", count: client.documents.length },
     { id: "assessment", label: "Assessment" },
+    { id: "scans", label: "Scans" },
   ];
 
   async function resume() {
@@ -138,10 +140,10 @@ export function ClientProfilePage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="page">
       <Link
         to="/clients"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="h-4 w-4" /> Clients
       </Link>
@@ -152,7 +154,9 @@ export function ClientProfilePage() {
           <Avatar name={client.name} size="lg" />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-semibold">{client.name}</h1>
+              <h1 className="font-display text-2xl font-semibold tracking-display">
+                {client.name}
+              </h1>
               <span className="text-sm text-muted-foreground">{client.clientCode}</span>
               <StatusBadge status={client.status} />
               {client.status === "lead" && (
@@ -176,7 +180,7 @@ export function ClientProfilePage() {
                   <button
                     type="button"
                     onClick={() => setShowWeddingEdit(true)}
-                    className="text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground transition-colors duration-150 hover:text-foreground"
                     title="Change wedding date"
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -225,7 +229,7 @@ export function ClientProfilePage() {
           )}
         </div>
         {client.status === "on_hold" && client.onHoldReason && (
-          <p className="mt-3 rounded-lg bg-warning/10 px-3 py-2 text-sm text-[hsl(35_92%_38%)]">
+          <p className="mt-3 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
             On hold: {client.onHoldReason}
           </p>
         )}
@@ -252,7 +256,7 @@ export function ClientProfilePage() {
                     strokeWidth={8}
                     className="text-primary"
                   >
-                    <span className="text-sm font-bold">
+                    <span className="font-num text-sm font-bold">
                       {total ? Math.round((paid / total) * 100) : 0}%
                     </span>
                   </ProgressRing>
@@ -263,15 +267,17 @@ export function ClientProfilePage() {
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Value</p>
-                      <p className="mt-0.5 font-medium">{formatINR(total)}</p>
+                      <p className="font-num mt-0.5 font-medium">{formatINR(total)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Paid</p>
-                      <p className="mt-0.5 font-medium text-success">{formatINR(paid)}</p>
+                      <p className="font-num mt-0.5 font-medium text-success">{formatINR(paid)}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Outstanding</p>
-                      <p className="mt-0.5 font-medium">{formatINR(Math.max(total - paid, 0))}</p>
+                      <p className="font-num mt-0.5 font-medium">
+                        {formatINR(Math.max(total - paid, 0))}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -361,7 +367,7 @@ export function ClientProfilePage() {
           (client.sessions.length ? (
             <div className="card divide-y divide-border">
               {client.sessions.map((s) => (
-                <div key={s.id} className="flex items-center gap-3 px-4 py-3">
+                <div key={s.id} className="flex items-center gap-3 px-5 py-3.5">
                   <Badge tone="info">{SERVICE_TYPE_LABELS[s.serviceType as ServiceType]}</Badge>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">
@@ -393,7 +399,7 @@ export function ClientProfilePage() {
           (installments.length ? (
             <div className="card divide-y divide-border">
               {installments.map((i) => (
-                <div key={i.id} className="flex items-center justify-between px-4 py-3">
+                <div key={i.id} className="flex items-center justify-between px-5 py-3.5">
                   <div>
                     <p className="text-sm font-medium">
                       Installment {i.installmentNumber} of {installments.length}
@@ -401,12 +407,12 @@ export function ClientProfilePage() {
                     <p className="text-xs text-muted-foreground">Due {formatDate(i.dueDate)}</p>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="text-sm font-semibold">{formatINR(i.amount)}</span>
+                    <span className="font-num text-sm font-semibold">{formatINR(i.amount)}</span>
                     <StatusBadge status={installmentDisplayStatus(i)} />
                   </div>
                 </div>
               ))}
-              <div className="px-4 py-3 text-right">
+              <div className="px-5 py-3.5 text-right">
                 <Link to="/payments" className="text-xs font-medium text-primary hover:underline">
                   Review & approve on the Payments page →
                 </Link>
@@ -447,6 +453,8 @@ export function ClientProfilePage() {
               The client hasn't completed their onboarding assessment yet.
             </p>
           ))}
+
+        {tab === "scans" && <ClientScansTab clientId={client.id} />}
       </div>
 
       {/* Status modals */}
@@ -657,7 +665,7 @@ function StatusChangeModal({
           <div className="space-y-2 text-sm text-muted-foreground">
             <p>Marks the program as delivered.</p>
             {(pendingSessions > 0 || outstanding > 0) && (
-              <p className="rounded-lg bg-warning/10 px-3 py-2 text-[hsl(35_92%_38%)]">
+              <p className="rounded-lg bg-warning/10 px-3 py-2 text-warning">
                 Heads up:{" "}
                 {pendingSessions > 0 && `${pendingSessions} sessions are still scheduled. `}
                 {outstanding > 0 && `${formatINR(outstanding)} is still outstanding.`}

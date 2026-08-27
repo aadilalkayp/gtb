@@ -34,7 +34,7 @@ const SEVERITY: Record<AlertSeverity, { ring: string; chip: string; label: strin
   danger: { ring: "border-danger/30", chip: "bg-danger/10 text-danger", label: "Urgent" },
   warning: {
     ring: "border-warning/40",
-    chip: "bg-warning/15 text-[hsl(35_92%_38%)]",
+    chip: "bg-warning/15 text-warning",
     label: "Attention",
   },
   info: { ring: "border-info/30", chip: "bg-info/10 text-info", label: "Heads-up" },
@@ -47,7 +47,7 @@ export function AlertsPage() {
   // CALC-8: "All clear" must never be shown when the queries actually failed.
   if (isError) {
     return (
-      <div className="p-6">
+      <div className="page">
         <PageHeader
           title="Alerts"
           subtitle="Everything that needs attention, derived live from the latest data."
@@ -70,7 +70,7 @@ export function AlertsPage() {
   };
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Alerts"
         subtitle="Everything that needs attention, derived live from the latest data."
@@ -87,7 +87,7 @@ export function AlertsPage() {
       ) : (
         <>
           {/* Severity summary */}
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+          <div className="stagger-children mt-5 grid gap-3 sm:grid-cols-3">
             {(["danger", "warning", "info"] as AlertSeverity[]).map((sev) => (
               <div key={sev} className={cn("card flex items-center gap-3 p-4", SEVERITY[sev].ring)}>
                 <span
@@ -99,7 +99,7 @@ export function AlertsPage() {
                   <BellRing className="h-5 w-5" />
                 </span>
                 <div>
-                  <p className="text-2xl font-bold leading-none">{counts[sev]}</p>
+                  <p className="font-num text-2xl font-bold leading-none">{counts[sev]}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{SEVERITY[sev].label}</p>
                 </div>
               </div>
@@ -137,7 +137,7 @@ export function AlertsPage() {
                       <li key={idx}>
                         <Link
                           to={it.linkPath}
-                          className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm hover:bg-muted/50"
+                          className="flex items-center justify-between gap-3 px-5 py-2.5 text-sm transition-colors hover:bg-muted/50"
                         >
                           <span className="truncate font-medium">{it.label}</span>
                           <span className="flex shrink-0 items-center gap-2 text-xs text-muted-foreground">

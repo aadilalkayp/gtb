@@ -55,7 +55,7 @@ export function DashboardPage() {
   // CALC-8: never render "Everything's calm" on a failed fetch.
   if (isError) {
     return (
-      <div className="p-6">
+      <div className="page">
         <QueryErrorState
           message={error instanceof Error ? error.message : "The dashboard queries failed."}
         />
@@ -69,16 +69,16 @@ export function DashboardPage() {
   const roleLabel = role && role !== "client" ? STAFF_ROLE_LABELS[role as StaffRole] : "";
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="page space-y-6">
       {/* Greeting hero */}
-      <section className="relative overflow-hidden rounded-card bg-gradient-to-br from-[hsl(var(--sidebar))] via-primary to-primary/80 p-6 text-white shadow-card sm:p-7">
+      <section className="relative overflow-hidden rounded-card bg-gradient-to-br from-sidebar via-primary to-primary/80 p-6 text-white shadow-card sm:p-7">
         <Sparkles className="absolute right-6 top-5 h-7 w-7 opacity-30" />
         <div className="absolute -right-8 -top-10 h-40 w-40 rounded-full bg-white/5" />
         <div className="absolute -bottom-16 right-24 h-44 w-44 rounded-full bg-white/5" />
         <p className="text-sm font-medium opacity-80">
           {greeting}, {firstName}
         </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">
+        <h1 className="mt-1 font-display text-2xl font-semibold tracking-display sm:text-3xl">
           Here's your {roleLabel} overview
         </h1>
         <p className="mt-2 max-w-xl text-sm opacity-80">
@@ -143,7 +143,7 @@ function FounderView({ m }: { m: DashboardMetrics }) {
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           icon={Users}
           label="Active clients"
@@ -258,7 +258,7 @@ function QuickStats({ m }: { m: DashboardMetrics }) {
       {rows.map((r) => (
         <div key={r.label} className="flex items-center justify-between py-2.5 text-sm">
           <dt className="text-muted-foreground">{r.label}</dt>
-          <dd className="font-semibold tabular-nums">{r.value}</dd>
+          <dd className="font-num font-semibold">{r.value}</dd>
         </div>
       ))}
     </dl>
@@ -273,7 +273,7 @@ function OpsView({ m }: { m: DashboardMetrics }) {
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+      <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
           icon={CalendarClock}
           label="Consultations (7d)"
@@ -324,7 +324,7 @@ function OpsView({ m }: { m: DashboardMetrics }) {
                 <li key={c.id}>
                   <Link
                     to={`/clients/${c.id}`}
-                    className="flex items-center justify-between rounded-lg border border-border p-2.5 text-sm hover:bg-muted/50"
+                    className="flex items-center justify-between rounded-lg border border-border p-2.5 text-sm transition-colors hover:border-border-strong hover:bg-muted/50"
                   >
                     <span className="truncate font-medium">{c.name}</span>
                     <ArrowRight className="h-4 w-4 text-muted-foreground" />
@@ -393,7 +393,7 @@ function CroView({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={PhoneCall}
           label="Follow-ups today"
@@ -489,7 +489,7 @@ function ConsultantView({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={CalendarClock}
           label="Upcoming (7d)"
@@ -527,7 +527,7 @@ function ConsultantView({
                 <li key={s.id}>
                   <Link
                     to="/consultations"
-                    className="flex items-center gap-3 rounded-lg border border-border p-2.5 hover:bg-muted/50"
+                    className="flex items-center gap-3 rounded-lg border border-border p-2.5 transition-colors hover:border-border-strong hover:bg-muted/50"
                   >
                     <span className="h-9 w-1 shrink-0 rounded-full bg-info" />
                     <span className="min-w-0 flex-1">
@@ -562,9 +562,9 @@ function ConsultantView({
                 <li key={s.id}>
                   <Link
                     to="/consultations"
-                    className="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/5 p-2.5 hover:bg-warning/10"
+                    className="flex items-center gap-3 rounded-lg border border-warning/40 bg-warning/5 p-2.5 transition-colors hover:bg-warning/10"
                   >
-                    <FileWarning className="h-4 w-4 shrink-0 text-[hsl(35_92%_38%)]" />
+                    <FileWarning className="h-4 w-4 shrink-0 text-warning" />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{s.client.name}</span>
                       <span className="block text-xs text-muted-foreground">
@@ -609,7 +609,7 @@ function CoachView({
   );
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard icon={Users} label="My clients" value={myClientIds.size} accent="primary" />
         <StatCard
           icon={ShieldAlert}
@@ -675,7 +675,7 @@ function MediaView({
 
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={Clapperboard}
           label="In production"
@@ -709,7 +709,7 @@ function MediaView({
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
           {byStage.map((s) => (
             <div key={s.stage} className="rounded-card border border-border p-4 text-center">
-              <p className="text-2xl font-bold">{s.count}</p>
+              <p className="font-num text-2xl font-bold">{s.count}</p>
               <p className="mt-1 text-xs capitalize text-muted-foreground">{s.stage}</p>
             </div>
           ))}

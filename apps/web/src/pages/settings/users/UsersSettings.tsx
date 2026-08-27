@@ -112,7 +112,7 @@ export function UsersSettings() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => void refetch()}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
             aria-label="Refresh"
           >
             <RefreshCw className="h-4 w-4" />
@@ -167,7 +167,7 @@ export function UsersSettings() {
                   )}
                   <button
                     onClick={() => setModal({ userId: u.id })}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
                     aria-label="Edit"
                   >
                     <Pencil className="h-4 w-4" />
@@ -289,7 +289,7 @@ function InviteStaffModal({ onClose, onDone }: { onClose: () => void; onDone: ()
                   setCopied(true);
                   setTimeout(() => setCopied(false), 1500);
                 }}
-                className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-muted"
+                className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
               >
                 {copied ? (
                   <Check className="h-3.5 w-3.5 text-success" />
@@ -461,7 +461,7 @@ function InviteLinkModal({
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);
             }}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-muted"
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
           >
             {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
             {copied ? "Copied" : "Copy"}

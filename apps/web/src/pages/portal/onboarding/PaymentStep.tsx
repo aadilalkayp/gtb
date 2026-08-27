@@ -53,7 +53,7 @@ export function PaymentStep({
     <div className="space-y-5">
       <div>
         <p className="text-sm text-muted-foreground">{clientPlan.planNameSnapshot}</p>
-        <p className="text-2xl font-semibold">{formatINR(clientPlan.priceAtEnrollment)}</p>
+        <p className="font-num text-2xl font-semibold">{formatINR(clientPlan.priceAtEnrollment)}</p>
         <p className="text-xs text-muted-foreground">Total package value</p>
       </div>
 
@@ -76,7 +76,7 @@ export function PaymentStep({
                 <p className="text-xs text-muted-foreground">Due {formatDate(i.dueDate)}</p>
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-sm font-semibold">{formatINR(i.amount)}</span>
+                <span className="font-num text-sm font-semibold">{formatINR(i.amount)}</span>
                 <StatusBadge status={i.status} />
               </div>
             </div>

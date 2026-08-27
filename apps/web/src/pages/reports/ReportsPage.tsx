@@ -187,7 +187,7 @@ export function ReportsPage() {
   ];
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Reports"
         subtitle="Revenue, collections, sales, performance, and spend — exportable to CSV."
@@ -295,7 +295,7 @@ function DataTable({
     <div className="overflow-x-auto">
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
+          <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
             {headers.map((h, i) => (
               <th key={h} className={cn("pb-2 font-medium", right.has(i) && "text-right")}>
                 {h}
@@ -309,7 +309,7 @@ function DataTable({
               {r.map((cell, ci) => (
                 <td
                   key={ci}
-                  className={cn("py-2.5", right.has(ci) ? "text-right tabular-nums" : "")}
+                  className={cn("py-2.5", right.has(ci) ? "font-num text-right" : "")}
                 >
                   {cell}
                 </td>
@@ -386,7 +386,7 @@ function RevenueReport({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="stagger-children grid gap-4 sm:grid-cols-3">
         <StatCard
           icon={Wallet}
           label="Revenue (period)"
@@ -498,7 +498,7 @@ function CollectionsReport({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="stagger-children grid gap-4 sm:grid-cols-3">
         <StatCard
           icon={Wallet}
           label="Collected (period)"
@@ -595,7 +595,7 @@ function SalesReport({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="stagger-children grid gap-4 sm:grid-cols-3">
         <StatCard
           icon={Target}
           label="Conversion rate"
@@ -782,7 +782,7 @@ function ExpensesReport({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="stagger-children grid gap-4 sm:grid-cols-3">
         <StatCard
           icon={Wallet}
           label="Revenue (period)"
@@ -880,7 +880,7 @@ function OperationsReport({
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="stagger-children grid gap-4 sm:grid-cols-3">
         <StatCard
           icon={Activity}
           label="Session completion"

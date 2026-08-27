@@ -18,9 +18,9 @@ export function Stepper({ steps, currentIndex }: { steps: Step[]; currentIndex: 
             <div className="flex items-center gap-2">
               <span
                 className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
                   done && "bg-primary text-primary-foreground",
-                  active && "border-2 border-primary text-primary",
+                  active && "border-2 border-primary text-primary ring-4 ring-ring/15",
                   !done && !active && "border border-border text-muted-foreground",
                 )}
               >
@@ -36,7 +36,12 @@ export function Stepper({ steps, currentIndex }: { steps: Step[]; currentIndex: 
               </span>
             </div>
             {i < steps.length - 1 && (
-              <span className={cn("mx-3 h-px flex-1", done ? "bg-primary" : "bg-border")} />
+              <span
+                className={cn(
+                  "mx-3 h-px flex-1 transition-colors",
+                  done ? "bg-primary" : "bg-border",
+                )}
+              />
             )}
           </li>
         );

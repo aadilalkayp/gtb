@@ -19,8 +19,8 @@ export function PortalDocuments() {
   );
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-semibold">My documents</h1>
+    <div className="animate-fade-up space-y-5">
+      <h1 className="font-display text-2xl font-semibold tracking-display">My documents</h1>
       {isLoading ? (
         <div className="flex justify-center py-16">
           <Spinner className="h-6 w-6 text-muted-foreground" />

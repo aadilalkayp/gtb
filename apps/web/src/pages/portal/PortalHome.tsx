@@ -68,15 +68,17 @@ export function PortalHome() {
   })).filter((t) => t.assignment);
 
   return (
-    <div className="space-y-5">
+    <div className="animate-fade-up space-y-5">
       {/* Wedding countdown hero */}
       <section className="relative overflow-hidden rounded-card bg-gradient-to-br from-primary via-primary to-primary/80 p-6 text-primary-foreground shadow-card sm:p-8">
         <Heart className="absolute -right-6 -top-6 h-36 w-36 rotate-12 opacity-10" />
         <Sparkles className="absolute bottom-4 right-24 h-6 w-6 opacity-30" />
-        <p className="text-sm font-medium opacity-80">Hi {firstName}, your big day is coming</p>
+        <p className="font-display text-sm font-medium opacity-80">
+          Hi {firstName}, your big day is coming
+        </p>
         <div className="mt-3 flex flex-wrap items-end gap-x-8 gap-y-4">
           <div>
-            <p className="text-5xl font-bold tracking-tight sm:text-6xl">
+            <p className="font-num text-5xl font-bold tracking-tight sm:text-6xl">
               {days >= 0 ? days : 0}
               <span className="ml-2 text-lg font-medium opacity-80">days to go</span>
             </p>
@@ -102,8 +104,11 @@ export function PortalHome() {
       </section>
 
       {/* Next session + payment */}
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Link to="/portal/sessions" className="card group p-5 transition-shadow hover:shadow-md">
+      <div className="stagger-children grid gap-4 sm:grid-cols-2">
+        <Link
+          to="/portal/sessions"
+          className="card group p-5 transition-[box-shadow,border-color,transform] duration-150 ease-out-strong hover:border-border-strong hover:shadow-md active:scale-[0.99]"
+        >
           <div className="flex items-center justify-between">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-info/10 text-info">
               <CalendarCheck className="h-[18px] w-[18px]" />
@@ -132,14 +137,17 @@ export function PortalHome() {
           )}
         </Link>
 
-        <Link to="/portal/payments" className="card group p-5 transition-shadow hover:shadow-md">
+        <Link
+          to="/portal/payments"
+          className="card group p-5 transition-[box-shadow,border-color,transform] duration-150 ease-out-strong hover:border-border-strong hover:shadow-md active:scale-[0.99]"
+        >
           <div className="flex items-center justify-between">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-success/10 text-success">
               <Wallet className="h-[18px] w-[18px]" />
             </span>
             <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
           </div>
-          <p className="mt-3 font-semibold">
+          <p className="font-num mt-3 font-semibold">
             {formatINR(paid)}{" "}
             <span className="text-sm font-normal text-muted-foreground">
               of {formatINR(total)} paid
@@ -229,7 +237,7 @@ export function PortalHome() {
                   Installment {i.installmentNumber} · {formatDate(i.dueDate)}
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="font-medium">{formatINR(i.amount)}</span>
+                  <span className="font-num font-medium">{formatINR(i.amount)}</span>
                   <StatusBadge status={installmentDisplayStatus(i)} />
                 </span>
               </div>
@@ -242,13 +250,13 @@ export function PortalHome() {
       <div className="flex gap-3">
         <Link
           to="/portal/documents"
-          className="flex flex-1 items-center justify-center gap-2 rounded-card border border-dashed border-border py-3 text-sm font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          className="flex flex-1 items-center justify-center gap-2 rounded-card border border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/40 hover:text-foreground active:scale-[0.99]"
         >
           <FileText className="h-4 w-4" /> My documents
         </Link>
         <Link
           to="/portal/profile"
-          className="flex flex-1 items-center justify-center gap-2 rounded-card border border-dashed border-border py-3 text-sm font-medium text-muted-foreground hover:border-primary/40 hover:text-foreground"
+          className="flex flex-1 items-center justify-center gap-2 rounded-card border border-dashed border-border py-3 text-sm font-medium text-muted-foreground transition-colors duration-150 hover:border-primary/40 hover:text-foreground active:scale-[0.99]"
         >
           <Sparkles className="h-4 w-4" /> My profile
         </Link>

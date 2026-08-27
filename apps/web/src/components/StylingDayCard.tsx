@@ -85,7 +85,7 @@ export function StylingDayCard({ clientId }: { clientId: string }) {
       <div className="p-5">
         <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
           <span>Getting you ready</span>
-          <span className="font-medium">
+          <span className="font-num font-medium">
             {done}/{MILESTONES.length}
           </span>
         </div>

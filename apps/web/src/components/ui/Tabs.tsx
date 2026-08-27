@@ -25,10 +25,10 @@ export function Tabs<T extends string>({
           key={t.id}
           onClick={() => onChange(t.id)}
           className={cn(
-            "flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+            "-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors duration-150",
             active === t.id
               ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground",
+              : "border-transparent text-muted-foreground hover:border-border-strong hover:text-foreground",
           )}
         >
           {t.label}
@@ -67,10 +67,10 @@ export function PillFilter<T extends string>({
           key={o.id}
           onClick={() => onChange(o.id)}
           className={cn(
-            "rounded-full px-3 py-1 text-sm font-medium transition-colors",
+            "rounded-full px-3 py-1 text-sm font-medium transition-[background-color,color,box-shadow] duration-150 active:scale-[0.98]",
             active === o.id
-              ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted",
+              ? "bg-primary text-primary-foreground shadow-button"
+              : "text-muted-foreground hover:bg-muted hover:text-foreground",
           )}
         >
           {o.label}

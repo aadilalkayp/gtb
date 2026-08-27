@@ -14,7 +14,7 @@ export function EmptyState({
 }) {
   return (
     <div className="card flex flex-col items-center justify-center gap-2 p-12 text-center">
-      <span className="flex h-11 w-11 items-center justify-center rounded-full bg-muted text-muted-foreground">
+      <span className="mb-1 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-b from-muted to-muted/40 text-muted-foreground ring-1 ring-inset ring-border">
         <Icon className="h-5 w-5" />
       </span>
       <p className="text-sm font-medium">{title}</p>

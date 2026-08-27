@@ -70,7 +70,7 @@ const ALERT_ICON: Record<AlertItem["kind"], LucideIcon> = {
 
 const SEVERITY_STYLE: Record<AlertSeverity, { chip: string; text: string }> = {
   danger: { chip: "bg-danger/10 text-danger", text: "text-danger" },
-  warning: { chip: "bg-warning/15 text-[hsl(35_92%_38%)]", text: "text-[hsl(35_92%_38%)]" },
+  warning: { chip: "bg-warning/15 text-warning", text: "text-warning" },
   info: { chip: "bg-info/10 text-info", text: "text-info" },
 };
 
@@ -90,8 +90,8 @@ export function AlertsPanel({ alerts }: { alerts: AlertItem[] }) {
         const Icon = ALERT_ICON[a.kind];
         const style = SEVERITY_STYLE[a.severity];
         return (
-          <details key={a.kind} className="group rounded-lg border border-border bg-surface">
-            <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5">
+          <details key={a.kind} className="group rounded-lg border border-border bg-surface transition-colors hover:border-border-strong">
+            <summary className="flex cursor-pointer list-none items-center gap-3 rounded-lg px-3 py-2.5 transition-colors hover:bg-muted/50">
               <span
                 className={cn("flex h-8 w-8 items-center justify-center rounded-lg", style.chip)}
               >
@@ -114,7 +114,7 @@ export function AlertsPanel({ alerts }: { alerts: AlertItem[] }) {
                   <li key={idx}>
                     <Link
                       to={it.linkPath}
-                      className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm hover:bg-muted"
+                      className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-sm transition-colors hover:bg-muted"
                     >
                       <span className="truncate">{it.label}</span>
                       {it.sublabel && (
@@ -183,7 +183,8 @@ export function RevenueChart({
           <Tooltip
             formatter={(value: number, name: string) => [formatINR(value), humanize(name)]}
             contentStyle={{
-              borderRadius: 12,
+              background: "hsl(var(--surface))",
+              borderRadius: 10,
               border: "1px solid hsl(var(--border))",
               fontSize: 13,
               boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
@@ -238,7 +239,7 @@ export function PipelineFunnel({
         <div key={s.label}>
           <div className="mb-1 flex items-center justify-between text-xs">
             <span className="font-medium text-foreground">{s.label}</span>
-            <span className="text-muted-foreground">{s.value}</span>
+            <span className="font-num text-muted-foreground">{s.value}</span>
           </div>
           <div className="h-2.5 overflow-hidden rounded-full bg-muted">
             <div
@@ -250,7 +251,7 @@ export function PipelineFunnel({
       ))}
       <div className="mt-4 flex items-center justify-between rounded-lg bg-muted/50 px-3 py-2">
         <span className="text-xs text-muted-foreground">Conversion rate (this month)</span>
-        <span className="text-sm font-semibold">{(conversionRate * 100).toFixed(0)}%</span>
+        <span className="font-num text-sm font-semibold">{(conversionRate * 100).toFixed(0)}%</span>
       </div>
     </div>
   );
@@ -274,7 +275,7 @@ export function AgendaList({ agenda }: { agenda: AgendaEntry[] }) {
         <li key={e.id}>
           <Link
             to={e.linkPath}
-            className="flex items-center gap-3 rounded-lg border border-border p-2.5 hover:bg-muted/50"
+            className="flex items-center gap-3 rounded-lg border border-border p-2.5 transition-colors hover:border-border-strong hover:bg-muted/50"
           >
             <span className={cn("h-9 w-1 shrink-0 rounded-full", e.accent)} />
             <span className="min-w-0 flex-1">
@@ -308,14 +309,14 @@ export function WeddingsStrip({ weddings }: { weddings: WeddingEntry[] }) {
           key={w.id}
           to={`/clients/${w.id}`}
           className={cn(
-            "relative overflow-hidden rounded-card p-4 text-white shadow-card transition-transform hover:-translate-y-0.5",
+            "relative overflow-hidden rounded-card p-4 text-white shadow-card transition-[box-shadow,transform] duration-150 ease-out-strong hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.99]",
             w.type === "bride"
               ? "bg-gradient-to-br from-bride to-bride/70"
               : "bg-gradient-to-br from-groom to-groom/70",
           )}
         >
           <Heart className="absolute -right-3 -top-3 h-16 w-16 rotate-12 opacity-15" />
-          <p className="text-3xl font-bold leading-none">{w.days}</p>
+          <p className="font-num text-3xl font-bold leading-none">{w.days}</p>
           <p className="text-xs opacity-80">days to go</p>
           <p className="mt-3 truncate text-sm font-medium">{w.name}</p>
           <p className="text-xs opacity-80">{formatDate(w.date)}</p>
@@ -347,7 +348,7 @@ export function AtRiskList({
         <li key={c.id}>
           <Link
             to={`/clients/${c.id}`}
-            className="flex items-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-2.5 hover:bg-danger/10"
+            className="flex items-center gap-3 rounded-lg border border-danger/30 bg-danger/5 p-2.5 transition-colors hover:bg-danger/10"
           >
             <ShieldAlert className="h-4 w-4 shrink-0 text-danger" />
             <span className="min-w-0 flex-1">

@@ -6,11 +6,11 @@ type Variant = "primary" | "secondary" | "outline" | "ghost" | "danger";
 type Size = "sm" | "md" | "lg" | "icon";
 
 const variants: Record<Variant, string> = {
-  primary: "bg-primary text-primary-foreground hover:bg-primary/90",
-  secondary: "bg-muted text-foreground hover:bg-muted/70",
-  outline: "border border-border bg-surface text-foreground hover:bg-muted",
+  primary: "bg-primary text-primary-foreground shadow-button hover:bg-primary-hover",
+  secondary: "bg-muted text-foreground hover:bg-border/60",
+  outline: "border border-border bg-surface text-foreground shadow-xs hover:border-border-strong hover:bg-muted/50",
   ghost: "text-foreground hover:bg-muted",
-  danger: "bg-danger text-white hover:bg-danger/90",
+  danger: "bg-danger text-white shadow-button hover:bg-danger/90",
 };
 
 const sizes: Record<Size, string> = {
@@ -32,8 +32,10 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       disabled={disabled || loading}
       className={cn(
-        "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40",
+        "inline-flex items-center justify-center gap-2 rounded-lg font-medium",
+        "transition-[background-color,border-color,transform,box-shadow] duration-150 ease-out-strong",
+        "active:scale-[0.98]",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-offset-1",
         "disabled:pointer-events-none disabled:opacity-50",
         variants[variant],
         sizes[size],

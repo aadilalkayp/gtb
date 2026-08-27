@@ -66,7 +66,7 @@ export function InviteClientPanel({
           </>
         ) : (
           <>
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-warning/15 text-[hsl(35_92%_38%)]">
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-warning/15 text-warning">
               <Mail className="h-4 w-4" />
             </span>
             Email not sent — share this link
@@ -81,7 +81,7 @@ export function InviteClientPanel({
           </code>
           <button
             onClick={copyLink}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs font-medium text-foreground hover:bg-muted"
+            className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
           >
             {copied ? (
               <Check className="h-3.5 w-3.5 text-success" />
@@ -94,13 +94,16 @@ export function InviteClientPanel({
       )}
 
       {result.warning && (
-        <p className="flex items-start gap-1.5 text-xs text-[hsl(35_92%_38%)]">
+        <p className="flex items-start gap-1.5 text-xs text-warning">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
           {result.warning}
         </p>
       )}
 
-      <button onClick={send} className="text-xs font-medium text-primary hover:underline">
+      <button
+        onClick={send}
+        className="text-xs font-medium text-primary transition-colors duration-150 hover:underline"
+      >
         Resend
       </button>
     </div>

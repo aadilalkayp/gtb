@@ -63,7 +63,7 @@ export function DocumentsPage() {
   const filtered = docs;
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Documents"
         subtitle="Plans, guides, receipts, and proofs across every client."

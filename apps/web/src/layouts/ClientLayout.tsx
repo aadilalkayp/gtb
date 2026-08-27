@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Home, CalendarCheck, Wallet, FileText, User, LogOut } from "lucide-react";
+import { Home, CalendarCheck, ScanFace, Wallet, FileText, User, LogOut } from "lucide-react";
 import { CLIENT_TYPE_LABELS } from "@gtb/shared";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
@@ -10,6 +10,7 @@ import { ContentSpinner } from "@/components/ui/Spinner";
 const CLIENT_NAV = [
   { label: "Home", to: "/portal", icon: Home, end: true },
   { label: "Sessions", to: "/portal/sessions", icon: CalendarCheck, end: false },
+  { label: "Scan", to: "/portal/scan", icon: ScanFace, end: false },
   { label: "Payments", to: "/portal/payments", icon: Wallet, end: false },
   { label: "Documents", to: "/portal/documents", icon: FileText, end: false },
   { label: "Profile", to: "/portal/profile", icon: User, end: false },
@@ -22,10 +23,10 @@ export function ClientLayout() {
 
   return (
     <div data-theme={type === "bride" ? "bride" : undefined} className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b border-border bg-surface">
+      <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 font-display text-xs font-semibold text-primary-foreground shadow-button">
               {type === "bride" ? "G" : "G"}
             </div>
             <span className="text-sm font-semibold">{brand}</span>
@@ -50,10 +51,10 @@ export function ClientLayout() {
               end={item.end}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium",
+                  "flex items-center gap-2 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors duration-150",
                   isActive
                     ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground",
+                    : "border-transparent text-muted-foreground hover:border-border-strong hover:text-foreground",
                 )
               }
             >
@@ -71,7 +72,7 @@ export function ClientLayout() {
       </main>
 
       {/* Bottom nav (mobile) */}
-      <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-border bg-surface sm:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:hidden">
         {CLIENT_NAV.map((item) => (
           <NavLink
             key={item.to}
@@ -79,7 +80,7 @@ export function ClientLayout() {
             end={item.end}
             className={({ isActive }) =>
               cn(
-                "flex flex-1 flex-col items-center gap-1 py-2 text-[10px] font-medium",
+                "flex flex-1 flex-col items-center gap-1 py-2 text-[10px] font-medium transition-colors duration-150 active:scale-95",
                 isActive ? "text-primary" : "text-muted-foreground",
               )
             }

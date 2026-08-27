@@ -109,7 +109,7 @@ export function MediaPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Media"
         subtitle="Plan, produce, and publish content across campaigns."
@@ -238,7 +238,7 @@ function ContentCard({ item: c, onDragStart }: { item: ContentRow; onDragStart: 
     <div
       draggable
       onDragStart={onDragStart}
-      className="card group cursor-grab p-3 active:cursor-grabbing"
+      className="card group cursor-grab p-3 transition-[border-color,box-shadow] duration-150 hover:border-border-strong hover:shadow-md active:cursor-grabbing"
     >
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium leading-snug">{c.title}</p>

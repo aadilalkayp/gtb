@@ -140,7 +140,7 @@ export function CroTrackingPage() {
   const visible = followUps;
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="CRO Tracking"
         subtitle="Follow-ups, payment reminders, and client touch-points."
@@ -154,7 +154,7 @@ export function CroTrackingPage() {
       {/* No-contact alert */}
       {notContacted.length > 0 && (
         <div className="mt-5 rounded-card border border-warning/40 bg-warning/10 p-4">
-          <p className="flex items-center gap-2 text-sm font-semibold text-[hsl(35_92%_32%)]">
+          <p className="flex items-center gap-2 text-sm font-semibold text-warning">
             <AlertTriangle className="h-4 w-4" />
             {notContacted.length} active client{notContacted.length > 1 ? "s" : ""} not contacted in
             7+ days
@@ -164,7 +164,7 @@ export function CroTrackingPage() {
               <Link
                 key={c.id}
                 to={`/clients/${c.id}`}
-                className="rounded-full bg-surface px-3 py-1 text-xs font-medium shadow-sm hover:shadow"
+                className="rounded-full bg-surface px-3 py-1 text-xs font-medium shadow-sm transition-shadow duration-150 hover:shadow-md"
               >
                 {c.name}
               </Link>
@@ -198,7 +198,10 @@ export function CroTrackingPage() {
         ) : (
           <div className="card divide-y divide-border">
             {visible.map((f) => (
-              <div key={f.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+              <div
+                key={f.id}
+                className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/50"
+              >
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <Link to={`/clients/${f.client.id}`} className="font-medium hover:underline">

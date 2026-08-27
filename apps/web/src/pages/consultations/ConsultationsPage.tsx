@@ -143,14 +143,14 @@ export function ConsultationsPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Consultations"
         subtitle="Track, complete, and reschedule sessions across all services."
         actions={
           <>
             {!isAdmin && (
-              <div className="flex rounded-md border border-border p-0.5 text-sm">
+              <div className="flex rounded-lg border border-border bg-surface p-0.5 text-sm shadow-xs">
                 {(
                   [
                     { id: "mine", label: "My sessions" },
@@ -161,10 +161,10 @@ export function ConsultationsPage() {
                     key={o.id}
                     onClick={() => setScope(o.id)}
                     className={
-                      "h-8 rounded px-3 font-medium transition-colors " +
+                      "h-8 rounded-md px-3 font-medium transition-colors duration-150 active:scale-[0.98] " +
                       (scope === o.id
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:bg-muted")
+                        ? "bg-primary text-primary-foreground shadow-button"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground")
                     }
                   >
                     {o.label}
@@ -172,7 +172,7 @@ export function ConsultationsPage() {
                 ))}
               </div>
             )}
-            <div className="flex rounded-md border border-border p-0.5">
+            <div className="flex rounded-lg border border-border bg-surface p-0.5 shadow-xs">
               {(
                 [
                   { id: "list", icon: List },
@@ -183,10 +183,10 @@ export function ConsultationsPage() {
                   key={v.id}
                   onClick={() => setView(v.id)}
                   className={
-                    "flex h-8 w-9 items-center justify-center rounded " +
+                    "flex h-8 w-9 items-center justify-center rounded-md transition-colors duration-150 active:scale-[0.98] " +
                     (view === v.id
-                      ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-muted")
+                      ? "bg-primary text-primary-foreground shadow-button"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground")
                   }
                   aria-label={v.id}
                 >
@@ -239,7 +239,10 @@ export function ConsultationsPage() {
               const open = s.status === "scheduled" || s.status === "delayed";
               const overdue = open && daysUntil(s.scheduledDate) < 0;
               return (
-                <div key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+                <div
+                  key={s.id}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 transition-colors hover:bg-muted/50"
+                >
                   <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${SERVICE_CHIP[svc]}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">

@@ -110,7 +110,7 @@ export function TeamTasksPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Team Tasks"
         subtitle="Assign work, track priorities, and keep everyone moving."
@@ -157,7 +157,7 @@ export function TeamTasksPage() {
               >
                 <div className="mb-3 flex items-center justify-between px-1">
                   <h2 className="text-sm font-semibold">{col.label}</h2>
-                  <span className="rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-muted-foreground shadow-sm">
+                  <span className="font-num rounded-full bg-surface px-2 py-0.5 text-xs font-medium text-muted-foreground shadow-sm">
                     {items.length}
                   </span>
                 </div>
@@ -224,7 +224,7 @@ function TaskCard({
     <div
       draggable
       onDragStart={onDragStart}
-      className="card group cursor-grab overflow-hidden p-0 active:cursor-grabbing"
+      className="card group cursor-grab overflow-hidden p-0 transition-[box-shadow,border-color] duration-150 ease-out-strong hover:border-border-strong hover:shadow-md active:cursor-grabbing"
     >
       <div className="flex">
         <span className={cn("w-1 shrink-0", meta.bar)} />
@@ -274,7 +274,7 @@ function TaskCard({
               <button
                 key={c.id}
                 onClick={() => onMove(c.id)}
-                className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                className="rounded-md bg-muted px-2 py-1 text-[11px] font-medium text-muted-foreground transition-colors duration-150 hover:bg-muted/70 hover:text-foreground active:scale-[0.98]"
               >
                 → {c.label}
               </button>
@@ -283,7 +283,7 @@ function TaskCard({
               // FEAT-8: tasks in flight can be cancelled (assigner/admin)
               <button
                 onClick={onCancel}
-                className="rounded-md bg-danger/10 px-2 py-1 text-[11px] font-medium text-danger hover:bg-danger/20"
+                className="rounded-md bg-danger/10 px-2 py-1 text-[11px] font-medium text-danger transition-colors duration-150 hover:bg-danger/20 active:scale-[0.98]"
               >
                 Cancel
               </button>

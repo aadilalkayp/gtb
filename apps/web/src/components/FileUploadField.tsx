@@ -79,7 +79,7 @@ export function FileUploadField({
         <button
           type="button"
           onClick={() => inputRef.current?.click()}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-sm text-muted-foreground hover:border-primary/50 hover:text-foreground"
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-surface px-4 py-6 text-sm text-muted-foreground transition-colors duration-150 hover:border-primary hover:bg-primary/5 hover:text-foreground active:scale-[0.98]"
         >
           <Upload className="h-4 w-4" />
           {label}
@@ -111,7 +111,7 @@ export function FileUploadField({
             <button
               type="button"
               onClick={clear}
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-danger"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-danger active:scale-[0.98]"
               aria-label="Remove file"
             >
               <X className="h-4 w-4" />

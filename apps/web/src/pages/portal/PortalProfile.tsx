@@ -26,8 +26,8 @@ export function PortalProfile() {
   if (isLoading || !client || !user) return <FullPageSpinner />;
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-semibold">My profile</h1>
+    <div className="animate-fade-up space-y-5">
+      <h1 className="font-display text-2xl font-semibold tracking-display">My profile</h1>
 
       <section className="card flex items-center gap-4 p-5">
         <Avatar name={client.name} size="lg" />

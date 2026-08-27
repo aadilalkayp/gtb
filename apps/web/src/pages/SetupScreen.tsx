@@ -1,12 +1,16 @@
 /** Shown when the Supabase env vars are missing (fresh checkout). */
 export function SetupScreen() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <div className="card w-full max-w-lg p-8">
-        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-sidebar text-sm font-bold text-sidebar-foreground">
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-6">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -top-40 left-1/2 h-[480px] w-[480px] -translate-x-1/2 rounded-full bg-primary/5 blur-3xl"
+      />
+      <div className="card relative w-full max-w-lg animate-scale-in p-8 shadow-lg">
+        <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 font-display text-sm font-bold text-primary-foreground">
           GTB
         </div>
-        <h1 className="text-lg font-semibold">Finish setup</h1>
+        <h1 className="font-display text-2xl font-semibold tracking-display">Finish setup</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           GTB OS needs a Supabase project before it can run.
         </p>

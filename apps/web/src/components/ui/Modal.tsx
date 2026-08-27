@@ -29,12 +29,12 @@ export function Modal({
   const widths = { sm: "max-w-md", md: "max-w-xl", lg: "max-w-3xl" };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:p-8">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/30 p-4 backdrop-blur-[2px] animate-fade-in sm:p-8">
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
       <div
         role="dialog"
         aria-modal="true"
-        className={cn("card relative z-10 my-4 w-full", widths[size])}
+        className={cn("card relative z-10 my-4 w-full shadow-xl animate-scale-in", widths[size])}
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">
           <h2 className="text-base font-semibold">{title}</h2>

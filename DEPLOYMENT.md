@@ -72,8 +72,10 @@ Both runtimes point at the same Supabase project.
    pnpm --filter @gtb/db seed             # optional: founder account, lead sources, sample plans
    ```
 
-3. **Storage** — create a **private** bucket named exactly `client-documents`. No bucket
-   RLS needed; the API writes to it with the service-role key (payment proofs, photos).
+3. **Storage** — create **private** buckets named exactly `client-documents` (payment
+   proofs, photos) and `scan-photos` (Wedding Readiness Scan selfies — separate bucket
+   because anonymous scans are purged after 24h by the daily cron). No bucket RLS needed;
+   the API writes to both with the service-role key.
 
 4. **Auth** — Authentication → URL Configuration: set **Site URL** to
    `https://app.yourdomain.com` and add it (plus `https://app.yourdomain.com/**`) to
@@ -122,6 +124,11 @@ SUPABASE_URL="https://<ref>.supabase.co"
 SUPABASE_ANON_KEY="<anon-key>"
 SUPABASE_SERVICE_ROLE_KEY="<service-role-key>"   # server only — never ships to the browser
 SUPABASE_JWT_SECRET="<jwt-secret>"
+
+# ---- Gemini (Wedding Readiness Scan; optional — if unset, scans use a
+# ----          deterministic stub scorer, fine for testing, never for launch) ----
+GEMINI_API_KEY="<google-ai-studio-key>"
+GEMINI_MODEL="gemini-2.5-flash"        # optional; this is the default
 
 # ---- Mailgun SMTP (optional; if unset, invite links are shown in the UI to copy) ----
 MAILGUN_SMTP_HOST="smtp.mailgun.org"

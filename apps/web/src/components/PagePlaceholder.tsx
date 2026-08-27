@@ -4,7 +4,7 @@ import { PageHeader } from "./PageHeader";
 /** Temporary stub for routes not yet implemented. Replaced as modules land. */
 export function PagePlaceholder({ title, subtitle }: { title: string; subtitle?: string }) {
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader title={title} subtitle={subtitle} />
       <div className="card mt-6 flex flex-col items-center justify-center gap-2 p-16 text-center">
         <Construction className="h-8 w-8 text-muted-foreground" />

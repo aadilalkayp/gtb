@@ -130,7 +130,7 @@ export function ExpensesPage() {
   }
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Expenses"
         subtitle="Submit, approve, and track spend and consultant payouts."
@@ -141,7 +141,7 @@ export function ExpensesPage() {
         }
       />
 
-      <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="stagger-children mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           icon={CheckCircle2}
           accent="success"
@@ -265,7 +265,7 @@ function ExpenseRowItem({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/50">
       <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
         {e.payeeId ? <Wallet className="h-4 w-4" /> : <Receipt className="h-4 w-4" />}
       </span>
@@ -296,7 +296,7 @@ function ExpenseRowItem({
         )}
       </div>
 
-      <span className="text-sm font-semibold tabular-nums">{formatINR(e.amount)}</span>
+      <span className="font-num text-sm font-semibold">{formatINR(e.amount)}</span>
       <StatusBadge status={e.status} />
 
       <div className="flex items-center gap-1.5">

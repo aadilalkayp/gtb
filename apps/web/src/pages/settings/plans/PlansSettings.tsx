@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useFindManyPlan, useCreatePlan, useUpdatePlan, useDeletePlan } from "@gtb/db/hooks";
 import { formatINR, SERVICE_TYPE_LABELS, CLIENT_TYPE_LABELS } from "@gtb/shared";
 import { Button, Badge, Spinner } from "@/components/ui";
+import { EmptyState } from "@/components/EmptyState";
 import { PlanFormModal } from "./PlanFormModal";
 import { emptyPlan, type PlanFormValues } from "./planSchema";
 
@@ -95,9 +96,7 @@ export function PlansSettings() {
           <Spinner className="h-6 w-6 text-muted-foreground" />
         </div>
       ) : !plans?.length ? (
-        <div className="card p-12 text-center text-sm text-muted-foreground">
-          No plans yet. Create your first plan.
-        </div>
+        <EmptyState title="No plans yet." hint="Create your first plan." />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {plans.map((plan) => (
@@ -137,14 +136,14 @@ export function PlansSettings() {
                         },
                       })
                     }
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
                     aria-label="Edit"
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(plan.id, plan.name)}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-danger"
+                    className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-danger active:scale-[0.98]"
                     aria-label="Delete"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -152,7 +151,7 @@ export function PlansSettings() {
                 </div>
               </div>
 
-              <p className="mt-3 text-lg font-semibold">{formatINR(plan.price)}</p>
+              <p className="mt-3 font-num text-lg font-semibold">{formatINR(plan.price)}</p>
 
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {plan.services.map((s) => (

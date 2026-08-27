@@ -44,19 +44,19 @@ export function SettingsPage() {
   const activeTab = available.find((t) => t.id === active) ?? available[0];
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader title="Settings" subtitle="Configure plans, lookups, and team access." />
 
-      <div className="mt-5 flex gap-1 border-b border-border">
+      <div className="mt-5 flex gap-1 overflow-x-auto border-b border-border">
         {available.map((t) => (
           <button
             key={t.id}
             onClick={() => setActive(t.id)}
             className={cn(
-              "border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
+              "-mb-px shrink-0 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors duration-150",
               activeTab?.id === t.id
                 ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground",
+                : "border-transparent text-muted-foreground hover:border-border-strong hover:text-foreground",
             )}
           >
             {t.label}

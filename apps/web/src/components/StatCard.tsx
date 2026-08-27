@@ -3,13 +3,13 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const accents = {
-  primary: "bg-primary/10 text-primary",
-  groom: "bg-groom/10 text-groom",
-  bride: "bg-bride/10 text-bride",
-  success: "bg-success/10 text-success",
-  warning: "bg-warning/15 text-[hsl(35_92%_38%)]",
-  danger: "bg-danger/10 text-danger",
-  info: "bg-info/10 text-info",
+  primary: "bg-gradient-to-br from-primary/15 to-primary/5 text-primary",
+  groom: "bg-gradient-to-br from-groom/15 to-groom/5 text-groom",
+  bride: "bg-gradient-to-br from-bride/15 to-bride/5 text-bride",
+  success: "bg-gradient-to-br from-success/15 to-success/5 text-success",
+  warning: "bg-gradient-to-br from-warning/15 to-warning/5 text-warning",
+  danger: "bg-gradient-to-br from-danger/15 to-danger/5 text-danger",
+  info: "bg-gradient-to-br from-info/15 to-info/5 text-info",
 } as const;
 
 export type StatAccent = keyof typeof accents;
@@ -41,7 +41,8 @@ export function StatCard({
       onClick={onClick}
       className={cn(
         "card p-4 text-left",
-        onClick && "transition-shadow hover:shadow-md",
+        onClick &&
+          "transition-[box-shadow,transform,border-color] duration-150 ease-out-strong hover:-translate-y-0.5 hover:border-border-strong hover:shadow-md active:translate-y-0 active:scale-[0.99]",
         className,
       )}
     >
@@ -67,7 +68,7 @@ export function StatCard({
           </span>
         )}
       </div>
-      <p className="mt-3 text-2xl font-semibold tracking-tight">{value}</p>
+      <p className="font-num mt-3 text-2xl font-semibold tracking-tight">{value}</p>
       <p className="mt-0.5 text-sm text-muted-foreground">{label}</p>
       {footnote && <p className="mt-1 text-xs text-muted-foreground/80">{footnote}</p>}
     </Comp>

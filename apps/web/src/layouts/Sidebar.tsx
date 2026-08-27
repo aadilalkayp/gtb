@@ -14,7 +14,7 @@ export function Sidebar() {
     <aside className="flex h-screen w-60 flex-col bg-sidebar text-sidebar-foreground">
       {/* Brand */}
       <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-sidebar-active text-sm font-bold">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-groom to-groom/60 font-display text-sm font-semibold text-white shadow-button">
           GTB
         </div>
         <div className="leading-tight">
@@ -33,9 +33,9 @@ export function Sidebar() {
             to={item.to}
             className={({ isActive }) =>
               cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
+                "relative flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150",
                 isActive
-                  ? "bg-sidebar-active text-white"
+                  ? "bg-sidebar-active text-white before:absolute before:left-0 before:top-1/2 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-full before:bg-groom"
                   : "text-sidebar-muted hover:bg-sidebar-active/60 hover:text-white",
               )
             }

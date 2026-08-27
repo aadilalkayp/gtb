@@ -85,7 +85,7 @@ export function PlanFormModal({
             <input
               type="checkbox"
               {...register("isActive")}
-              className="h-4 w-4 rounded border-border"
+              className="h-4 w-4 rounded border-border accent-primary"
             />
             Active (visible to new clients at onboarding)
           </label>
@@ -165,7 +165,7 @@ export function PlanFormModal({
                       <button
                         type="button"
                         onClick={() => remove(i)}
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-danger"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-danger active:scale-[0.98]"
                         aria-label="Remove service"
                       >
                         <Trash2 className="h-4 w-4" />
@@ -176,7 +176,7 @@ export function PlanFormModal({
                     <input
                       type="checkbox"
                       {...register(`services.${i}.manual`)}
-                      className="h-3.5 w-3.5"
+                      className="h-3.5 w-3.5 rounded border-border accent-primary"
                     />
                     Manual scheduling (only the first session is auto-created, e.g. styling)
                   </label>

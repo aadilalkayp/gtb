@@ -68,12 +68,12 @@ export function PlanStep({
               type="button"
               onClick={() => setSelected(plan.id)}
               className={cn(
-                "card relative p-4 text-left transition-shadow hover:shadow-md",
-                active && "ring-2 ring-primary",
+                "card relative p-4 text-left transition duration-150 ease-out-strong hover:border-border-strong hover:shadow-md active:scale-[0.99]",
+                active && "border-primary ring-4 ring-ring/10 hover:border-primary",
               )}
             >
               {active && (
-                <span className="absolute right-3 top-3 flex h-6 w-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                <span className="absolute right-3 top-3 flex h-6 w-6 animate-scale-in items-center justify-center rounded-full bg-primary text-primary-foreground">
                   <Check className="h-4 w-4" />
                 </span>
               )}
@@ -84,7 +84,7 @@ export function PlanStep({
                   ? `${plan.installmentCount} installments`
                   : "Full payment"}
               </p>
-              <p className="mt-2 text-xl font-semibold">{formatINR(plan.price)}</p>
+              <p className="mt-2 font-num text-xl font-semibold">{formatINR(plan.price)}</p>
               {plan.description && (
                 <p className="mt-2 text-sm text-muted-foreground">{plan.description}</p>
               )}

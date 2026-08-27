@@ -12,6 +12,7 @@ import {
 } from "@gtb/shared";
 import { assignTeam, activateClient } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
+import { EmptyState } from "@/components/EmptyState";
 import { Badge, Button, Select, Spinner, StatusBadge } from "@/components/ui";
 
 interface StaffLite {
@@ -83,7 +84,7 @@ export function AssignmentsPage() {
   const staffList = (staff ?? []) as unknown as StaffLite[];
 
   return (
-    <div className="p-6">
+    <div className="page">
       <PageHeader
         title="Assignments"
         subtitle="Assign coaches and consultants to converted clients, then activate their schedule."
@@ -95,9 +96,7 @@ export function AssignmentsPage() {
             <Spinner className="h-6 w-6 text-muted-foreground" />
           </div>
         ) : rows.length === 0 ? (
-          <div className="card p-12 text-center text-sm text-muted-foreground">
-            No converted clients waiting for a team.
-          </div>
+          <EmptyState icon={UserCheck} title="No converted clients waiting for a team." />
         ) : (
           <div className="space-y-4">
             {rows.map((c) => (

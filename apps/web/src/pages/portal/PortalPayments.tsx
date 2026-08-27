@@ -77,8 +77,8 @@ export function PortalPayments() {
   }
 
   return (
-    <div className="space-y-5">
-      <h1 className="text-xl font-semibold">My payments</h1>
+    <div className="animate-fade-up space-y-5">
+      <h1 className="font-display text-2xl font-semibold tracking-display">My payments</h1>
 
       {/* Summary */}
       <section className="card flex items-center gap-5 p-5">
@@ -88,15 +88,15 @@ export function PortalPayments() {
         <div className="grid flex-1 grid-cols-3 gap-3 text-sm">
           <div>
             <p className="text-xs text-muted-foreground">Package</p>
-            <p className="mt-0.5 font-semibold">{formatINR(total)}</p>
+            <p className="font-num mt-0.5 font-semibold">{formatINR(total)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Paid</p>
-            <p className="mt-0.5 font-semibold text-success">{formatINR(paid)}</p>
+            <p className="font-num mt-0.5 font-semibold text-success">{formatINR(paid)}</p>
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Outstanding</p>
-            <p className="mt-0.5 font-semibold">{formatINR(outstanding)}</p>
+            <p className="font-num mt-0.5 font-semibold">{formatINR(outstanding)}</p>
           </div>
         </div>
       </section>
@@ -116,7 +116,7 @@ export function PortalPayments() {
                   <p className="text-xs text-muted-foreground">Due {formatDate(i.dueDate)}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold">{formatINR(i.amount)}</span>
+                  <span className="font-num text-sm font-semibold">{formatINR(i.amount)}</span>
                   <StatusBadge status={display} />
                 </div>
               </div>
@@ -158,7 +158,7 @@ export function PortalPayments() {
       {payable && client.status === "lead" && (
         <Link
           to="/portal/onboarding"
-          className="block rounded-lg border border-border bg-muted/40 p-4 text-center text-sm text-primary hover:bg-muted"
+          className="block rounded-lg border border-border bg-muted/40 p-4 text-center text-sm text-primary transition-colors duration-150 hover:border-border-strong hover:bg-muted active:scale-[0.99]"
         >
           Finish your onboarding to submit your first payment →
         </Link>
