@@ -26,5 +26,14 @@ jobs:
           VITE_API_URL: https://placeholder.invalid
           VITE_SUPABASE_URL: https://placeholder.invalid
           VITE_SUPABASE_ANON_KEY: placeholder
+      # next build forces NODE_ENV=production and apps/api/src/lib/env.ts
+      # validates eagerly while collecting page data — placeholders only, the
+      # server re-reads process.env at boot (same trick as deploy/Dockerfile).
       - name: Build api
         run: pnpm --filter @gtb/api build
+        env:
+          DATABASE_URL: postgresql://build:build@localhost:5432/build
+          SUPABASE_URL: http://localhost:54321
+          SUPABASE_ANON_KEY: build-placeholder
+          SUPABASE_SERVICE_ROLE_KEY: build-placeholder
+          WEB_ORIGIN: https://localhost
