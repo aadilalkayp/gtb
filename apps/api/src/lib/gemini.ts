@@ -34,7 +34,7 @@ export interface ScanAnalysis {
   modelVersion: string;
 }
 
-const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-2.5-flash";
+const GEMINI_MODEL = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
 const API_KEY = process.env.GEMINI_API_KEY ?? "";
 
 export const geminiConfigured = Boolean(API_KEY);
