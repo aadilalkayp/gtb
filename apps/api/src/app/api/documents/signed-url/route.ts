@@ -3,6 +3,7 @@ import { prisma } from "@gtb/db";
 import { resolveAuthUser } from "@/lib/auth";
 import { createSignedUrl } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -18,7 +19,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  *   - assigned staff see docs except payment_proof (CRO/Ops/Founder only) and
  *     expense_receipt (Ops/Founder only).
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
 
@@ -70,3 +71,5 @@ export async function POST(req: NextRequest): Promise<Response> {
     return json(req, { error: e instanceof Error ? e.message : "Could not sign URL" }, 502);
   }
 }
+
+export const POST = withRequestLog(handlePost);

@@ -140,6 +140,13 @@ NODE_ENV="production"
 WEB_ORIGIN="https://app.yourdomain.com"          # exact origin(s), comma-separated; drives CORS
 API_PUBLIC_URL="https://api.yourdomain.com"
 WEB_PUBLIC_URL="https://app.yourdomain.com"      # used in invite/registration email links
+
+# ---- Logging (optional) ----
+LOG_LEVEL="info"        # debug|info|warn|error; default info in production.
+                        # Production logs are JSON lines (one object per line) on
+                        # stdout/stderr — see apps/api/src/lib/logger.ts. Every request
+                        # gets one access line with reqId/method/path/status/durMs/userId;
+                        # the reqId is echoed in the x-request-id response header.
 ```
 
 > `WEB_ORIGIN` must be the **exact** frontend origin (scheme + host, no trailing slash).

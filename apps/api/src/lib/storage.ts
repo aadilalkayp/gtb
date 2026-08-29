@@ -1,4 +1,7 @@
 import { supabaseAdmin } from "./supabase.js";
+import { logger } from "./logger.js";
+
+const log = logger.child({ mod: "storage" });
 
 /** Private Storage bucket holding all client documents (proofs, photos, plans, receipts). */
 export const DOCUMENTS_BUCKET = "client-documents";
@@ -55,5 +58,5 @@ export async function createScanSignedUrl(path: string, expiresInSeconds = 3600)
 /** Best-effort delete (used by the anonymous-scan purge job). */
 export async function deleteScanObject(path: string): Promise<void> {
   const { error } = await supabaseAdmin.storage.from(SCAN_BUCKET).remove([path]);
-  if (error) console.warn("[storage] scan photo delete failed:", error.message);
+  if (error) log.warn("scan photo delete failed", { path, reason: error.message });
 }

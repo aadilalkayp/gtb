@@ -3,6 +3,7 @@ import { prisma } from "@gtb/db";
 import { ASSIGNMENT_ROLES, type AssignmentRole } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -21,7 +22,7 @@ interface AssignInput {
  * Assign / reassign a client's team (SRS §14, §6.1 step 11). Each role keeps one
  * active assignment; reassigning deactivates the previous one (history preserved).
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (!ASSIGNERS.has(authUser.role)) return json(req, { error: "Forbidden" }, 403);
@@ -107,3 +108,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { ok: true });
 }
+
+export const POST = withRequestLog(handlePost);

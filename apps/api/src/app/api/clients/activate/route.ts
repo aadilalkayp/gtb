@@ -3,6 +3,7 @@ import { activateClientPlan } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notify";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -19,7 +20,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * welcome. STATE-2: all of it is one transaction with a skipDuplicates guard —
  * a double-activate produces exactly one schedule (see activateClientPlan).
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (!ASSIGNERS.has(authUser.role)) return json(req, { error: "Forbidden" }, 403);
@@ -59,3 +60,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { ok: true, sessionsCreated: result.sessionsCreated });
 }
+
+export const POST = withRequestLog(handlePost);

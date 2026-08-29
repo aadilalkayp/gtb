@@ -7,7 +7,7 @@ function required(name: string): string {
       throw new Error(`Missing required env var: ${name}`);
     }
     // In dev, warn but allow boot so the app can render a setup state.
-    console.warn(`[GTB OS API] Missing env var: ${name}`);
+    console.warn(`[env] missing env var (dev fallback to empty): ${name}`);
     return "";
   }
   return value;

@@ -3,6 +3,7 @@ import { prisma } from "@gtb/db";
 import { cancelClientPlan } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -18,7 +19,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * waived (staff decision), portal login blocked, ActivityLog written. Client
  * data is retained.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (!CANCELERS.has(authUser.role)) return json(req, { error: "Forbidden" }, 403);
@@ -60,3 +61,5 @@ export async function POST(req: NextRequest): Promise<Response> {
     throw e;
   }
 }
+
+export const POST = withRequestLog(handlePost);

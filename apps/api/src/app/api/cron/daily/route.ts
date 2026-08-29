@@ -2,6 +2,8 @@ import type { NextRequest } from "next/server";
 import { runDailyJobs } from "@gtb/db/server";
 import { runScanJobs } from "@/lib/scanJobs";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
+import { requestLog } from "@/lib/logger";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -15,10 +17,10 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * REMEDIATION_PLAN.md SYS-2). Guarded by a shared CRON_SECRET in the
  * `x-cron-secret` header so it can never be fired by an anonymous caller.
  */
-export async function GET(req: NextRequest): Promise<Response> {
+async function handleGet(req: NextRequest): Promise<Response> {
   const secret = process.env.CRON_SECRET;
   if (!secret) {
-    console.error("[cron] CRON_SECRET is not configured — job refused");
+    requestLog(req).error("CRON_SECRET is not configured — job refused");
     return json(req, { error: "Scheduler not configured" }, 503);
   }
   if (req.headers.get("x-cron-secret") !== secret) {
@@ -29,3 +31,5 @@ export async function GET(req: NextRequest): Promise<Response> {
   const scanReport = await runScanJobs();
   return json(req, { ok: true, at: new Date().toISOString(), report: { ...report, ...scanReport } });
 }
+
+export const GET = withRequestLog(handleGet);

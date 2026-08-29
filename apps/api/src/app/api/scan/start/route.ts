@@ -5,6 +5,8 @@ import { analyzeSelfie } from "@/lib/gemini";
 import { buildScanReport, clientIp, rateLimit, syncRoadmap } from "@/lib/scan";
 import { uploadScanObject } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
+import { requestLog } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
@@ -45,7 +47,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  *     row immediately, future roadmap weeklies are regenerated from the new
  *     scores, and the full report returns directly.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   if (!rateLimit(`scan:${clientIp(req)}`, SCANS_PER_HOUR_PER_IP)) {
     return json(req, { error: "Too many scans from this network. Try again in an hour." }, 429);
   }
@@ -101,7 +103,7 @@ export async function POST(req: NextRequest): Promise<Response> {
   const photoPath = `${ownClient?.id ?? "anonymous"}/${crypto.randomUUID()}.${sniffed.split("/")[1]}`;
   const { error: uploadError } = await uploadScanObject(photoPath, buffer, sniffed);
   if (uploadError) {
-    console.error("[scan] photo upload failed:", uploadError.message);
+    requestLog(req).error("scan photo upload failed", { reason: uploadError.message });
     return json(req, { error: "Could not store the photo. Please try again." }, 502);
   }
 
@@ -149,7 +151,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     });
   } catch (e) {
     const reason = e instanceof Error ? e.message : "analysis failed";
-    console.error("[scan] analysis failed:", reason);
+    requestLog(req).error("scan analysis failed", { scanId: scan.id, error: e });
     await prisma.scan.update({
       where: { id: scan.id },
       data: { status: "failed", failureReason: reason.slice(0, 500) },
@@ -175,3 +177,5 @@ export async function POST(req: NextRequest): Promise<Response> {
     },
   });
 }
+
+export const POST = withRequestLog(handlePost);

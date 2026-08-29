@@ -3,6 +3,7 @@ import { prisma } from "@gtb/db";
 import { enrollClientInPlan, EnrollmentConflictError } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -18,7 +19,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * STATE-7: creation + leadPhase advance are one transaction, and the
  * double-enroll race returns 409 (EnrollmentConflictError) instead of a 500.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
 
@@ -63,3 +64,5 @@ export async function POST(req: NextRequest): Promise<Response> {
     throw e;
   }
 }
+
+export const POST = withRequestLog(handlePost);

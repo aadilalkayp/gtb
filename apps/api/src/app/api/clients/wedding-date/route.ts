@@ -5,6 +5,7 @@ import { formatDate } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers, getAdminUserIds } from "@/lib/notify";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -17,7 +18,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * schedule (SRS §24.1) — one transaction, completed/cancelled sessions
  * untouched, ActivityLog written, staff notified.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (authUser.role !== "founder" && authUser.role !== "ops_head") {
@@ -77,3 +78,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { ok: true, ...result });
 }
+
+export const POST = withRequestLog(handlePost);

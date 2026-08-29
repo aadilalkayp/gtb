@@ -3,6 +3,7 @@ import { prisma } from "@gtb/db";
 import { cancelSession } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -16,7 +17,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * an every-field grant — see schema notes), so this route is their only
  * cancel/miss path; unlike the old gateway write it records the audit row.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
 
@@ -58,3 +59,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { ok: true });
 }
+
+export const POST = withRequestLog(handlePost);

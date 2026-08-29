@@ -4,6 +4,7 @@ import { generateClientCode } from "@gtb/shared";
 import { buildScanReport, clientIp, rateLimit } from "@/lib/scan";
 import { syncRoadmap } from "@/lib/scan";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -28,7 +29,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * Assessment is prefilled from the scan's focus areas so consultants inherit a
  * head start at conversion.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   if (!rateLimit(`claim:${clientIp(req)}`, CLAIMS_PER_HOUR_PER_IP)) {
     return json(req, { error: "Too many requests. Try again in an hour." }, 429);
   }
@@ -123,3 +124,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { ok: true, report: await buildScanReport(claimed, client.weddingDate) });
 }
+
+export const POST = withRequestLog(handlePost);

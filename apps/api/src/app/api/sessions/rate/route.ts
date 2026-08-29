@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { applySessionRating } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -14,7 +15,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * expose Session updates to clients — this is the only client write path, and
  * all validation lives in applySessionRating (server-side + DB CHECK).
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (authUser.role !== "client") return json(req, { error: "Forbidden" }, 403);
@@ -36,3 +37,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { ok: true, rating: result.rating });
 }
+
+export const POST = withRequestLog(handlePost);

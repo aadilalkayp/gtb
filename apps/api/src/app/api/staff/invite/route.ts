@@ -7,6 +7,8 @@ import { sendMail, mailConfigured } from "@/lib/mailer";
 import { staffInviteEmail } from "@/lib/emails";
 import { env } from "@/lib/env";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
+import { requestLog } from "@/lib/logger";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -19,7 +21,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * (linked by email on first login) and emails a set-password link. Also used to
  * resend an invite for an existing staff member who hasn't logged in yet.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (authUser.role !== "founder") return json(req, { error: "Forbidden" }, 403);
@@ -79,7 +81,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     registrationUrl = link.data.properties?.action_link ?? registrationUrl;
   } catch (e) {
     warning = e instanceof Error ? e.message : "Could not generate a verification link.";
-    console.error("[GTB OS] staff generateLink failed:", warning);
+    requestLog(req).error("staff invite generateLink failed", { error: e });
   }
 
   const mail = await sendMail(
@@ -105,3 +107,5 @@ export async function POST(req: NextRequest): Promise<Response> {
     ...(warning ? { warning } : {}),
   });
 }
+
+export const POST = withRequestLog(handlePost);

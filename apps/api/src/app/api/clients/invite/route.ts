@@ -7,6 +7,8 @@ import { sendMail, mailConfigured } from "@/lib/mailer";
 import { inviteEmail } from "@/lib/emails";
 import { env } from "@/lib/env";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
+import { requestLog } from "@/lib/logger";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -25,7 +27,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * a Supabase-backed registration link. Email is best-effort — the link is always
  * returned so the staff UI can show/copy it when SMTP isn't configured.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (!INVITER_ROLES.has(authUser.role)) return json(req, { error: "Forbidden" }, 403);
@@ -117,7 +119,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     else warning = "Could not generate a verification link; sent a fallback URL.";
   } catch (e) {
     warning = e instanceof Error ? e.message : "Could not generate a verification link.";
-    console.error("[GTB OS] generateLink failed:", warning);
+    requestLog(req).error("client invite generateLink failed", { error: e });
   }
 
   const brand = CLIENT_TYPE_LABELS[client.type];
@@ -140,3 +142,5 @@ export async function POST(req: NextRequest): Promise<Response> {
     ...(mail.error && mail.error !== "mail_not_configured" ? { mailError: mail.error } : {}),
   });
 }
+
+export const POST = withRequestLog(handlePost);

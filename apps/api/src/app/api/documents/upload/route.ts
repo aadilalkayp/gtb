@@ -4,6 +4,8 @@ import { DOCUMENT_TYPES, type DocumentType } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { uploadObject } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
+import { requestLog } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
@@ -83,7 +85,7 @@ function slugifyName(name: string): string {
  * (when given) must belong to the same client; the file's magic bytes must
  * match its declared MIME.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
 
@@ -178,7 +180,7 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   const { error: uploadError } = await uploadObject(path, buffer, declaredType);
   if (uploadError) {
-    console.error("[GTB OS] Storage upload failed:", uploadError.message);
+    requestLog(req).error("document storage upload failed", { path, reason: uploadError.message });
     return json(req, { error: "Upload failed. Please try again." }, 502);
   }
 
@@ -196,3 +198,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { document });
 }
+
+export const POST = withRequestLog(handlePost);

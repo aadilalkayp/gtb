@@ -5,6 +5,7 @@ import { SERVICE_TYPE_LABELS, type ServiceType } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notify";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -21,7 +22,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * STATE-3: status flip + payout expense are one transaction (completeSession);
  * STATE-5: actualDate is validated (must parse, must not be in the future).
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
 
@@ -78,3 +79,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { ok: true, expenseCreated: result.expenseCreated });
 }
+
+export const POST = withRequestLog(handlePost);

@@ -1,5 +1,6 @@
 import { prisma, type AuthUser } from "@gtb/db";
 import { supabaseAnon } from "./supabase.js";
+import { addRequestLogContext, logger, requestLog } from "./logger.js";
 
 /**
  * Resolve the GTB OS user for an incoming request.
@@ -14,17 +15,21 @@ import { supabaseAnon } from "./supabase.js";
  * Returns `undefined` for anonymous / unprovisioned / deactivated callers, so
  * ZenStack policies fail closed.
  */
+const log = logger.child({ mod: "auth" });
+
 export async function resolveAuthUser(req: Request): Promise<AuthUser | undefined> {
   const authHeader = req.headers.get("authorization") ?? "";
   const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
   if (!token) {
-    console.warn("[auth] no bearer token");
+    // Debug, not warn: every unauthenticated probe hits this and the access
+    // line already records the 401.
+    requestLog(req).debug("no bearer token");
     return undefined;
   }
 
   const { data, error } = await supabaseAnon.auth.getUser(token);
   if (error || !data.user) {
-    console.warn("[auth] supabase getUser failed:", error?.message ?? "no user");
+    requestLog(req).warn("supabase getUser rejected token", { reason: error?.message ?? "no user" });
     return undefined;
   }
 
@@ -48,28 +53,31 @@ export async function resolveAuthUser(req: Request): Promise<AuthUser | undefine
     });
     if (pending) {
       if (!data.user.email_confirmed_at) {
-        console.warn(
-          `[auth] refusing to link unconfirmed email=${email} to pre-provisioned user ${pending.id}`,
-        );
+        log.warn("refusing to link unconfirmed email to pre-provisioned user", {
+          email,
+          userId: pending.id,
+        });
       } else {
         user = await prisma.user.update({
           where: { id: pending.id },
           data: { authId },
           select: { id: true, role: true, isActive: true },
         });
-        console.info(`[auth] linked email=${email} to authId=${authId}`);
+        log.info("linked pre-provisioned user to auth identity", { email, userId: user.id, authId });
       }
     }
   }
 
   if (!user) {
-    console.warn(`[auth] no user row for authId=${authId} email=${email}`);
+    requestLog(req).warn("no user row for auth identity", { authId, email });
     return undefined;
   }
   if (!user.isActive) {
-    console.warn(`[auth] user ${user.id} (${user.role}) is deactivated`);
+    requestLog(req).warn("deactivated user rejected", { userId: user.id, role: user.role });
     return undefined;
   }
 
+  // Stamp the caller onto the request's access log line.
+  addRequestLogContext(req, { userId: user.id, role: user.role });
   return { id: user.id, role: user.role };
 }

@@ -3,19 +3,23 @@ import type { NextRequest } from "next/server";
 import { getEnhancedPrisma } from "@gtb/db";
 import { resolveAuthUser } from "@/lib/auth";
 import { handleOptions, withCors } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
+import { logger, requestLog } from "@/lib/logger";
 
 /**
  * ZenStack auto-CRUD endpoint. Every model is exposed here as an RPC-style API
  * (findMany, create, update, ...). Access policies in the schema are enforced
  * because we hand ZenStack a client enhanced with the caller's identity.
  */
+const zenLog = logger.child({ mod: "zenstack" });
+
 const zenHandler = NextRequestHandler({
   useAppDir: true,
   getPrisma: async (req) => getEnhancedPrisma(await resolveAuthUser(req)),
   logger: {
-    error: (msg, code) => console.error(`[ZenStack] ${code ?? ""} ${msg}`),
-    warn: (msg) => console.warn(`[ZenStack] ${msg}`),
-    info: (msg) => console.info(`[ZenStack] ${msg}`),
+    error: (msg, code) => zenLog.error(msg, { code }),
+    warn: (msg) => zenLog.warn(msg),
+    info: (msg) => zenLog.info(msg),
   },
 });
 
@@ -33,7 +37,7 @@ async function handler(req: NextRequest, ctx: Ctx): Promise<Response> {
   const path = req.nextUrl.pathname;
   const user = await resolveAuthUser(req);
   if (!user) {
-    console.warn(`[model] ${req.method} ${path} — no auth user resolved`);
+    requestLog(req).debug("no auth user resolved", { path });
   }
 
   const { path: segments } = await ctx.params;
@@ -47,21 +51,19 @@ async function handler(req: NextRequest, ctx: Ctx): Promise<Response> {
 
   const res = await zenHandler(req, ctx);
 
+  // The access line records method/path/status; add the ZenStack error body,
+  // which is the only place the policy-denial reason surfaces.
   if (res.status >= 400) {
-    const body = await res.clone().text();
-    console.error(
-      `[model] ${req.method} ${path} ${res.status}`,
-      user ? `user=${user.id} role=${user.role}` : "anonymous",
-      body,
-    );
+    requestLog(req).warn("model request rejected", { body: await res.clone().text() });
   }
 
   return withCors(req, res);
 }
 
-export const GET = handler;
-export const POST = handler;
-export const PUT = handler;
-export const PATCH = handler;
-export const DELETE = handler;
+const wrapped = withRequestLog(handler);
+export const GET = wrapped;
+export const POST = wrapped;
+export const PUT = wrapped;
+export const PATCH = wrapped;
+export const DELETE = wrapped;
 export const OPTIONS = (req: NextRequest) => handleOptions(req);

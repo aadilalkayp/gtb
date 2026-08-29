@@ -5,6 +5,7 @@ import { SERVICE_TYPE_LABELS, formatDate, type ServiceType } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notify";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -16,7 +17,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * Reschedule a session (SRS §9.4). DATA-2 (original date preserved + audit
  * log) and MISC-3 (delayed only when moved later) live in rescheduleSession.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
 
@@ -71,3 +72,5 @@ export async function POST(req: NextRequest): Promise<Response> {
 
   return json(req, { ok: true });
 }
+
+export const POST = withRequestLog(handlePost);

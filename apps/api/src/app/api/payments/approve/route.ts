@@ -6,6 +6,8 @@ import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers, getAdminUserIds } from "@/lib/notify";
 import { createPaymentReceipt } from "@/lib/receipt";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
+import { requestLog } from "@/lib/logger";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -25,7 +27,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * double-convert, and a crash can't leave an approved-but-never-converted
  * client.
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (!APPROVERS.has(authUser.role)) return json(req, { error: "Forbidden" }, 403);
@@ -123,8 +125,10 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
     }
   } catch (e) {
-    console.error("[GTB OS] Receipt generation failed:", e instanceof Error ? e.message : e);
+    requestLog(req).error("receipt generation failed", { error: e });
   }
 
   return json(req, { ok: true, converted: result.converted });
 }
+
+export const POST = withRequestLog(handlePost);

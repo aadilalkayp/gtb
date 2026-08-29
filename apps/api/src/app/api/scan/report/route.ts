@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
 import { buildScanReport, clientIp, rateLimit } from "@/lib/scan";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -16,7 +17,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * never exposes fields off an existing Client record. Authenticated portal
  * reads go through the policy-enforced gateway instead.
  */
-export async function GET(req: NextRequest): Promise<Response> {
+async function handleGet(req: NextRequest): Promise<Response> {
   if (!rateLimit(`report:${clientIp(req)}`, 120)) {
     return json(req, { error: "Too many requests" }, 429);
   }
@@ -35,3 +36,5 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   return json(req, { report: await buildScanReport(scan, owner?.weddingDate) });
 }
+
+export const GET = withRequestLog(handleGet);

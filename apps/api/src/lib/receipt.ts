@@ -1,6 +1,9 @@
 import PDFDocument from "pdfkit";
 import { formatINR } from "@gtb/shared";
 import { uploadObject } from "@/lib/storage";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ mod: "receipt" });
 
 export interface ReceiptData {
   clientName: string;
@@ -87,7 +90,7 @@ export async function createPaymentReceipt(
   const path = `${data.clientCode.toLowerCase().replace(/[^a-z0-9]/g, "")}/payment_receipt/${data.receiptId}.pdf`;
   const { error } = await uploadObject(path, buffer, "application/pdf");
   if (error) {
-    console.error("[GTB OS] Receipt upload failed:", error.message);
+    log.error("receipt upload failed", { path, reason: error.message });
     return null;
   }
   return { id: data.receiptId, fileUrl: path, fileSize: buffer.byteLength };

@@ -3,6 +3,7 @@ import { prisma } from "@gtb/db";
 import { resolveAuthUser } from "@/lib/auth";
 import { createScanSignedUrl } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
+import { withRequestLog } from "@/lib/handler";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -16,7 +17,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * client. (Anonymous funnel screens re-show the photo from the browser's own
  * file, so no anonymous read path is needed.)
  */
-export async function POST(req: NextRequest): Promise<Response> {
+async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
 
@@ -49,3 +50,5 @@ export async function POST(req: NextRequest): Promise<Response> {
   const url = await createScanSignedUrl(scan.photoPath);
   return json(req, { url });
 }
+
+export const POST = withRequestLog(handlePost);

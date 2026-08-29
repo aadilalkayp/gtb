@@ -1,5 +1,8 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "./env.js";
+import { logger } from "./logger.js";
+
+const log = logger.child({ mod: "mailer" });
 
 /**
  * Mailgun SMTP mailer.
@@ -40,9 +43,7 @@ export interface SendMailResult {
 
 export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
   if (!mailConfigured) {
-    console.warn(
-      `[GTB OS] Mail not configured — skipping email to ${input.to} ("${input.subject}")`,
-    );
+    log.warn("mail not configured — skipping email", { to: input.to, subject: input.subject });
     return { sent: false, error: "mail_not_configured" };
   }
   try {
@@ -56,7 +57,7 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
     return { sent: true };
   } catch (e) {
     const error = e instanceof Error ? e.message : "send_failed";
-    console.error(`[GTB OS] Failed to send email to ${input.to}:`, error);
+    log.error("failed to send email", { to: input.to, subject: input.subject, error: e });
     return { sent: false, error };
   }
 }
