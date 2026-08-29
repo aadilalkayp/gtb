@@ -49,7 +49,7 @@ Settings → Secrets and variables → Actions:
 | Kind | Name | Value |
 | --- | --- | --- |
 | Secret | `CLOUDFLARE_API_TOKEN` | token with Workers Scripts:Edit |
-| Secret | `DIRECT_URL` | Supabase **direct** (non-pooled) URL, for migrations |
+| Secret | `DIRECT_URL` | Supabase **session pooler** URL (port 5432, `postgres.<ref>@aws-0-<region>.pooler.supabase.com`) — the `db.<ref>` direct host is IPv6-only and unreachable from GitHub runners; the 6543 transaction pooler breaks migrations |
 | Secret | `VPS_SSH_KEY` | private half of the `deploy` user's key |
 | Variable | `CLOUDFLARE_ACCOUNT_ID` | from the Cloudflare dashboard |
 | Variable | `VITE_API_URL` | `https://api.yourdomain.com` |
