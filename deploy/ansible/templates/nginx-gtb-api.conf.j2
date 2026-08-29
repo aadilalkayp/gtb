@@ -1,0 +1,25 @@
+# GTB OS API reverse proxy — managed by Ansible (deploy/ansible/site.yml).
+# Certbot rewrites this file to add the 443 server + redirect on first issue.
+#
+# Do NOT add CORS headers here: the Next.js app sets them per-request from
+# WEB_ORIGIN (apps/api/src/lib/cors.ts); duplicating them breaks the browser.
+server {
+    listen 80;
+    server_name {{ api_domain }};
+
+    # Uploads (payment proofs, scan selfies) stream through the API.
+    client_max_body_size 25M;
+
+    location / {
+        proxy_pass         http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_set_header   Upgrade           $http_upgrade;
+        proxy_set_header   Connection        "upgrade";
+        # Scan scoring calls Gemini synchronously — allow more than nginx's 60s default.
+        proxy_read_timeout 90s;
+    }
+}

@@ -1,0 +1,13 @@
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/out
+.git
+.github
+deploy/ansible
+supabase/.temp
+**/.env
+**/.env.*
+*.log
+.DS_Store

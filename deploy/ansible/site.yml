@@ -1,0 +1,300 @@
+# GTB OS VPS — provision + harden + deploy scaffolding, idempotent.
+#
+# Fresh box (as root):   ansible-playbook -i inventory.ini site.yml -u root -e bootstrap=true
+# Thereafter:            ansible-playbook -i inventory.ini site.yml
+#
+# What it sets up, in order:
+#   base       — apt update/upgrade, unattended-upgrades, basics
+#   users      — non-root deploy user (docker group, no general sudo), SSH keys
+#   ssh        — key-only auth, root login disabled, hardened sshd
+#   firewall   — ufw: allow 22/80/443, deny everything else inbound
+#   fail2ban   — sshd jail
+#   docker     — engine + compose plugin from Docker's apt repo
+#   nginx+tls  — reverse proxy for the API + certbot certificate w/ auto-renew
+#   app        — /opt/gtb (compose.yml, env file, GHCR login), starts the API
+#   cron       — systemd timer hitting /api/cron/daily with CRON_SECRET
+---
+- name: Provision and harden the GTB VPS
+  hosts: gtb
+  become: true
+  vars:
+    bootstrap: false
+  tasks:
+    # ------------------------------------------------------------ base
+    - name: Update apt cache and upgrade packages
+      ansible.builtin.apt:
+        update_cache: true
+        upgrade: safe
+        cache_valid_time: 3600
+
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - git
+          - ufw
+          - fail2ban
+          - unattended-upgrades
+          - nginx
+        state: present
+
+    - name: Enable unattended security upgrades
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+        mode: "0644"
+
+    # ------------------------------------------------------------ users
+    # Two accounts, two blast radii:
+    #   admin  — your key(s); passwordless sudo; what Ansible connects as.
+    #   deploy — the CI key only; docker group, NO sudo. A leaked CI key can
+    #            roll containers in /opt/gtb, not administer the box.
+    - name: Create the admin user
+      ansible.builtin.user:
+        name: "{{ admin_user }}"
+        shell: /bin/bash
+        create_home: true
+
+    - name: Authorize SSH keys for the admin user
+      ansible.posix.authorized_key:
+        user: "{{ admin_user }}"
+        key: "{{ item }}"
+      loop: "{{ admin_ssh_public_keys }}"
+
+    - name: Grant the admin user passwordless sudo
+      ansible.builtin.copy:
+        dest: /etc/sudoers.d/{{ admin_user }}
+        content: "{{ admin_user }} ALL=(ALL) NOPASSWD: ALL\n"
+        mode: "0440"
+        validate: visudo -cf %s
+
+    - name: Create the deploy user (no sudo)
+      ansible.builtin.user:
+        name: "{{ deploy_user }}"
+        shell: /bin/bash
+        create_home: true
+
+    - name: Authorize SSH keys for the deploy user
+      ansible.posix.authorized_key:
+        user: "{{ deploy_user }}"
+        key: "{{ item }}"
+        exclusive: true # exactly the CI key(s) — nothing accumulates here
+      loop: "{{ deploy_ssh_public_keys }}"
+
+    # ------------------------------------------------------------ ssh hardening
+    - name: Harden sshd
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/99-gtb-hardening.conf
+        content: |
+          PermitRootLogin no
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PubkeyAuthentication yes
+          X11Forwarding no
+          MaxAuthTries 4
+          LoginGraceTime 20
+          AllowUsers {{ admin_user }} {{ deploy_user }}
+        mode: "0644"
+        validate: sshd -t -f %s
+      notify: Restart sshd
+
+    # ------------------------------------------------------------ firewall
+    - name: Allow SSH, HTTP, HTTPS
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop: ["22", "80", "443"]
+
+    - name: Enable ufw with default deny incoming
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+
+    - name: Enable fail2ban sshd jail
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [sshd]
+          enabled = true
+          maxretry = 5
+          bantime = 1h
+        mode: "0644"
+      notify: Restart fail2ban
+
+    # ------------------------------------------------------------ docker
+    - name: Add Docker apt repository
+      ansible.builtin.deb822_repository:
+        name: docker
+        types: deb
+        uris: https://download.docker.com/linux/ubuntu
+        suites: "{{ ansible_distribution_release }}"
+        components: stable
+        architectures: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+        signed_by: https://download.docker.com/linux/ubuntu/gpg
+      register: docker_repo
+
+    - name: Refresh apt cache after adding the Docker repo
+      ansible.builtin.apt:
+        update_cache: true
+      when: docker_repo.changed
+
+    - name: Install Docker engine + compose plugin
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-compose-plugin
+        state: present
+
+    - name: Add deploy user to the docker group
+      ansible.builtin.user:
+        name: "{{ deploy_user }}"
+        groups: docker
+        append: true
+
+    # ------------------------------------------------------------ nginx + tls
+    - name: Install certbot
+      ansible.builtin.apt:
+        name: [certbot, python3-certbot-nginx]
+        state: present
+
+    - name: Install the API nginx site
+      ansible.builtin.template:
+        src: templates/nginx-gtb-api.conf.j2
+        dest: /etc/nginx/sites-available/gtb-api
+        mode: "0644"
+      notify: Reload nginx
+
+    - name: Enable the API site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/gtb-api
+        dest: /etc/nginx/sites-enabled/gtb-api
+        state: link
+      notify: Reload nginx
+
+    - name: Remove the default nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Reload nginx
+
+    - name: Check for an existing certificate
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ api_domain }}/fullchain.pem"
+      register: cert
+
+    # Needs DNS for api_domain pointing at this box first. Certbot rewrites the
+    # site config for 443 + adds the systemd renewal timer.
+    - name: Obtain TLS certificate
+      ansible.builtin.command:
+        cmd: >-
+          certbot --nginx --non-interactive --agree-tos
+          -m {{ certbot_email }} -d {{ api_domain }} --redirect
+      when: not cert.stat.exists
+
+    # ------------------------------------------------------------ app
+    - name: Create /opt/gtb
+      ansible.builtin.file:
+        path: /opt/gtb
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0755"
+
+    - name: Install compose.yml
+      ansible.builtin.copy:
+        src: ../compose.yml
+        dest: /opt/gtb/compose.yml
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0644"
+
+    - name: Seed /opt/gtb/.env if missing (CI owns it afterwards)
+      ansible.builtin.copy:
+        dest: /opt/gtb/.env
+        content: "GTB_IMAGE_TAG=latest\n"
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0644"
+        force: false
+
+    - name: Append GTB_IMAGE to /opt/gtb/.env
+      ansible.builtin.lineinfile:
+        path: /opt/gtb/.env
+        line: "GTB_IMAGE={{ gtb_image }}"
+        regexp: "^GTB_IMAGE="
+
+    - name: Write the API runtime env file
+      ansible.builtin.copy:
+        dest: /opt/gtb/gtb-api.env
+        content: |
+          {% for key, value in gtb_api_env.items() %}
+          {{ key }}={{ value }}
+          {% endfor %}
+        owner: root
+        group: "{{ deploy_user }}"
+        mode: "0640"
+      notify: Restart api
+
+    - name: Log in to GHCR for image pulls
+      become_user: "{{ deploy_user }}"
+      ansible.builtin.command:
+        cmd: docker login ghcr.io -u {{ ghcr_username }} --password-stdin
+        stdin: "{{ ghcr_token }}"
+      changed_when: false
+
+    - name: Start the API
+      become_user: "{{ deploy_user }}"
+      ansible.builtin.command:
+        cmd: docker compose up -d
+        chdir: /opt/gtb
+      register: compose_up
+      changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr"
+
+    # ------------------------------------------------------------ cron
+    - name: Install the daily-cron service + timer
+      ansible.builtin.template:
+        src: "templates/{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop: [gtb-cron.service, gtb-cron.timer]
+      notify: Reload systemd
+
+    - name: Enable the daily-cron timer
+      ansible.builtin.systemd_service:
+        name: gtb-cron.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: Restart sshd
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
+    - name: Restart fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+
+    - name: Reload nginx
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Restart api
+      become_user: "{{ deploy_user }}"
+      ansible.builtin.command:
+        cmd: docker compose up -d --force-recreate api
+        chdir: /opt/gtb

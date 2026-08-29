@@ -1,0 +1,110 @@
+# Production pipeline: push to main → checks → deploy web (Cloudflare Workers
+# assets) + api (GHCR image → VPS docker compose), with DB migrations applied
+# before the API rolls.
+#
+# Required repository configuration (Settings → Secrets and variables → Actions):
+#
+#   Secrets
+#     CLOUDFLARE_API_TOKEN   Workers deploy token (Account → Workers Scripts:Edit)
+#     DIRECT_URL             Supabase DIRECT (non-pooled) URL — prisma migrate deploy
+#     VPS_SSH_KEY            private key for the deploy user on the VPS
+#   Variables
+#     CLOUDFLARE_ACCOUNT_ID
+#     VITE_API_URL           e.g. https://api.yourdomain.com
+#     VITE_SUPABASE_URL      Supabase project URL
+#     VITE_SUPABASE_ANON_KEY Supabase anon key (public by design)
+#     VPS_HOST               VPS hostname or IP
+#     VPS_USER               deploy user created by the Ansible playbook (default: deploy)
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false # never cancel a deploy mid-flight
+
+jobs:
+  check:
+    uses: ./.github/workflows/ci.yml
+
+  deploy-web:
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Build web
+        run: pnpm --filter @gtb/web build
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+      - name: Deploy to Cloudflare Workers
+        run: pnpm --filter @gtb/web exec wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+
+  deploy-api:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write # push to GHCR
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/gtb-api:${{ github.sha }}
+            ghcr.io/${{ github.repository }}/gtb-api:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # Migrations run BEFORE the new API rolls — additive migrations keep the
+      # still-running old container happy for the seconds in between.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter @gtb/db...
+      - name: Apply database migrations
+        run: pnpm --filter @gtb/db migrate:deploy
+        env:
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+
+      - name: Roll the VPS to the new image
+        env:
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_HOST: ${{ vars.VPS_HOST }}
+          VPS_USER: ${{ vars.VPS_USER }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
+            "cd /opt/gtb && echo \"GTB_IMAGE_TAG=$IMAGE_TAG\" > .env && docker compose pull -q api && docker compose up -d api && docker image prune -f"

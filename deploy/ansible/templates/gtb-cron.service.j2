@@ -1,0 +1,13 @@
+# Fires the GTB OS daily jobs (overdue flips, reminders, scan purge).
+# Managed by Ansible; triggered by gtb-cron.timer.
+[Unit]
+Description=GTB OS daily cron trigger
+Wants=network-online.target
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+# Hits the container directly on loopback — no dependency on nginx/TLS/DNS.
+ExecStart=/usr/bin/curl --silent --show-error --fail --max-time 300 \
+  -H "x-cron-secret: {{ gtb_api_env.CRON_SECRET }}" \
+  http://127.0.0.1:3001/api/cron/daily

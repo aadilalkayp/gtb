@@ -1,5 +1,11 @@
 # GTB OS — Deployment Guide
 
+> **Automated pipeline:** deployment is now automated — push to `main` and GitHub
+> Actions checks, builds, migrates, and deploys everything. See
+> [`deploy/README.md`](./deploy/README.md) for the pipeline, Docker, and the Ansible
+> playbook that provisions/hardens the VPS. This document remains the reference for
+> env vars, Supabase setup, and as the manual fallback.
+
 Production deployment for the two runtime pieces:
 
 | Piece        | App        | Tech                | Target                          |

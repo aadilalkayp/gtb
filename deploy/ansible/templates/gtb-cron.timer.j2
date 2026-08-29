@@ -1,0 +1,12 @@
+# Daily at 01:30 IST (the business timezone — SRS §22.6): the job computes IST
+# day boundaries itself, this just needs to fire once early in the IST day.
+[Unit]
+Description=GTB OS daily cron timer
+
+[Timer]
+OnCalendar=*-*-* 01:30:00 Asia/Kolkata
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

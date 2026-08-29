@@ -1,0 +1,30 @@
+# PR gate: typecheck + lint + both production builds. No deploys here.
+name: CI
+
+on:
+  pull_request:
+  workflow_call: # reused as the check stage of deploy.yml
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version comes from packageManager in package.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - run: pnpm -r typecheck
+      - run: pnpm lint
+        continue-on-error: true # pre-existing lint debt; tighten once cleaned up
+      - name: Build web
+        run: pnpm --filter @gtb/web build
+        env:
+          VITE_API_URL: https://placeholder.invalid
+          VITE_SUPABASE_URL: https://placeholder.invalid
+          VITE_SUPABASE_ANON_KEY: placeholder
+      - name: Build api
+        run: pnpm --filter @gtb/api build

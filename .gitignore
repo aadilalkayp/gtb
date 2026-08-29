@@ -38,3 +38,7 @@ pnpm-debug.log*
 # Misc
 coverage/
 *.pem
+
+# Deploy secrets (examples are committed instead)
+deploy/ansible/inventory.ini
+deploy/ansible/group_vars/gtb.yml
