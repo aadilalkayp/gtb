@@ -1,12 +1,11 @@
-# GTB OS API reverse proxy — managed by Ansible (deploy/ansible/site.yml).
-# Certbot rewrites this file to add the 443 server + redirect on first issue.
+# GTB OS API reverse proxy — fully managed by Ansible (deploy/ansible/site.yml).
+# Certbot runs in `certonly` mode and NEVER edits this file; the TLS server
+# block below is rendered by Ansible once the certificate exists (tls_ready).
 #
 # Do NOT add CORS headers here: the Next.js app sets them per-request from
 # WEB_ORIGIN (apps/api/src/lib/cors.ts); duplicating them breaks the browser.
-server {
-    listen 80;
-    server_name {{ api_domain }};
 
+{% macro proxy_block() %}
     # Uploads (payment proofs, scan selfies) stream through the API.
     client_max_body_size 25M;
 
@@ -19,7 +18,44 @@ server {
         proxy_set_header   X-Forwarded-Proto $scheme;
         proxy_set_header   Upgrade           $http_upgrade;
         proxy_set_header   Connection        "upgrade";
-        # Scan scoring calls Gemini synchronously — allow more than nginx's 60s default.
+        # Scan scoring calls Gemini synchronously — allow more than the 60s default.
         proxy_read_timeout 90s;
     }
+{% endmacro %}
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ api_domain }};
+
+{% if tls_ready %}
+    # TLS is live: port 80 only redirects. Certbot renewals use the nginx
+    # authenticator's temporary config and work through this redirect.
+    location / {
+        return 301 https://$host$request_uri;
+    }
+{% else %}
+    # Bootstrap (no certificate yet): serve the proxy on 80 so certbot's nginx
+    # authenticator can complete the HTTP-01 challenge; the playbook re-renders
+    # this file with TLS immediately after the certificate is issued.
+{{ proxy_block() }}
+{% endif %}
 }
+{% if tls_ready %}
+
+server {
+    # `http2` as a listen flag: Ubuntu 24.04 ships nginx 1.24, which predates
+    # the standalone `http2 on;` directive (1.25.1+).
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{ api_domain }};
+
+    ssl_certificate     /etc/letsencrypt/live/{{ api_domain }}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/{{ api_domain }}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+{{ proxy_block() }}
+}
+{% endif %}
