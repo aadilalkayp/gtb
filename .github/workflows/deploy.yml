@@ -106,5 +106,6 @@ jobs:
           echo "$VPS_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -H "$VPS_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          # Replace only the tag line — .env also carries GTB_IMAGE (set by Ansible).
           ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
-            "cd /opt/gtb && echo \"GTB_IMAGE_TAG=$IMAGE_TAG\" > .env && docker compose pull -q api && docker compose up -d api && docker image prune -f"
+            "cd /opt/gtb && sed -i '/^GTB_IMAGE_TAG=/d' .env && echo \"GTB_IMAGE_TAG=$IMAGE_TAG\" >> .env && docker compose pull -q api && docker compose up -d api && docker image prune -f"
