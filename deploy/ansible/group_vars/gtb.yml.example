@@ -30,7 +30,8 @@ gtb_api_env:
   SUPABASE_ANON_KEY: "{{ vault_supabase_anon_key }}"
   SUPABASE_SERVICE_ROLE_KEY: "{{ vault_supabase_service_role_key }}"
   SUPABASE_JWT_SECRET: "{{ vault_supabase_jwt_secret }}"
-  GEMINI_API_KEY: "{{ vault_gemini_api_key }}"
+  # Optional until launch: empty = deterministic stub scorer (never ship ads on it).
+  GEMINI_API_KEY: "{{ vault_gemini_api_key | default('') }}"
   MAILGUN_SMTP_HOST: smtp.mailgun.org
   MAILGUN_SMTP_PORT: "587"
   MAILGUN_SMTP_USER: postmaster@yourdomain.mailgun.org

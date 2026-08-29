@@ -1,12 +1,13 @@
 // Cloudflare Workers (static assets) deployment for the GTB OS SPA.
 // Deployed by CI (.github/workflows/deploy.yml) via `wrangler deploy`;
 // VITE_* env vars are baked in at build time, before wrangler runs.
-// First-time setup: add the custom domain to this Worker in the Cloudflare
-// dashboard (Workers & Pages → gtb-web → Settings → Domains & Routes).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gtb-web",
   "compatibility_date": "2026-08-01",
+  // custom_domain: wrangler provisions the DNS record + certificate on deploy
+  // (the zone must live in the same Cloudflare account as the Worker).
+  "routes": [{ "pattern": "app.glowtobe.com", "custom_domain": true }],
   "assets": {
     "directory": "./dist",
     // Client-side router owns unknown paths (/scan, /portal/…): serve index.html.

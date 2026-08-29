@@ -11,14 +11,14 @@ Production deployment for the two runtime pieces:
 | Piece        | App        | Tech                | Target                          |
 | ------------ | ---------- | ------------------- | ------------------------------- |
 | **Frontend** | `apps/web` | Vite + React (SPA)  | **Cloudflare Pages**            |
-| **Backend**  | `apps/api` | Next.js 15 (:3001)  | **VPS** — PM2 behind Nginx      |
+| **Backend**  | `apps/api` | Next.js 15 (:3001)  | **VPS** — Docker behind Nginx   |
 | **Data**     | —          | Postgres + Auth + Storage | **Supabase** (managed)    |
 
 ```
             ┌────────────────────┐         ┌──────────────────────────┐
   Browser ─▶│ Cloudflare Pages   │  HTTPS  │ VPS                      │
             │ app.yourdomain.com │────────▶│ Nginx :443               │
-            │ (static SPA)       │  /api/* │   └─▶ PM2 ─▶ next :3001   │
+            │ (static SPA)       │  /api/* │   └─▶ docker ─▶ next :3001│
             └─────────┬──────────┘         └────────────┬─────────────┘
                       │ supabase-js (auth, anon reads)  │ prisma / service-role
                       └──────────────┬──────────────────┘
@@ -89,27 +89,19 @@ Both runtimes point at the same Supabase project.
 
 ---
 
-## 2. Backend — VPS + PM2 + Nginx
+## 2. Backend — VPS + Docker + Nginx
 
-### 2.1 Server packages
+> Provisioning, hardening, nginx, TLS, and the running container are all managed
+> by the Ansible playbook — see [`deploy/README.md`](./deploy/README.md). The
+> subsections below remain as the **reference for env vars** (§2.3 is templated
+> into `/opt/gtb/gtb-api.env` by Ansible) and for understanding the moving parts;
+> none of them are run by hand anymore.
 
-```bash
-sudo apt update && sudo apt install -y nginx git
-corepack enable && corepack prepare pnpm@11.6.0 --activate   # matches package.json's "packageManager"
-sudo npm i -g pm2
-```
+### 2.2 Code & migrations
 
-### 2.2 Get the code & install
-
-```bash
-sudo mkdir -p /var/www/gtb-os && sudo chown $USER:$USER /var/www/gtb-os
-git clone <your-repo-url> /var/www/gtb-os
-cd /var/www/gtb-os
-
-pnpm install --frozen-lockfile
-pnpm db:generate                         # MANDATORY — generates Prisma client + hooks
-pnpm --filter @gtb/db migrate:deploy     # safe to re-run; no-op if already applied
-```
+Nothing is cloned or built on the VPS: CI builds the Docker image
+(`deploy/Dockerfile`) and applies migrations (`prisma migrate deploy` with
+`DIRECT_URL`) before rolling the container.
 
 ### 2.3 Backend env
 
@@ -154,21 +146,12 @@ WEB_PUBLIC_URL="https://app.yourdomain.com"      # used in invite/registration e
 > The API sends `Access-Control-Allow-Credentials: true`, so a `*` origin won't work for
 > authenticated calls — list the real domain(s).
 
-### 2.4 Build & run under PM2
+### 2.4 The running container
 
-```bash
-pnpm --filter @gtb/api build             # produces apps/api/.next — reads apps/api/.env
-```
-
-`ecosystem.config.cjs` is committed at the repo root — no editing needed (it resolves
-paths from its own location, so it works regardless of where you cloned the repo).
-Secrets are **not** in it; they come from `apps/api/.env` (previous step).
-
-```bash
-pm2 start ecosystem.config.cjs
-pm2 save                       # persist process list
-pm2 startup                    # print the systemd command to run once, so PM2 survives reboot
-```
+The API runs as the `gtb-api` container (image from GHCR, compose file at
+`/opt/gtb/compose.yml`, secrets in `/opt/gtb/gtb-api.env`), bound to
+`127.0.0.1:3001` only. `restart: unless-stopped` + the Docker daemon's systemd
+unit survive reboots; the container healthcheck hits `/api/health`.
 
 Sanity check it's up locally before wiring Nginx:
 
@@ -296,22 +279,10 @@ Plus Supabase Auth **Site URL / Redirect URLs** = `https://app.yourdomain.com`.
 
 ## 6. Redeploy / update runbook
 
-**Frontend** — push to the production branch; Cloudflare Pages rebuilds and deploys
-automatically. (Roll back from the Pages **Deployments** list.)
+Deploy = **push to `main`** — GitHub Actions checks, builds, migrates, and rolls
+both halves. Rollback, log locations, and day-2 commands: [`deploy/README.md`](./deploy/README.md).
 
-**Backend** — on the VPS:
-
-```bash
-cd /var/www/gtb-os
-git pull
-pnpm install --frozen-lockfile
-pnpm db:generate
-pnpm --filter @gtb/db migrate:deploy     # only does work when there are new migrations
-pnpm --filter @gtb/api build
-pm2 reload gtb-api                        # zero-downtime restart
-```
-
-Handy: `pm2 logs gtb-api` · `pm2 status` · `pm2 monit`.
+Handy on the VPS: `docker logs -f gtb-api` · `docker ps` · `journalctl -u gtb-cron.service`.
 
 ---
 
@@ -339,7 +310,7 @@ Handy: `pm2 logs gtb-api` · `pm2 status` · `pm2 monit`.
 - **Migrations** use `DIRECT_URL` (port 5432); the **runtime** uses the pooled
   `DATABASE_URL` (port 6543, `pgbouncer=true`). Don't swap them.
 - **Uploads fail at ~1 MB** → raise `client_max_body_size` in Nginx (set to `25M` above).
-- **Changed a `VITE_*` value but nothing changed** → those are compile-time; trigger a new
-  Pages build.
+- **Changed a `VITE_*` value but nothing changed** → those are compile-time; update the
+  repo Actions **variable** and re-run the Deploy workflow.
 - **API 500s on boot in prod** → a required env var is missing; in production
-  `apps/api/src/lib/env.ts` throws instead of warning. Check `pm2 logs gtb-api`.
+  `apps/api/src/lib/env.ts` throws instead of warning. Check `docker logs gtb-api`.

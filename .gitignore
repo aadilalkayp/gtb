@@ -42,3 +42,4 @@ coverage/
 # Deploy secrets (examples are committed instead)
 deploy/ansible/inventory.ini
 deploy/ansible/group_vars/gtb.yml
+.vault-pass

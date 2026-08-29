@@ -85,9 +85,25 @@
       loop: "{{ deploy_ssh_public_keys }}"
 
     # ------------------------------------------------------------ ssh hardening
+    # sshd takes the FIRST occurrence of a keyword, and sshd_config.d files load
+    # in lexical order — so the hardening file must sort before cloud-init's
+    # 50-cloud-init.conf (which ships PasswordAuthentication yes on Ubuntu
+    # cloud images). We name ours 00- AND remove the cloud-init override.
+    - name: Remove cloud-init's sshd override (re-enables password auth)
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/50-cloud-init.conf
+        state: absent
+      notify: Restart sshd
+
+    - name: Remove the old 99-named hardening file (superseded by 00-)
+      ansible.builtin.file:
+        path: /etc/ssh/sshd_config.d/99-gtb-hardening.conf
+        state: absent
+      notify: Restart sshd
+
     - name: Harden sshd
       ansible.builtin.copy:
-        dest: /etc/ssh/sshd_config.d/99-gtb-hardening.conf
+        dest: /etc/ssh/sshd_config.d/00-gtb-hardening.conf
         content: |
           PermitRootLogin no
           PasswordAuthentication no
@@ -132,9 +148,9 @@
         name: docker
         types: deb
         uris: https://download.docker.com/linux/ubuntu
-        suites: "{{ ansible_distribution_release }}"
+        suites: "{{ ansible_facts['distribution_release'] }}"
         components: stable
-        architectures: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+        architectures: "{{ 'arm64' if ansible_facts['architecture'] == 'aarch64' else 'amd64' }}"
         signed_by: https://download.docker.com/linux/ubuntu/gpg
       register: docker_repo
 
@@ -241,6 +257,16 @@
         group: "{{ deploy_user }}"
         mode: "0640"
       notify: Restart api
+
+    # Pre-create the become_user temp dir so Ansible doesn't warn about
+    # creating it implicitly on the deploy user's first delegated task.
+    - name: Ensure the deploy user's ansible tmp dir exists
+      ansible.builtin.file:
+        path: /home/{{ deploy_user }}/.ansible/tmp
+        state: directory
+        owner: "{{ deploy_user }}"
+        group: "{{ deploy_user }}"
+        mode: "0700"
 
     - name: Log in to GHCR for image pulls
       become_user: "{{ deploy_user }}"

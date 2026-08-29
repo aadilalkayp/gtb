@@ -31,7 +31,8 @@ cd deploy/ansible
 cp inventory.example.ini inventory.ini                  # fill in host
 cp group_vars/gtb.yml.example group_vars/gtb.yml        # fill in vars, vault the secrets
 ansible-galaxy collection install community.general ansible.posix
-ansible-playbook site.yml -u root                       # first run as root
+ansible-playbook site.yml -e ansible_user=root          # first run as root (-e, not -u:
+                                                        # inventory's ansible_user beats -u)
 ansible-playbook site.yml                               # thereafter (as admin)
 ```
 
@@ -59,9 +60,12 @@ Settings → Secrets and variables → Actions:
 
 ### 3. Cloudflare
 
-After the first `deploy-web` run creates the `gtb-web` Worker, attach the domain:
-Workers & Pages → gtb-web → Settings → Domains & Routes → `app.yourdomain.com`.
-(If migrating from Pages, delete the old Pages project once the Worker serves traffic.)
+Nothing manual: the custom domain is declared in `apps/web/wrangler.jsonc`
+(`routes` → `custom_domain: true`), so `wrangler deploy` provisions the DNS
+record and certificate. Requires the zone to live in the same Cloudflare
+account, and no other project (e.g. a legacy Pages project) may hold the
+domain. If the deploy fails on the route with a permissions error, extend the
+API token with Zone → DNS → Edit for the zone.
 
 ### 4. GHCR visibility
 
@@ -88,5 +92,5 @@ VPS into GHCR with `ghcr_token`) or make the package public and drop the token.
 - `next build` inside Docker uses placeholder env values (see Dockerfile); real
   values are injected at runtime from `/opt/gtb/gtb-api.env` (root:deploy, 0640).
 - The container binds `127.0.0.1:3001` only — nginx on the host is the sole way in.
-- pm2 (`ecosystem.config.cjs`) is superseded by this pipeline; it remains only as
-  a fallback for running without Docker.
+- The custom domain for the web app is declared in `apps/web/wrangler.jsonc`
+  (`routes` with `custom_domain: true`) — wrangler provisions DNS + cert on deploy.
