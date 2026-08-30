@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Camera, Lock, ArrowRight, RefreshCw } from "lucide-react";
 import { claimScan, startScan, type ScanReport, type ScanTeaser } from "@/lib/api";
 import { checkFraming } from "@/lib/framing";
@@ -33,6 +33,7 @@ export function ScanPage() {
   const [claiming, setClaiming] = useState(false);
   const [contact, setContact] = useState({ name: "", email: "", phone: "", city: "" });
   const fileInput = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
 
   const pickFile = async (f: File | null) => {
     setFile(f);
@@ -57,6 +58,13 @@ export function ScanPage() {
     setStep("analyzing");
     try {
       const res = await startScan({ file, weddingDate, type });
+      if (res.report) {
+        // A logged-in client on the public funnel: the server treated this as a
+        // portal rescan and already attached the scan to their record, so the
+        // portal is where the result lives.
+        navigate("/portal/scan", { replace: true });
+        return;
+      }
       if (res.scanId && res.teaser) {
         setScanId(res.scanId);
         setTeaser(res.teaser);
