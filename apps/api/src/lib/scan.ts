@@ -1,5 +1,5 @@
 /**
- * Shared helpers for the Wedding Readiness Scan routes.
+ * Shared helpers for the Transformation Readiness Scan routes.
  *
  * The /api/scan/* routes are the product's only unauthenticated surface (the
  * public funnel runs pre-registration), so everything here is written for
@@ -132,7 +132,11 @@ export async function buildScanReport(scan: ScanRow, weddingDate?: Date): Promis
  * replaced on each new scan so the plan tracks the latest weakest areas —
  * completed weeks and past weeks are history and never touched.
  */
-export async function syncRoadmap(clientId: string, scan: ScanRow, weddingDate: Date): Promise<number> {
+export async function syncRoadmap(
+  clientId: string,
+  scan: ScanRow,
+  weddingDate: Date,
+): Promise<number> {
   if (scan.status !== "scored" || scan.skinScore == null) return 0;
   const now = new Date();
   const items = generateRoadmap({

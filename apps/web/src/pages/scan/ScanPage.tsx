@@ -15,7 +15,7 @@ import {
 type Step = "capture" | "analyzing" | "teaser" | "report";
 
 /**
- * The public Wedding Readiness Scan funnel — the product's only
+ * The public Transformation Readiness Scan funnel — the product's only
  * unauthenticated surface. Capture → teaser score → contact details unlock the
  * full report (and create the lead server-side). Everything renders from the
  * scan itself; no client-record data ever reaches this page.
@@ -101,7 +101,7 @@ export function ScanPage() {
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 font-display text-xs font-semibold text-primary-foreground shadow-button">
               G
             </div>
-            <span className="text-sm font-semibold">GTB · Wedding Readiness Scan</span>
+            <span className="text-sm font-semibold">GTB · Transformation Readiness Scan</span>
           </div>
           <Link to="/portal/login" className="text-xs font-medium text-primary hover:underline">
             Client login
@@ -127,7 +127,11 @@ export function ScanPage() {
               className="relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-card border-2 border-dashed border-border bg-surface transition-colors duration-150 hover:border-primary/50 active:scale-[0.99]"
             >
               {preview ? (
-                <img src={preview} alt="Your selfie" className="absolute inset-0 h-full w-full object-cover" />
+                <img
+                  src={preview}
+                  alt="Your selfie"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
               ) : (
                 <>
                   <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -182,7 +186,11 @@ export function ScanPage() {
 
             {error && <p className="text-sm text-danger">{error}</p>}
 
-            <Button onClick={() => void runScan()} disabled={!file || !weddingDate} className="w-full">
+            <Button
+              onClick={() => void runScan()}
+              disabled={!file || !weddingDate}
+              className="w-full"
+            >
               Scan my readiness <ArrowRight className="ml-1.5 h-4 w-4" />
             </Button>
             <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
@@ -203,7 +211,12 @@ export function ScanPage() {
         {step === "teaser" && teaser && (
           <div className="animate-fade-up space-y-6">
             <div className="card flex flex-col items-center gap-4 p-8 text-center">
-              <ProgressRing value={(teaser.readinessScore ?? 0) / 100} size={132} strokeWidth={10} className="text-primary">
+              <ProgressRing
+                value={(teaser.readinessScore ?? 0) / 100}
+                size={132}
+                strokeWidth={10}
+                className="text-primary"
+              >
                 <div className="leading-tight">
                   <span className="font-num text-4xl font-bold">{teaser.readinessScore}</span>
                   <span className="block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">

@@ -1,5 +1,5 @@
 /**
- * On-device selfie framing pre-check for the Wedding Readiness Scan.
+ * On-device selfie framing pre-check for the Transformation Readiness Scan.
  *
  * Uses the browser's native FaceDetector (Chrome/Android — most of the ad
  * traffic; not in lib.dom yet, hence the minimal declaration). Free and

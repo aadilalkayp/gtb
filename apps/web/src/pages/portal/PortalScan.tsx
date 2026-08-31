@@ -26,7 +26,7 @@ import {
 } from "@/components/ScanResults";
 
 /**
- * Portal home for the Wedding Readiness Scan: latest scores, the progress
+ * Portal home for the Transformation Readiness Scan: latest scores, the progress
  * graph (self-comparison only — the product never compares users to each
  * other), the tickable roadmap, and monthly rescan.
  */
@@ -120,7 +120,7 @@ export function PortalScan() {
         <EmptyState
           icon={ScanFace}
           title="No scan yet"
-          hint="Take your first Wedding Readiness Scan — a selfie is all it takes."
+          hint="Take your first Transformation Readiness Scan — a selfie is all it takes."
           action={
             <Button onClick={() => fileInput.current?.click()} disabled={scanning}>
               <Camera className="mr-1.5 h-4 w-4" /> {scanning ? "Scanning…" : "Scan now"}

@@ -192,7 +192,7 @@ export async function getDocumentUrl(documentId: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
-// Wedding Readiness Scan
+// Transformation Readiness Scan
 // ---------------------------------------------------------------------------
 
 export interface ScanReport {
@@ -235,9 +235,12 @@ export async function startScan(args: {
   if (args.weddingDate) form.append("weddingDate", args.weddingDate);
   if (args.type) form.append("type", args.type);
   const res = await authedFetch(`${env.apiUrl}/api/scan/start`, { method: "POST", body: form });
-  const json = (await res.json().catch(() => null)) as
-    | { scanId?: string; teaser?: ScanTeaser; report?: ScanReport; error?: string }
-    | null;
+  const json = (await res.json().catch(() => null)) as {
+    scanId?: string;
+    teaser?: ScanTeaser;
+    report?: ScanReport;
+    error?: string;
+  } | null;
   if (!res.ok) throw new Error(json?.error || `Scan failed (${res.status})`);
   return json ?? {};
 }
@@ -258,7 +261,10 @@ export async function fetchScanReport(scanId: string): Promise<ScanReport> {
   const res = await authedFetch(
     `${env.apiUrl}/api/scan/report?scanId=${encodeURIComponent(scanId)}`,
   );
-  const json = (await res.json().catch(() => null)) as { report?: ScanReport; error?: string } | null;
+  const json = (await res.json().catch(() => null)) as {
+    report?: ScanReport;
+    error?: string;
+  } | null;
   if (!res.ok || !json?.report) throw new Error(json?.error || `Request failed (${res.status})`);
   return json.report;
 }

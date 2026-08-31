@@ -1,5 +1,5 @@
 /**
- * Wedding Readiness Scan — shared types + roadmap generation.
+ * Transformation Readiness Scan — shared types + roadmap generation.
  *
  * Pure date math (no DB access), mirroring scheduling.ts, so the roadmap can be
  * generated server-side at claim/rescan time and previewed client-side.
@@ -56,41 +56,134 @@ export interface RoadmapItemInput {
 /** Fixed prep-checklist milestones, offset in days before the wedding. Items
  *  whose slot has already passed at generation time are simply skipped. */
 const CHECKLIST_TEMPLATE: { daysBefore: number; title: string; description: string }[] = [
-  { daysBefore: 90, title: "Lock your grooming routine", description: "Start the daily skincare and haircare routine from your scan report — results need runway." },
-  { daysBefore: 60, title: "Outfit shopping", description: "Finalize your wedding outfit direction and start shopping — alterations take time." },
-  { daysBefore: 45, title: "Hairstyle trial", description: "Trial your wedding haircut now so there's one more grow-out cycle before the day." },
-  { daysBefore: 30, title: "Suit / sherwani trial", description: "First full fitting. Book the alteration follow-up before you leave." },
-  { daysBefore: 21, title: "Shoes & accessories", description: "Buy shoes now and break them in. Match accessories to the finalized outfit." },
-  { daysBefore: 14, title: "Facial / clean-up", description: "Last deep facial — never closer than two weeks to the wedding, so skin settles." },
-  { daysBefore: 10, title: "Perfume & grooming kit", description: "Pick the wedding fragrance and assemble the day-of grooming kit." },
-  { daysBefore: 7, title: "Documents & logistics", description: "IDs, bookings, vendor contacts — one folder, one backup." },
-  { daysBefore: 5, title: "Final haircut & beard shape-up", description: "The wedding cut. Close enough to look sharp, far enough to soften." },
-  { daysBefore: 3, title: "Packing", description: "Pack for the wedding and honeymoon. Tick off the grooming kit." },
-  { daysBefore: 1, title: "Rest & prep", description: "Hydrate, sleep early, lay out everything for tomorrow. You're ready." },
+  {
+    daysBefore: 90,
+    title: "Lock your grooming routine",
+    description:
+      "Start the daily skincare and haircare routine from your scan report — results need runway.",
+  },
+  {
+    daysBefore: 60,
+    title: "Outfit shopping",
+    description:
+      "Finalize your wedding outfit direction and start shopping — alterations take time.",
+  },
+  {
+    daysBefore: 45,
+    title: "Hairstyle trial",
+    description:
+      "Trial your wedding haircut now so there's one more grow-out cycle before the day.",
+  },
+  {
+    daysBefore: 30,
+    title: "Suit / sherwani trial",
+    description: "First full fitting. Book the alteration follow-up before you leave.",
+  },
+  {
+    daysBefore: 21,
+    title: "Shoes & accessories",
+    description: "Buy shoes now and break them in. Match accessories to the finalized outfit.",
+  },
+  {
+    daysBefore: 14,
+    title: "Facial / clean-up",
+    description: "Last deep facial — never closer than two weeks to the wedding, so skin settles.",
+  },
+  {
+    daysBefore: 10,
+    title: "Perfume & grooming kit",
+    description: "Pick the wedding fragrance and assemble the day-of grooming kit.",
+  },
+  {
+    daysBefore: 7,
+    title: "Documents & logistics",
+    description: "IDs, bookings, vendor contacts — one folder, one backup.",
+  },
+  {
+    daysBefore: 5,
+    title: "Final haircut & beard shape-up",
+    description: "The wedding cut. Close enough to look sharp, far enough to soften.",
+  },
+  {
+    daysBefore: 3,
+    title: "Packing",
+    description: "Pack for the wedding and honeymoon. Tick off the grooming kit.",
+  },
+  {
+    daysBefore: 1,
+    title: "Rest & prep",
+    description: "Hydrate, sleep early, lay out everything for tomorrow. You're ready.",
+  },
 ];
 
 /** Weekly focus task bank per category — rotated so consecutive weeks vary. */
 const WEEKLY_TASKS: Record<ScanCategory, { title: string; description: string }[]> = {
   skin: [
-    { title: "Daily skincare discipline", description: "Cleanser morning and night, moisturizer after, sunscreen every morning — no skipped days this week." },
-    { title: "Hydration week", description: "3L of water daily and moisturizer twice a day. Skin clarity follows hydration." },
-    { title: "Targeted care", description: "Work your top focus area from the scan with the recommended routine, every day this week." },
-    { title: "Sleep for your skin", description: "7+ hours nightly this week — dark circles respond to sleep faster than to any product." },
+    {
+      title: "Daily skincare discipline",
+      description:
+        "Cleanser morning and night, moisturizer after, sunscreen every morning — no skipped days this week.",
+    },
+    {
+      title: "Hydration week",
+      description: "3L of water daily and moisturizer twice a day. Skin clarity follows hydration.",
+    },
+    {
+      title: "Targeted care",
+      description:
+        "Work your top focus area from the scan with the recommended routine, every day this week.",
+    },
+    {
+      title: "Sleep for your skin",
+      description:
+        "7+ hours nightly this week — dark circles respond to sleep faster than to any product.",
+    },
   ],
   hair: [
-    { title: "Scalp care week", description: "Oil or scalp treatment twice this week; wash routine on alternate days." },
-    { title: "Style practice", description: "Practice your intended wedding style twice this week so it's routine by the big day." },
-    { title: "Trim check", description: "Assess length against the wedding-day plan; book a shaping trim if you're ahead of schedule." },
+    {
+      title: "Scalp care week",
+      description: "Oil or scalp treatment twice this week; wash routine on alternate days.",
+    },
+    {
+      title: "Style practice",
+      description:
+        "Practice your intended wedding style twice this week so it's routine by the big day.",
+    },
+    {
+      title: "Trim check",
+      description:
+        "Assess length against the wedding-day plan; book a shaping trim if you're ahead of schedule.",
+    },
   ],
   beard: [
-    { title: "Beard line maintenance", description: "Clean up neckline and cheek lines; comb and oil daily this week." },
-    { title: "Density care", description: "Beard oil nightly and gentle exfoliation twice this week to keep growth even." },
-    { title: "Shape rehearsal", description: "Define the exact wedding beard shape and maintain it all week — no experiments after this." },
+    {
+      title: "Beard line maintenance",
+      description: "Clean up neckline and cheek lines; comb and oil daily this week.",
+    },
+    {
+      title: "Density care",
+      description: "Beard oil nightly and gentle exfoliation twice this week to keep growth even.",
+    },
+    {
+      title: "Shape rehearsal",
+      description:
+        "Define the exact wedding beard shape and maintain it all week — no experiments after this.",
+    },
   ],
   style: [
-    { title: "Fit audit", description: "Try your shortlisted outfits; note what needs tailoring. Fit beats fabric, always." },
-    { title: "Color matching", description: "Hold shortlisted colors against your skin tone in daylight; keep the two best." },
-    { title: "Grooming details", description: "Nails, brows, ears — the details cameras find. Twenty minutes, once this week." },
+    {
+      title: "Fit audit",
+      description:
+        "Try your shortlisted outfits; note what needs tailoring. Fit beats fabric, always.",
+    },
+    {
+      title: "Color matching",
+      description: "Hold shortlisted colors against your skin tone in daylight; keep the two best.",
+    },
+    {
+      title: "Grooming details",
+      description: "Nails, brows, ears — the details cameras find. Twenty minutes, once this week.",
+    },
   ],
 };
 

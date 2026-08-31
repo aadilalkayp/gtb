@@ -121,7 +121,7 @@ export default function App() {
         <Route path="/portal/login" element={<LoginPage portal="client" />} />
         {/* Reached from the invite email; Supabase establishes the session from the link. */}
         <Route path="/portal/register" element={<RegisterPage />} />
-        {/* Wedding Readiness Scan — the public lead-gen funnel (no auth). */}
+        {/* Transformation Readiness Scan — the public lead-gen funnel (no auth). */}
         <Route path="/scan" element={<ScanPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage portal="staff" />} />
         <Route path="/portal/forgot-password" element={<ForgotPasswordPage portal="client" />} />

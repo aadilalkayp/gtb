@@ -49,12 +49,14 @@ async function handlePost(req: NextRequest): Promise<Response> {
 
   if (!scanId) return json(req, { error: "scanId is required" }, 400);
   if (!name) return json(req, { error: "Your name is required" }, 400);
-  if (!email || !EMAIL_RE.test(email)) return json(req, { error: "A valid email is required" }, 400);
+  if (!email || !EMAIL_RE.test(email))
+    return json(req, { error: "A valid email is required" }, 400);
   if (!phone) return json(req, { error: "A phone number is required" }, 400);
 
   const scan = await prisma.scan.findUnique({ where: { id: scanId } });
   if (!scan) return json(req, { error: "Scan not found" }, 404);
-  if (scan.status !== "scored") return json(req, { error: "This scan has no result to claim" }, 409);
+  if (scan.status !== "scored")
+    return json(req, { error: "This scan has no result to claim" }, 409);
 
   // Already claimed: idempotent success for the same submission, otherwise
   // refuse — a scanId is a bearer secret, but claiming can't re-point a scan.
@@ -94,7 +96,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
             weddingDate: scan.weddingDate,
             status: "lead",
             leadSourceId: leadSource.id,
-            notes: "Lead from the Wedding Readiness Scan funnel.",
+            notes: "Lead from the Transformation Readiness Scan funnel.",
           },
           select: { id: true, weddingDate: true },
         });
@@ -103,7 +105,8 @@ async function handlePost(req: NextRequest): Promise<Response> {
         if (attempt === 4) throw e;
       }
     }
-    if (!client) return json(req, { error: "Could not create your profile. Please try again." }, 500);
+    if (!client)
+      return json(req, { error: "Could not create your profile. Please try again." }, 500);
 
     // Prefill the assessment from the scan so consultants start ahead.
     const focus = (scan.focusAreas as { area: string }[] | null) ?? [];

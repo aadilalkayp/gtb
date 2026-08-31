@@ -911,7 +911,7 @@ model Task {
 }
 
 // ============================================================================
-// Wedding Readiness Scan (companion funnel)
+// Transformation Readiness Scan (companion funnel)
 // ============================================================================
 
 /// One AI readiness scan: a selfie scored by the vision pipeline. Created and

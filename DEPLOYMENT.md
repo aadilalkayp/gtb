@@ -8,11 +8,11 @@
 
 Production deployment for the two runtime pieces:
 
-| Piece        | App        | Tech                | Target                          |
-| ------------ | ---------- | ------------------- | ------------------------------- |
-| **Frontend** | `apps/web` | Vite + React (SPA)  | **Cloudflare Pages**            |
-| **Backend**  | `apps/api` | Next.js 15 (:3001)  | **VPS** — Docker behind Nginx   |
-| **Data**     | —          | Postgres + Auth + Storage | **Supabase** (managed)    |
+| Piece        | App        | Tech                      | Target                        |
+| ------------ | ---------- | ------------------------- | ----------------------------- |
+| **Frontend** | `apps/web` | Vite + React (SPA)        | **Cloudflare Pages**          |
+| **Backend**  | `apps/api` | Next.js 15 (:3001)        | **VPS** — Docker behind Nginx |
+| **Data**     | —          | Postgres + Auth + Storage | **Supabase** (managed)        |
 
 ```
             ┌────────────────────┐         ┌──────────────────────────┐
@@ -79,7 +79,7 @@ Both runtimes point at the same Supabase project.
    ```
 
 3. **Storage** — create **private** buckets named exactly `client-documents` (payment
-   proofs, photos) and `scan-photos` (Wedding Readiness Scan selfies — separate bucket
+   proofs, photos) and `scan-photos` (Transformation Readiness Scan selfies — separate bucket
    because anonymous scans are purged after 24h by the daily cron). No bucket RLS needed;
    the API writes to both with the service-role key.
 
@@ -107,7 +107,7 @@ Nothing is cloned or built on the VPS: CI builds the Docker image
 
 Create `apps/api/.env` with production values — **before building**. `next build`
 forces `NODE_ENV=production`, and `apps/api/src/lib/env.ts` validates required vars
-*eagerly at module load*; every API route imports it transitively, so a build with this
+_eagerly at module load_; every API route imports it transitively, so a build with this
 file missing or incomplete fails with `Error: Missing required env var: ...` while
 "Collecting page data". This is a **separate file** from `packages/db/.env` (§1) — both
 are needed.
@@ -123,7 +123,7 @@ SUPABASE_ANON_KEY="<anon-key>"
 SUPABASE_SERVICE_ROLE_KEY="<service-role-key>"   # server only — never ships to the browser
 SUPABASE_JWT_SECRET="<jwt-secret>"
 
-# ---- Gemini (Wedding Readiness Scan; optional — if unset, scans use a
+# ---- Gemini (Transformation Readiness Scan; optional — if unset, scans use a
 # ----          deterministic stub scorer, fine for testing, never for launch) ----
 GEMINI_API_KEY="<google-ai-studio-key>"
 GEMINI_MODEL="gemini-2.5-flash"        # optional; this is the default
@@ -222,12 +222,12 @@ The web app is a static Vite SPA. `apps/web/public/_redirects` already contains
 Cloudflare Dashboard → **Workers & Pages → Create → Pages → Connect to Git**, pick the
 repo, then set **Build settings**:
 
-| Setting                    | Value                                            |
-| -------------------------- | ------------------------------------------------ |
-| Framework preset           | None                                             |
-| Root directory             | `/` (repo root — it's a pnpm monorepo)           |
-| Build command              | `pnpm db:generate && pnpm --filter @gtb/web build` |
-| Build output directory     | `apps/web/dist`                                  |
+| Setting                | Value                                              |
+| ---------------------- | -------------------------------------------------- |
+| Framework preset       | None                                               |
+| Root directory         | `/` (repo root — it's a pnpm monorepo)             |
+| Build command          | `pnpm db:generate && pnpm --filter @gtb/web build` |
+| Build output directory | `apps/web/dist`                                    |
 
 Cloudflare auto-detects pnpm from `pnpm-lock.yaml` and runs `pnpm install` before the
 build command. The build command then runs the mandatory `db:generate` and builds only
@@ -261,11 +261,11 @@ backend exactly.
 
 These three must agree or you'll see CORS errors or broken email links:
 
-| Frontend (Cloudflare)            | Backend (`apps/api/.env`)                 |
-| -------------------------------- | ----------------------------------------- |
-| Custom domain `app.yourdomain.com` | `WEB_ORIGIN` = `https://app.yourdomain.com` |
-| `VITE_API_URL` = `https://api.yourdomain.com` | API served at that host via Nginx |
-| (registration links land here)   | `WEB_PUBLIC_URL` = `https://app.yourdomain.com` |
+| Frontend (Cloudflare)                         | Backend (`apps/api/.env`)                       |
+| --------------------------------------------- | ----------------------------------------------- |
+| Custom domain `app.yourdomain.com`            | `WEB_ORIGIN` = `https://app.yourdomain.com`     |
+| `VITE_API_URL` = `https://api.yourdomain.com` | API served at that host via Nginx               |
+| (registration links land here)                | `WEB_PUBLIC_URL` = `https://app.yourdomain.com` |
 
 Plus Supabase Auth **Site URL / Redirect URLs** = `https://app.yourdomain.com`.
 

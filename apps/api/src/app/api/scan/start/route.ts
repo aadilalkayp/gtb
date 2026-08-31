@@ -34,7 +34,7 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 }
 
 /**
- * Start a Wedding Readiness Scan: store the selfie, run the vision pipeline,
+ * Start a Transformation Readiness Scan: store the selfie, run the vision pipeline,
  * return the scored result.
  *
  * The product's only unauthenticated write surface (the free funnel runs
@@ -156,7 +156,11 @@ async function handlePost(req: NextRequest): Promise<Response> {
       where: { id: scan.id },
       data: { status: "failed", failureReason: reason.slice(0, 500) },
     });
-    return json(req, { error: "We couldn't analyze that photo. Try a clearer, front-facing selfie." }, 502);
+    return json(
+      req,
+      { error: "We couldn't analyze that photo. Try a clearer, front-facing selfie." },
+      502,
+    );
   }
 
   if (ownClient) {

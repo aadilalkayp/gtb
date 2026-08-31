@@ -1,5 +1,5 @@
 /**
- * Daily jobs for the Wedding Readiness Scan, run from /api/cron/daily alongside
+ * Daily jobs for the Transformation Readiness Scan, run from /api/cron/daily alongside
  * runDailyJobs. Lives in the API app (not @gtb/db) because the purge touches
  * Supabase Storage. Every notification is deduped per IST day, mirroring the
  * core cron's idempotency rule.
