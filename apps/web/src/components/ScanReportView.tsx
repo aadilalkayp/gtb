@@ -1,15 +1,19 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Check, Copy, Share2 } from "lucide-react";
 import type { ScanReport } from "@/lib/api";
 import { env } from "@/lib/env";
-import { Button } from "@/components/ui";
+import { Button, Modal } from "@/components/ui";
 import {
+  AttributeList,
   FocusAreas,
+  GroomScoreGrid,
   HighlightsAndSuggestions,
   ReadinessHero,
   RoadmapList,
   ScoreBars,
 } from "@/components/ScanResults";
+import { SelfReportForm } from "@/components/SelfReportForm";
 
 export const PRODUCT_NAME = "Transformation Readiness Scan";
 
@@ -53,7 +57,7 @@ export function ShareScore({ report }: { report: ScanReport }) {
   return (
     <div className="card overflow-hidden">
       <img
-        src={scanCardUrl(report.scanId)}
+        src={`${scanCardUrl(report.scanId)}&v=${readiness}`}
         alt={`${PRODUCT_NAME} score card: ${readiness} ready`}
         className="aspect-[1200/630] w-full bg-muted object-cover"
         loading="lazy"
@@ -86,15 +90,29 @@ export function ShareScore({ report }: { report: ScanReport }) {
  * The full report — rendered identically on the post-claim screen, the
  * emailed permalink (/scan/r/:id), and anywhere else a scan is shown to its
  * owner. Everything comes from the scan itself; no client-record data.
+ *
+ * `onReportChange` lets the self-assessment update the score in place.
  */
-export function ScanReportView({ report, emailed }: { report: ScanReport; emailed?: boolean }) {
-  if (!report.scores) {
+export function ScanReportView({
+  report,
+  emailed,
+  onReportChange,
+}: {
+  report: ScanReport;
+  emailed?: boolean;
+  onReportChange?: (next: ScanReport) => void;
+}) {
+  const [showSelfReport, setShowSelfReport] = useState(false);
+
+  if (!report.scores || !report.groomScore) {
     return (
       <p className="card p-10 text-center text-sm text-muted-foreground">
         This scan doesn't have a result yet.
       </p>
     );
   }
+  const g = report.groomScore;
+
   return (
     <div className="animate-fade-up space-y-5">
       {emailed && (
@@ -106,16 +124,40 @@ export function ScanReportView({ report, emailed }: { report: ScanReport; emaile
       <div className="card p-6">
         <ReadinessHero
           readiness={report.scores.readiness}
+          appearance={report.scores.appearance}
           daysToWedding={report.daysToWedding}
           weddingDate={report.weddingDate}
         />
-        <ScoreBars scores={report.scores} className="mt-6" />
+        <div className="mt-6">
+          <GroomScoreGrid
+            score={{
+              appearance: g.appearance,
+              fitness: g.fitness,
+              confidence: g.confidence,
+              prepProgress: g.prepProgress,
+              scores: report.scores,
+              labels: report.categoryLabels,
+            }}
+            onUnlockSelfReport={onReportChange ? () => setShowSelfReport(true) : undefined}
+          />
+        </div>
+        {report.scores.style == null && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            Style is scored from a full-body photo —{" "}
+            <Link to="/scan" className="text-primary underline">
+              rescan with one
+            </Link>{" "}
+            to unlock it (use the same email so your history stays together).
+          </p>
+        )}
       </div>
 
       <ShareScore report={report} />
 
       <div className="card space-y-5 p-6">
+        <ScoreBars scores={report.scores} labels={report.categoryLabels} />
         <FocusAreas areas={report.focusAreas} />
+        <AttributeList attributes={report.attributes} />
         <HighlightsAndSuggestions highlights={report.highlights} suggestions={report.suggestions} />
       </div>
 
@@ -143,7 +185,8 @@ export function ScanReportView({ report, emailed }: { report: ScanReport; emaile
       </div>
 
       <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-        Scores rate appearance only and are never a medical assessment.{" "}
+        Scores rate appearance only and are never a medical assessment. Fitness and Confidence come
+        from your own answers, not your photo.{" "}
         <a href="/privacy" className="underline">
           Privacy
         </a>{" "}
@@ -152,6 +195,29 @@ export function ScanReportView({ report, emailed }: { report: ScanReport; emaile
           Terms
         </a>
       </p>
+
+      {onReportChange && (
+        <Modal
+          open={showSelfReport}
+          onClose={() => setShowSelfReport(false)}
+          title="Complete your Groom Score"
+          size="md"
+        >
+          <p className="mb-4 text-sm text-muted-foreground">
+            Eight quick questions. Fitness and Confidence can't be read from a photo, so they come
+            from you — and they count toward your headline readiness.
+          </p>
+          <SelfReportForm
+            scanId={report.scanId}
+            initial={report.selfReport}
+            onSaved={(next) => {
+              onReportChange(next);
+              setShowSelfReport(false);
+            }}
+            onCancel={() => setShowSelfReport(false)}
+          />
+        </Modal>
+      )}
     </div>
   );
 }

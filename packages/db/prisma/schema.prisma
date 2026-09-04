@@ -184,6 +184,13 @@ enum RoadmapItemKind {
   checklist
 }
 
+enum ScanPhotoAngle {
+  front
+  left
+  right
+  full_body
+}
+
 enum MessageChannel {
   email
   whatsapp
@@ -590,36 +597,59 @@ model Task {
 /// exposes no create/update below admin. clientId is null while a scan is
 /// anonymous (pre email capture); unclaimed scans are purged by the daily job.
 model Scan {
-  id             String     @id() @default(uuid())
-  clientId       String?
-  client         Client?    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  id              String      @id() @default(uuid())
+  clientId        String?
+  client          Client?     @relation(fields: [clientId], references: [id], onDelete: Restrict)
   /// Storage object path in the private scan-photos bucket (never a public URL).
-  photoPath      String
+  photoPath       String
   /// Capture channel — "web" today; "whatsapp" / "telegram" / "app" later. The
   /// scoring pipeline is channel-agnostic so new capture surfaces just tag this.
-  source         String     @default("web")
+  source          String      @default("web")
   /// Wedding date captured with the scan (copied to the Client at claim time).
-  weddingDate    DateTime
-  type           ClientType @default(groom)
-  status         ScanStatus @default(pending)
-  modelVersion   String?
-  failureReason  String?
-  skinScore      Int?
-  hairScore      Int?
-  beardScore     Int?
-  styleScore     Int?
-  readinessScore Int?
+  weddingDate     DateTime
+  type            ClientType  @default(groom)
+  status          ScanStatus  @default(pending)
+  modelVersion    String?
+  failureReason   String?
+  skinScore       Int?
+  hairScore       Int?
+  beardScore      Int?
+  styleScore      Int?
+  readinessScore  Int?
   /// JSON array of { area, weight } — e.g. [{"area":"pigmentation","weight":70}].
-  focusAreas     Json?
+  focusAreas      Json?
   /// Positive observations shown to the user ("Strong jawline definition").
-  highlights     String[]
+  highlights      String[]
   /// Improvement pointers feeding the roadmap ("Hydration routine, twice daily").
-  suggestions    String[]
-  createdAt      DateTime   @default(now())
-  updatedAt      DateTime   @updatedAt()
+  suggestions     String[]
+  /// Attribute-level appearance metrics, JSON array of { key, label, score }
+  /// (tone evenness, clarity, hydration look, under-eye, hair density…). Neutral
+  /// appearance names only — never condition names.
+  attributes      Json?
+  selfReport      Json?
+  fitnessScore    Int?
+  confidenceScore Int?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt()
+  photos          ScanPhoto[]
 
   @@index([clientId, createdAt])
   @@index([status, createdAt])
+}
+
+/// Additional angles for a scan (front is Scan.photoPath). A full-body photo
+/// unlocks the Style score; side angles sharpen hair/beard scoring. Same
+/// bucket, same retention, same read policy as the parent scan.
+model ScanPhoto {
+  id        String         @id() @default(uuid())
+  scanId    String
+  scan      Scan           @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  angle     ScanPhotoAngle
+  /// Storage object path in the private scan-photos bucket.
+  path      String
+  createdAt DateTime       @default(now())
+
+  @@index([scanId])
 }
 
 /// A self-serve prep task on the client's readiness roadmap — weekly focus items
