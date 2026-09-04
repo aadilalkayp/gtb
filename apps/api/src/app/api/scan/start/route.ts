@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
 import { resolveAuthUser } from "@/lib/auth";
-import { analyzeSelfie } from "@/lib/gemini";
+import { analyzeScan, type ScanPhotoInput } from "@/lib/gemini";
 import { buildScanReport, clientIp, rateLimit, syncRoadmap } from "@/lib/scan";
 import { uploadScanObject } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
@@ -74,6 +74,21 @@ async function handlePost(req: NextRequest): Promise<Response> {
   }
   if (file.size > MAX_BYTES) return json(req, { error: "Photo is larger than 10 MB" }, 413);
 
+  // Optional extra angles: side views sharpen hair/beard scoring, a full-body
+  // photo is the only thing that unlocks the Style score.
+  const EXTRA_FIELDS = { left: "left", right: "right", fullBody: "full_body" } as const;
+  const extras: { angle: "left" | "right" | "full_body"; file: File }[] = [];
+  for (const [field, angle] of Object.entries(EXTRA_FIELDS) as [
+    keyof typeof EXTRA_FIELDS,
+    "left" | "right" | "full_body",
+  ][]) {
+    const f = form.get(field);
+    if (!f || typeof f === "string" || typeof f.arrayBuffer !== "function") continue;
+    if (f.size > MAX_BYTES)
+      return json(req, { error: `The ${field} photo is larger than 10 MB` }, 413);
+    extras.push({ angle, file: f });
+  }
+
   // Wedding date: the client's own for a portal rescan, else from the form.
   let weddingDate: Date;
   let type: "groom" | "bride";
@@ -100,21 +115,53 @@ async function handlePost(req: NextRequest): Promise<Response> {
   const sniffed = sniffMime(buffer);
   if (!sniffed) return json(req, { error: "Only JPEG, PNG or WebP photos are supported" }, 415);
 
-  const photoPath = `${ownClient?.id ?? "anonymous"}/${crypto.randomUUID()}.${sniffed.split("/")[1]}`;
+  const extraPhotos: ScanPhotoInput[] = [];
+  for (const e of extras) {
+    const data = Buffer.from(await e.file.arrayBuffer());
+    const mime = sniffMime(data);
+    if (!mime) return json(req, { error: "Only JPEG, PNG or WebP photos are supported" }, 415);
+    extraPhotos.push({ angle: e.angle, data, mimeType: mime });
+  }
+
+  const dir = ownClient?.id ?? "anonymous";
+  const photoPath = `${dir}/${crypto.randomUUID()}.${sniffed.split("/")[1]}`;
   const { error: uploadError } = await uploadScanObject(photoPath, buffer, sniffed);
   if (uploadError) {
     requestLog(req).error("scan photo upload failed", { reason: uploadError.message });
     return json(req, { error: "Could not store the photo. Please try again." }, 502);
   }
+  const extraPaths: { angle: ScanPhotoInput["angle"]; path: string }[] = [];
+  for (const p of extraPhotos) {
+    const path = `${dir}/${crypto.randomUUID()}-${p.angle}.${p.mimeType.split("/")[1]}`;
+    const { error } = await uploadScanObject(path, p.data, p.mimeType);
+    if (error) {
+      requestLog(req).error("scan extra photo upload failed", {
+        angle: p.angle,
+        reason: error.message,
+      });
+      return json(req, { error: "Could not store a photo. Please try again." }, 502);
+    }
+    extraPaths.push({ angle: p.angle, path });
+  }
 
   const scan = await prisma.scan.create({
-    data: { clientId: ownClient?.id ?? null, photoPath, weddingDate, type, source: "web" },
+    data: {
+      clientId: ownClient?.id ?? null,
+      photoPath,
+      weddingDate,
+      type,
+      source: "web",
+      photos: { create: extraPaths.map((p) => ({ angle: p.angle, path: p.path })) },
+    },
   });
 
   // Score synchronously — the funnel shows the result on the next screen.
   let scored;
   try {
-    const analysis = await analyzeSelfie(buffer, sniffed);
+    const analysis = await analyzeScan({
+      type,
+      photos: [{ angle: "front", data: buffer, mimeType: sniffed }, ...extraPhotos],
+    });
 
     // Framing gate: the scan only accepts a close-up with face AND hair in
     // frame. Validated by the same model call that scores, so rejection costs
@@ -145,6 +192,11 @@ async function handlePost(req: NextRequest): Promise<Response> {
         styleScore: analysis.scores.styleScore,
         readinessScore: analysis.scores.readinessScore,
         focusAreas: analysis.focusAreas.map((f) => ({ area: f.area, weight: f.weight })),
+        attributes: analysis.attributes.map((a) => ({
+          key: a.key,
+          label: a.label,
+          score: a.score,
+        })),
         highlights: analysis.highlights,
         suggestions: analysis.suggestions,
       },

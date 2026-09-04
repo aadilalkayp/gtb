@@ -195,13 +195,47 @@ export async function getDocumentUrl(documentId: string): Promise<string> {
 // Transformation Readiness Scan
 // ---------------------------------------------------------------------------
 
+export type ScanPhotoAngle = "front" | "left" | "right" | "full_body";
+
+export interface SelfReportAnswers {
+  fitnessLevel?: "beginner" | "intermediate" | "advanced";
+  workoutsPerWeek?: number;
+  sleepHours?: number;
+  waterLitres?: number;
+  photoComfort?: number;
+  styleConfidence?: number;
+  routineConsistency?: number;
+  socialEase?: number;
+}
+
 export interface ScanReport {
   scanId: string;
   status: string;
   createdAt: string;
+  type: "groom" | "bride";
   daysToWedding: number;
   weddingDate: string;
-  scores: { skin: number; hair: number; beard: number; style: number; readiness: number } | null;
+  categoryLabels: Record<"skin" | "hair" | "beard" | "style", string>;
+  photos: ScanPhotoAngle[];
+  scores: {
+    skin: number;
+    hair: number;
+    beard: number;
+    style: number | null;
+    appearance: number;
+    /** Headline composite Groom Score. */
+    readiness: number;
+  } | null;
+  groomScore: {
+    overall: number;
+    appearance: number;
+    fitness: number | null;
+    confidence: number | null;
+    prepProgress: number | null;
+    inputs: { fitness: boolean; confidence: boolean; prep: boolean };
+  } | null;
+  attributes: { key: string; label: string; score: number }[];
+  selfReport: SelfReportAnswers | null;
   focusAreas: { area: string; weight: number }[];
   highlights: string[];
   suggestions: string[];
@@ -227,11 +261,18 @@ export interface ScanTeaser {
  *  rescan attaches to their record and returns the full report directly. */
 export async function startScan(args: {
   file: File;
+  /** Optional extra angles — a full-body photo unlocks the Style score. */
+  fullBody?: File | null;
+  left?: File | null;
+  right?: File | null;
   weddingDate?: string;
   type?: "groom" | "bride";
 }): Promise<{ scanId?: string; teaser?: ScanTeaser; report?: ScanReport }> {
   const form = new FormData();
   form.append("file", args.file);
+  if (args.fullBody) form.append("fullBody", args.fullBody);
+  if (args.left) form.append("left", args.left);
+  if (args.right) form.append("right", args.right);
   if (args.weddingDate) form.append("weddingDate", args.weddingDate);
   if (args.type) form.append("type", args.type);
   const res = await authedFetch(`${env.apiUrl}/api/scan/start`, { method: "POST", body: form });
@@ -267,6 +308,14 @@ export async function fetchScanReport(scanId: string): Promise<ScanReport> {
   } | null;
   if (!res.ok || !json?.report) throw new Error(json?.error || `Request failed (${res.status})`);
   return json.report;
+}
+
+/** Save the self-assessment (fitness habits + confidence) on a scan. */
+export function submitSelfReport(
+  scanId: string,
+  answers: SelfReportAnswers,
+): Promise<{ ok: boolean; report: ScanReport }> {
+  return postJson("/api/scan/self-report", { scanId, answers });
 }
 
 /** Mint a signed URL for a scan photo (staff 360° / portal history). */

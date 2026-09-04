@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Camera, ScanFace } from "lucide-react";
 import { useFindManyRoadmapItem, useFindManyScan } from "@gtb/db/hooks";
-import { formatDate } from "@gtb/shared";
+import { formatDate, scanCategoryLabels } from "@gtb/shared";
 import { getScanPhotoUrl } from "@/lib/api";
 import { Badge, Button, Modal, Spinner } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
@@ -65,7 +65,17 @@ export function ClientScansTab({ clientId }: { clientId: string }) {
               <div className="flex items-center gap-3">
                 {scan.readinessScore != null && (
                   <p className="font-num text-sm">
-                    Readiness <span className="text-lg font-bold">{scan.readinessScore}</span>
+                    Appearance <span className="text-lg font-bold">{scan.readinessScore}</span>
+                    {scan.fitnessScore != null && (
+                      <span className="ml-3 text-xs text-muted-foreground">
+                        Fitness {scan.fitnessScore}
+                      </span>
+                    )}
+                    {scan.confidenceScore != null && (
+                      <span className="ml-3 text-xs text-muted-foreground">
+                        Confidence {scan.confidenceScore}
+                      </span>
+                    )}
                   </p>
                 )}
                 <Button
@@ -85,8 +95,9 @@ export function ClientScansTab({ clientId }: { clientId: string }) {
                   skin: scan.skinScore ?? 0,
                   hair: scan.hairScore ?? 0,
                   beard: scan.beardScore ?? 0,
-                  style: scan.styleScore ?? 0,
+                  style: scan.styleScore,
                 }}
+                labels={scanCategoryLabels(scan.type)}
                 className="mt-4 max-w-md"
               />
             )}

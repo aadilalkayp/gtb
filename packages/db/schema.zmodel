@@ -216,6 +216,13 @@ enum RoadmapItemKind {
   checklist
 }
 
+enum ScanPhotoAngle {
+  front
+  left
+  right
+  full_body
+}
+
 enum MessageChannel {
   email
   whatsapp
@@ -968,9 +975,21 @@ model Scan {
   highlights String[]
   /// Improvement pointers feeding the roadmap ("Hydration routine, twice daily").
   suggestions String[]
+  /// Attribute-level appearance metrics, JSON array of { key, label, score }
+  /// (tone evenness, clarity, hydration look, under-eye, hair density…). Neutral
+  /// appearance names only — never condition names.
+  attributes Json?
+
+  // Self-reported inputs to the composite Groom Score (a face photo can't
+  // honestly rate fitness or confidence). Raw answers + derived 0–100 scores.
+  selfReport      Json?
+  fitnessScore    Int?
+  confidenceScore Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  photos ScanPhoto[]
 
   @@index([clientId, createdAt])
   @@index([status, createdAt])
@@ -979,6 +998,27 @@ model Scan {
   @@allow('read', client.assignments?[staffId == auth().id && isActive])
   @@allow('read', client.userId == auth().id)
   @@allow('delete', auth().role == founder || auth().role == ops_head)
+}
+
+/// Additional angles for a scan (front is Scan.photoPath). A full-body photo
+/// unlocks the Style score; side angles sharpen hair/beard scoring. Same
+/// bucket, same retention, same read policy as the parent scan.
+model ScanPhoto {
+  id     String @id @default(uuid()) @deny('update', true)
+  scanId String @deny('update', true)
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  angle ScanPhotoAngle
+  /// Storage object path in the private scan-photos bucket.
+  path  String
+
+  createdAt DateTime @default(now())
+
+  @@index([scanId])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', scan.client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', scan.client.userId == auth().id)
 }
 
 /// A self-serve prep task on the client's readiness roadmap — weekly focus items

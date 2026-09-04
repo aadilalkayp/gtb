@@ -1,8 +1,8 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Camera, Lock, ArrowRight, RefreshCw } from "lucide-react";
+import { Lock, ArrowRight } from "lucide-react";
 import { claimScan, startScan, type ScanTeaser } from "@/lib/api";
-import { checkFraming } from "@/lib/framing";
+import { EMPTY_PHOTOS, ScanCapture, type CapturedPhotos } from "@/components/ScanCapture";
 import { Button, Field, Input, Select, ProgressRing, Spinner } from "@/components/ui";
 import { ScanShell } from "./ScanShell";
 
@@ -16,8 +16,7 @@ type Step = "capture" | "analyzing" | "teaser";
  */
 export function ScanPage() {
   const [step, setStep] = useState<Step>("capture");
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<CapturedPhotos>(EMPTY_PHOTOS);
   const [weddingDate, setWeddingDate] = useState("");
   const [type, setType] = useState<"groom" | "bride">("groom");
   const [scanId, setScanId] = useState<string | null>(null);
@@ -25,32 +24,24 @@ export function ScanPage() {
   const [error, setError] = useState<string | null>(null);
   const [claiming, setClaiming] = useState(false);
   const [contact, setContact] = useState({ name: "", email: "", phone: "", city: "" });
-  const fileInput = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  const pickFile = async (f: File | null) => {
-    setFile(f);
-    setError(null);
-    if (preview) URL.revokeObjectURL(preview);
-    setPreview(f ? URL.createObjectURL(f) : null);
-    if (f) {
-      const framingError = await checkFraming(f);
-      if (framingError) {
-        setError(framingError);
-        setFile(null); // keep the preview so they see what to fix
-      }
-    }
-  };
-
   const runScan = async () => {
-    if (!file || !weddingDate) {
+    if (!photos.front || !weddingDate) {
       setError("Add a selfie and your wedding date to start.");
       return;
     }
     setError(null);
     setStep("analyzing");
     try {
-      const res = await startScan({ file, weddingDate, type });
+      const res = await startScan({
+        file: photos.front,
+        fullBody: photos.fullBody,
+        left: photos.left,
+        right: photos.right,
+        weddingDate,
+        type,
+      });
       if (res.report) {
         // A logged-in client on the public funnel: the server treated this as a
         // portal rescan and already attached the scan to their record, so the
@@ -100,49 +91,12 @@ export function ScanPage() {
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
               Upload a selfie and your wedding date — our AI scores your skin, hair, beard and
-              style, then builds your week-by-week prep roadmap. Free, in under a minute.
+              style, then builds your week-by-week prep roadmap. Add a full-body photo to unlock
+              Style. Free, in under a minute.
             </p>
           </div>
 
-          <button
-            onClick={() => fileInput.current?.click()}
-            className="relative flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 overflow-hidden rounded-card border-2 border-dashed border-border bg-surface transition-colors duration-150 hover:border-primary/50 active:scale-[0.99]"
-          >
-            {preview ? (
-              <img
-                src={preview}
-                alt="Your selfie"
-                className="absolute inset-0 h-full w-full object-cover"
-              />
-            ) : (
-              <>
-                <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Camera className="h-6 w-6" />
-                </span>
-                <span className="text-sm font-medium">Take or upload a selfie</span>
-                <span className="px-8 text-xs text-muted-foreground">
-                  Face the camera straight on, in even daylight, no filters — the clearer the photo,
-                  the truer the score.
-                </span>
-              </>
-            )}
-          </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            capture="user"
-            className="hidden"
-            onChange={(e) => void pickFile(e.target.files?.[0] ?? null)}
-          />
-          {preview && (
-            <button
-              onClick={() => fileInput.current?.click()}
-              className="flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
-            >
-              <RefreshCw className="h-3 w-3" /> Use a different photo
-            </button>
-          )}
+          <ScanCapture photos={photos} onChange={setPhotos} onError={setError} />
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Your wedding date" htmlFor="scan-date" required>
@@ -170,7 +124,7 @@ export function ScanPage() {
 
           <Button
             onClick={() => void runScan()}
-            disabled={!file || !weddingDate}
+            disabled={!photos.front || !weddingDate}
             className="w-full"
           >
             Scan my readiness <ArrowRight className="ml-1.5 h-4 w-4" />

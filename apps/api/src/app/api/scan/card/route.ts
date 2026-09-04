@@ -4,8 +4,8 @@ import type { NextRequest } from "next/server";
 import satori from "satori";
 import { Resvg } from "@resvg/resvg-js";
 import { prisma } from "@gtb/db";
-import { SCAN_CATEGORY_LABELS, daysUntil, type ScanCategory } from "@gtb/shared";
-import { clientIp, rateLimit } from "@/lib/scan";
+import { scanCategoryLabels, type ScanCategory, type ScanClientType } from "@gtb/shared";
+import { buildScanReport, clientIp, rateLimit } from "@/lib/scan";
 import { withRequestLog } from "@/lib/handler";
 
 export const runtime = "nodejs";
@@ -90,9 +90,11 @@ function bar(label: string, value: number): Node {
 function card(args: {
   readiness: number;
   days: number;
-  scores: Record<ScanCategory, number>;
+  type: ScanClientType;
+  scores: Record<ScanCategory, number | null>;
   focus: string | null;
 }): Node {
+  const labels = scanCategoryLabels(args.type);
   const ring = h(
     "div",
     {
@@ -146,9 +148,9 @@ function card(args: {
       h(
         "div",
         { display: "flex", flexWrap: "wrap", gap: 28, width: 620 },
-        ...(Object.keys(SCAN_CATEGORY_LABELS) as ScanCategory[]).map((c) =>
-          bar(SCAN_CATEGORY_LABELS[c], args.scores[c]),
-        ),
+        ...(Object.keys(labels) as ScanCategory[])
+          .filter((c) => args.scores[c] != null)
+          .map((c) => bar(labels[c], args.scores[c]!)),
       ),
       h("span", { fontSize: 24, color: MUTED }, "app.glowtobe.com/scan · GTB"),
     ),
@@ -165,34 +167,27 @@ async function handleGet(req: NextRequest): Promise<Response> {
 
   const scan = await prisma.scan.findUnique({
     where: { id: scanId },
-    select: {
-      status: true,
-      readinessScore: true,
-      skinScore: true,
-      hairScore: true,
-      beardScore: true,
-      styleScore: true,
-      focusAreas: true,
-      weddingDate: true,
-      client: { select: { weddingDate: true } },
-    },
+    include: { client: { select: { weddingDate: true } } },
   });
   if (!scan || scan.status !== "scored" || scan.readinessScore == null) {
     return new Response("Not found", { status: 404 });
   }
+  // Same numbers the report shows — the composite Groom Score as the headline.
+  const report = await buildScanReport(scan, scan.client?.weddingDate);
+  if (!report.scores) return new Response("Not found", { status: 404 });
 
-  const focus = (scan.focusAreas as { area: string }[] | null)?.[0]?.area ?? null;
   const svg = await satori(
     card({
-      readiness: scan.readinessScore,
-      days: Math.max(0, daysUntil(scan.client?.weddingDate ?? scan.weddingDate)),
+      readiness: report.scores.readiness,
+      days: Math.max(0, report.daysToWedding),
+      type: report.type,
       scores: {
-        skin: scan.skinScore ?? 0,
-        hair: scan.hairScore ?? 0,
-        beard: scan.beardScore ?? 0,
-        style: scan.styleScore ?? 0,
+        skin: report.scores.skin,
+        hair: report.scores.hair,
+        beard: report.scores.beard,
+        style: report.scores.style,
       },
-      focus,
+      focus: report.focusAreas[0]?.area ?? null,
     }) as unknown as React.ReactNode,
     { width: WIDTH, height: HEIGHT, fonts: loadFonts() },
   );
