@@ -15,6 +15,10 @@ deploy_ssh_public_keys:
 api_domain: api.yourdomain.com
 certbot_email: you@yourdomain.com
 
+# Optional dead-man's switch for the daily cron: a healthchecks.io (or similar)
+# ping URL curled after each successful run. Leave empty to disable.
+healthchecks_ping_url: ""
+
 # GHCR pull credentials: a GitHub PAT (classic) with read:packages, or a
 # fine-grained token. Used once for `docker login` on the VPS.
 ghcr_username: your-github-username
@@ -41,3 +45,8 @@ gtb_api_env:
   WEB_PUBLIC_URL: https://app.yourdomain.com
   API_PUBLIC_URL: "https://{{ api_domain }}"
   CRON_SECRET: "{{ vault_cron_secret }}"
+  # Optional: error tracking. Empty = Sentry disabled.
+  SENTRY_DSN: ""
+  # Optional: WhatsApp channel for funnel drips ("none" until a provider adapter
+  # is configured in apps/api/src/lib/channels.ts).
+  WHATSAPP_PROVIDER: none

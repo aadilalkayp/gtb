@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import * as Sentry from "@sentry/nextjs";
 import { corsHeaders } from "./cors.js";
 import { bindRequestLog, logger, requestLog } from "./logger.js";
 
@@ -43,6 +44,9 @@ export function withRequestLog<R extends Request, Ctx = unknown>(
         durMs,
         error,
       });
+      // Our wrapper swallows the throw (opaque 500 to the client), so Next's
+      // onRequestError never sees it — report explicitly. No-op without a DSN.
+      Sentry.captureException(error, { tags: { reqId, path: url.pathname } });
       return Response.json(
         { error: "Internal server error", requestId: reqId },
         { status: 500, headers: { ...corsHeaders(req), "x-request-id": reqId } },
