@@ -1,16 +1,24 @@
-// Cloudflare Workers (static assets) deployment for the GTB OS SPA.
-// Deployed by CI (.github/workflows/deploy.yml) via `wrangler deploy`;
+// Cloudflare Workers deployment for the GTB OS SPA: static assets plus a tiny
+// edge Worker (worker/index.ts) that runs ONLY for /scan/r/* to inject Open
+// Graph tags into shared report links. Deployed by CI via `wrangler deploy`;
 // VITE_* env vars are baked in at build time, before wrangler runs.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gtb-web",
+  "main": "worker/index.ts",
   "compatibility_date": "2026-08-01",
   // custom_domain: wrangler provisions the DNS record + certificate on deploy
   // (the zone must live in the same Cloudflare account as the Worker).
   "routes": [{ "pattern": "app.glowtobe.com", "custom_domain": true }],
+  "vars": {
+    "API_URL": "https://api.glowtobe.com",
+  },
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     // Client-side router owns unknown paths (/scan, /portal/…): serve index.html.
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+    // Only report permalinks go through the Worker; everything else is pure assets.
+    "run_worker_first": ["/scan/r/*"],
+  },
 }

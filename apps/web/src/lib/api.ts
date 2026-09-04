@@ -252,7 +252,7 @@ export function claimScan(args: {
   email: string;
   phone: string;
   city?: string;
-}): Promise<{ ok: boolean; report: ScanReport }> {
+}): Promise<{ ok: boolean; emailed: boolean; report: ScanReport }> {
   return postJson("/api/scan/claim", args);
 }
 

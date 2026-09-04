@@ -1,7 +1,7 @@
 import type { SendMailInput } from "./mailer.js";
 
 /** Escape user-provided strings before interpolating them into HTML (SEC-15). */
-function esc(s: string): string {
+export function esc(s: string): string {
   return s
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -11,7 +11,7 @@ function esc(s: string): string {
 }
 
 /** Minimal branded wrapper so all transactional emails look consistent. */
-function layout(heading: string, bodyHtml: string): string {
+export function layout(heading: string, bodyHtml: string, footerHtml = ""): string {
   return `<!doctype html>
 <html>
   <body style="margin:0;background:#f5f5f4;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1c1917">
@@ -25,13 +25,14 @@ function layout(heading: string, bodyHtml: string): string {
           </td></tr>
         </table>
         <p style="margin:16px 0 0;font-size:12px;color:#a8a29e">Groom To Be · Glow To Be</p>
+        ${footerHtml}
       </td></tr>
     </table>
   </body>
 </html>`;
 }
 
-function button(href: string, label: string): string {
+export function button(href: string, label: string): string {
   return `<a href="${esc(href)}" style="display:inline-block;background:#1c1917;color:#fafaf9;text-decoration:none;padding:11px 20px;border-radius:8px;font-size:14px;font-weight:600">${esc(label)}</a>`;
 }
 

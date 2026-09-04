@@ -11,3 +11,8 @@ Type=oneshot
 ExecStart=/usr/bin/curl --silent --show-error --fail --max-time 300 \
   -H "x-cron-secret: {{ gtb_api_env.CRON_SECRET }}" \
   http://127.0.0.1:3001/api/cron/daily
+{% if healthchecks_ping_url | default('') %}
+# Dead-man's switch: only runs after ExecStart succeeds, so a missed ping means
+# the job failed or never fired — the monitor alerts either way.
+ExecStartPost=/usr/bin/curl --silent --max-time 10 --retry 3 {{ healthchecks_ping_url }}
+{% endif %}

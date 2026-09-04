@@ -216,6 +216,17 @@ enum RoadmapItemKind {
   checklist
 }
 
+enum MessageChannel {
+  email
+  whatsapp
+}
+
+enum MessageStatus {
+  sent
+  failed
+  skipped
+}
+
 // ============================================================================
 // Identity
 // ============================================================================
@@ -299,6 +310,12 @@ model Client {
   cancellationReason String? @deny('update', userId != null && userId == auth().id)
   onHoldReason      String? @deny('update', userId != null && userId == auth().id)
 
+  // Funnel messaging (scan report + follow-up drips). Transactional mail to
+  // enrolled clients (invites, session reminders) is unaffected by the opt-out.
+  marketingOptOut  Boolean @default(false) @deny('update', userId != null && userId == auth().id)
+  /// Bearer token in unsubscribe links; server-generated, never exposed via the gateway.
+  unsubscribeToken String? @unique @deny('read', auth().role != founder && auth().role != ops_head) @deny('update', true)
+
   // Auth link (null while a pre-registration lead)
   userId String? @unique @deny('update', userId != null && userId == auth().id)
   user   User?   @relation("ClientUser", fields: [userId], references: [id])
@@ -325,6 +342,7 @@ model Client {
   tasks       Task[]
   scans        Scan[]
   roadmapItems RoadmapItem[]
+  outboundMessages OutboundMessage[]
 
   @@index([status])
   @@index([type])
@@ -1001,6 +1019,32 @@ model RoadmapItem {
     (future().title != title || future().category != category || future().kind != kind ||
      future().dueDate != dueDate || future().weekNumber != weekNumber ||
      future().description != description))
+}
+
+/// Every funnel message sent to a client (scan report, drips, rescan nudges),
+/// one row per (client, template). Doubles as the idempotency key for the
+/// daily drip job and as the staff-visible send history. Written only by the
+/// server's channel layer (apps/api/src/lib/channels.ts).
+model OutboundMessage {
+  id       String @id @default(uuid())
+  clientId String
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  channel  MessageChannel
+  /// Template key, e.g. "scan_report", "drip_day3_focus" (see funnelTemplates.ts).
+  template String
+  status   MessageStatus
+  /// Provider message id when available (Mailgun / WhatsApp), for support lookups.
+  providerId String?
+  error      String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([clientId, template, channel])
+  @@index([clientId, createdAt])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
 }
 
 // ============================================================================

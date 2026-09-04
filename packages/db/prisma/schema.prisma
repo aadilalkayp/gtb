@@ -184,6 +184,17 @@ enum RoadmapItemKind {
   checklist
 }
 
+enum MessageChannel {
+  email
+  whatsapp
+}
+
+enum MessageStatus {
+  sent
+  failed
+  skipped
+}
+
 /// Auth principal for both staff and clients. Linked to a Supabase auth user
 /// via authId. Staff rows have a staff role; client rows have role = client and
 /// a 1:1 Client profile.
@@ -233,6 +244,9 @@ model Client {
   notes              String?
   cancellationReason String?
   onHoldReason       String?
+  marketingOptOut    Boolean            @default(false)
+  /// Bearer token in unsubscribe links; server-generated, never exposed via the gateway.
+  unsubscribeToken   String?            @unique()
   userId             String?            @unique()
   user               User?              @relation("ClientUser", fields: [userId], references: [id])
   leadSourceId       String?
@@ -253,6 +267,7 @@ model Client {
   tasks              Task[]
   scans              Scan[]
   roadmapItems       RoadmapItem[]
+  outboundMessages   OutboundMessage[]
 
   @@index([status])
   @@index([type])
@@ -628,6 +643,27 @@ model RoadmapItem {
   createdAt   DateTime        @default(now())
 
   @@index([clientId, dueDate])
+}
+
+/// Every funnel message sent to a client (scan report, drips, rescan nudges),
+/// one row per (client, template). Doubles as the idempotency key for the
+/// daily drip job and as the staff-visible send history. Written only by the
+/// server's channel layer (apps/api/src/lib/channels.ts).
+model OutboundMessage {
+  id         String         @id() @default(uuid())
+  clientId   String
+  client     Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  channel    MessageChannel
+  /// Template key, e.g. "scan_report", "drip_day3_focus" (see funnelTemplates.ts).
+  template   String
+  status     MessageStatus
+  /// Provider message id when available (Mailgun / WhatsApp), for support lookups.
+  providerId String?
+  error      String?
+  createdAt  DateTime       @default(now())
+
+  @@unique([clientId, template, channel])
+  @@index([clientId, createdAt])
 }
 
 model Notification {
