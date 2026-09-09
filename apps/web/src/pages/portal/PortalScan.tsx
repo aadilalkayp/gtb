@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Camera, ScanFace, TrendingUp } from "lucide-react";
 import {
   Area,
@@ -10,32 +11,60 @@ import {
   YAxis,
 } from "recharts";
 import { useFindManyRoadmapItem, useFindManyScan, useUpdateRoadmapItem } from "@gtb/db/hooks";
-import { formatDate } from "@gtb/shared";
+import {
+  computeGroomScore,
+  computePrepProgress,
+  formatDate,
+  scanCategoryLabels,
+  type SelfReport,
+} from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { startScan } from "@/lib/api";
-import { checkFraming } from "@/lib/framing";
-import { Button, Spinner } from "@/components/ui";
+import { Button, Modal, Spinner, Tabs, type TabDef } from "@/components/ui";
+import { OutfitCheckPanel } from "@/components/OutfitCheckPanel";
+import { LookPreviewPanel } from "@/components/LookPreviewPanel";
+import { CoachChat } from "@/components/CoachChat";
 import { EmptyState } from "@/components/EmptyState";
 import {
+  AttributeList,
   FocusAreas,
+  GroomScoreGrid,
   HighlightsAndSuggestions,
   ReadinessHero,
   RoadmapList,
   ScoreBars,
   type RoadmapEntry,
 } from "@/components/ScanResults";
+import { EMPTY_PHOTOS, ScanCapture, type CapturedPhotos } from "@/components/ScanCapture";
+import { SelfReportForm } from "@/components/SelfReportForm";
 
 /**
- * Portal home for the Transformation Readiness Scan: latest scores, the progress
+ * Portal home for the Transformation Readiness Scan: the composite Groom Score
+ * (appearance + self-reported fitness/confidence + prep progress), the progress
  * graph (self-comparison only — the product never compares users to each
- * other), the tickable roadmap, and monthly rescan.
+ * other), the tickable roadmap, and multi-photo rescans.
  */
 export function PortalScan() {
   const { user } = useAuth();
   const clientId = user?.client?.id;
+  const type = user?.client?.type ?? "groom";
+  const labels = scanCategoryLabels(type);
+
+  const [params, setParams] = useSearchParams();
+  type HubTab = "score" | "outfits" | "looks" | "coach";
+  const hubTab = (params.get("tab") as HubTab | null) ?? "score";
+  const setHubTab = (t: HubTab) => setParams(t === "score" ? {} : { tab: t }, { replace: true });
+  const hubTabs: TabDef<HubTab>[] = [
+    { id: "score", label: "Score" },
+    { id: "outfits", label: "Outfits" },
+    { id: "looks", label: "Looks" },
+    { id: "coach", label: "Coach" },
+  ];
+  const [rescanOpen, setRescanOpen] = useState(false);
+  const [selfReportOpen, setSelfReportOpen] = useState(false);
+  const [photos, setPhotos] = useState<CapturedPhotos>(EMPTY_PHOTOS);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
 
   const {
     data: scans,
@@ -57,23 +86,39 @@ export function PortalScan() {
   const latest = scans?.[scans.length - 1];
   const previous = scans && scans.length > 1 ? scans[scans.length - 2] : undefined;
 
-  const rescan = async (file: File | null) => {
-    if (!file) return;
+  // Composite score: recomputed live so ticking a roadmap item moves the number.
+  const prepProgress = useMemo(() => computePrepProgress(roadmap ?? []), [roadmap]);
+  const groom = useMemo(
+    () =>
+      latest?.readinessScore != null
+        ? computeGroomScore({
+            appearance: latest.readinessScore,
+            fitness: latest.fitnessScore,
+            confidence: latest.confidenceScore,
+            prepProgress,
+          })
+        : null,
+    [latest, prepProgress],
+  );
+
+  const rescan = async () => {
+    if (!photos.front) return;
     setScanning(true);
     setError(null);
     try {
-      const framingError = await checkFraming(file);
-      if (framingError) {
-        setError(framingError);
-        return;
-      }
-      await startScan({ file });
+      await startScan({
+        file: photos.front,
+        fullBody: photos.fullBody,
+        left: photos.left,
+        right: photos.right,
+      });
       await Promise.all([refetchScans(), refetchRoadmap()]);
+      setRescanOpen(false);
+      setPhotos(EMPTY_PHOTOS);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Scan failed. Please try again.");
     } finally {
       setScanning(false);
-      if (fileInput.current) fileInput.current.value = "";
     }
   };
 
@@ -94,45 +139,88 @@ export function PortalScan() {
 
   const chartData = (scans ?? [])
     .filter((s) => s.readinessScore != null)
-    .map((s) => ({
-      label: formatDate(s.createdAt),
-      readiness: s.readinessScore,
-      skin: s.skinScore,
-    }));
+    .map((s) => ({ label: formatDate(s.createdAt), appearance: s.readinessScore }));
 
   const delta =
     latest?.readinessScore != null && previous?.readinessScore != null
       ? latest.readinessScore - previous.readinessScore
       : null;
 
-  return (
-    <div className="animate-fade-up space-y-5">
-      <input
-        ref={fileInput}
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        capture="user"
-        className="hidden"
-        onChange={(e) => void rescan(e.target.files?.[0] ?? null)}
-      />
+  const rescanModal = (
+    <Modal
+      open={rescanOpen}
+      onClose={() => !scanning && setRescanOpen(false)}
+      title="Rescan"
+      size="md"
+    >
+      <p className="mb-4 text-sm text-muted-foreground">
+        Same angle, same light as last time for the truest comparison. Add a full-body photo to
+        score Style.
+      </p>
+      <ScanCapture photos={photos} onChange={setPhotos} onError={setError} compact />
+      {error && <p className="mt-3 text-sm text-danger">{error}</p>}
+      <Button
+        onClick={() => void rescan()}
+        disabled={!photos.front || scanning}
+        className="mt-4 w-full"
+      >
+        <Camera className="mr-1.5 h-4 w-4" /> {scanning ? "Scanning…" : "Scan"}
+      </Button>
+    </Modal>
+  );
 
-      {!latest ? (
+  if (!latest) {
+    return (
+      <>
         <EmptyState
           icon={ScanFace}
           title="No scan yet"
           hint="Take your first Transformation Readiness Scan — a selfie is all it takes."
           action={
-            <Button onClick={() => fileInput.current?.click()} disabled={scanning}>
-              <Camera className="mr-1.5 h-4 w-4" /> {scanning ? "Scanning…" : "Scan now"}
+            <Button onClick={() => setRescanOpen(true)}>
+              <Camera className="mr-1.5 h-4 w-4" /> Scan now
             </Button>
           }
         />
-      ) : (
+        {rescanModal}
+      </>
+    );
+  }
+
+  const scores = {
+    skin: latest.skinScore ?? 0,
+    hair: latest.hairScore ?? 0,
+    beard: latest.beardScore ?? 0,
+    style: latest.styleScore,
+  };
+
+  return (
+    <div className="animate-fade-up space-y-5">
+      <Tabs tabs={hubTabs} active={hubTab} onChange={setHubTab} />
+
+      {hubTab === "outfits" && (
+        <section className="card p-6">
+          <OutfitCheckPanel scanId={latest.id} />
+        </section>
+      )}
+      {hubTab === "looks" && (
+        <section className="card p-6">
+          <LookPreviewPanel scanId={latest.id} type={type} />
+        </section>
+      )}
+      {hubTab === "coach" && (
+        <section className="card p-6">
+          <CoachChat scanId={latest.id} />
+        </section>
+      )}
+
+      {hubTab === "score" && (
         <>
           <section className="card p-6">
             <div className="flex flex-wrap items-start justify-between gap-4">
               <ReadinessHero
-                readiness={latest.readinessScore ?? 0}
+                readiness={groom?.overall ?? latest.readinessScore ?? 0}
+                appearance={latest.readinessScore ?? undefined}
                 daysToWedding={Math.max(
                   0,
                   Math.ceil(
@@ -140,39 +228,48 @@ export function PortalScan() {
                   ),
                 )}
               />
-              <Button
-                variant="secondary"
-                onClick={() => fileInput.current?.click()}
-                disabled={scanning}
-              >
-                <Camera className="mr-1.5 h-4 w-4" /> {scanning ? "Scanning…" : "Rescan"}
+              <Button variant="secondary" onClick={() => setRescanOpen(true)}>
+                <Camera className="mr-1.5 h-4 w-4" /> Rescan
               </Button>
             </div>
             {delta != null && delta !== 0 && (
               <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-success">
                 <TrendingUp className="h-4 w-4" />
                 {delta > 0
-                  ? `Your readiness improved by ${delta} points since your last scan.`
+                  ? `Your appearance score improved by ${delta} points since your last scan.`
                   : `Down ${Math.abs(delta)} points since last scan — this week's roadmap gets you back.`}
               </p>
             )}
-            {error && <p className="mt-3 text-sm text-danger">{error}</p>}
-            <ScoreBars
-              scores={{
-                skin: latest.skinScore ?? 0,
-                hair: latest.hairScore ?? 0,
-                beard: latest.beardScore ?? 0,
-                style: latest.styleScore ?? 0,
-              }}
-              className="mt-6"
-            />
+            <div className="mt-6">
+              <GroomScoreGrid
+                score={{
+                  appearance: latest.readinessScore ?? 0,
+                  fitness: latest.fitnessScore,
+                  confidence: latest.confidenceScore,
+                  prepProgress,
+                  scores,
+                  labels,
+                }}
+                onUnlockStyle={() => setRescanOpen(true)}
+                onUnlockSelfReport={() => setSelfReportOpen(true)}
+              />
+            </div>
+            {(latest.fitnessScore != null || latest.confidenceScore != null) && (
+              <button
+                type="button"
+                onClick={() => setSelfReportOpen(true)}
+                className="mt-3 text-xs font-medium text-primary hover:underline"
+              >
+                Update my fitness & confidence answers
+              </button>
+            )}
           </section>
 
           {chartData.length > 1 && (
             <section className="card p-5">
               <h2 className="text-sm font-semibold">Your progress</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Compared with yourself, scan after scan.
+                Appearance score, scan after scan — compared with yourself only.
               </p>
               <div className="mt-3 h-48 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -212,7 +309,7 @@ export function PortalScan() {
                     />
                     <Area
                       type="monotone"
-                      dataKey="readiness"
+                      dataKey="appearance"
                       stroke="hsl(var(--primary))"
                       strokeWidth={2.5}
                       fill="url(#gradReadiness)"
@@ -224,8 +321,14 @@ export function PortalScan() {
           )}
 
           <section className="card space-y-5 p-6">
+            <ScoreBars scores={scores} labels={labels} />
             <FocusAreas
               areas={(latest.focusAreas as { area: string; weight: number }[] | null) ?? []}
+            />
+            <AttributeList
+              attributes={
+                (latest.attributes as { key: string; label: string; score: number }[] | null) ?? []
+              }
             />
             <HighlightsAndSuggestions
               highlights={latest.highlights}
@@ -237,7 +340,8 @@ export function PortalScan() {
             <section className="card p-6">
               <h2 className="font-display text-lg font-semibold">Your prep roadmap</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Tick items off as you go — weekly focus refreshes with every rescan.
+                Tick items off as you go — every on-time tick lifts your readiness, and weekly focus
+                refreshes with every rescan.
               </p>
               <div className="mt-4">
                 <RoadmapList items={roadmap ?? []} onToggle={toggleItem} />
@@ -246,6 +350,29 @@ export function PortalScan() {
           )}
         </>
       )}
+
+      {rescanModal}
+
+      <Modal
+        open={selfReportOpen}
+        onClose={() => setSelfReportOpen(false)}
+        title="Complete your Groom Score"
+        size="md"
+      >
+        <p className="mb-4 text-sm text-muted-foreground">
+          Fitness and Confidence can't be read from a photo, so they come from you — and they count
+          toward your headline readiness.
+        </p>
+        <SelfReportForm
+          scanId={latest.id}
+          initial={(latest.selfReport as SelfReport | null) ?? null}
+          onSaved={() => {
+            void refetchScans();
+            setSelfReportOpen(false);
+          }}
+          onCancel={() => setSelfReportOpen(false)}
+        />
+      </Modal>
     </div>
   );
 }

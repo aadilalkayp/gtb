@@ -216,6 +216,45 @@ enum RoadmapItemKind {
   checklist
 }
 
+enum ScanPhotoAngle {
+  front
+  left
+  right
+  full_body
+}
+
+enum OutfitVerdict {
+  great
+  good
+  avoid
+}
+
+enum LookKind {
+  hairstyle
+  beard
+}
+
+enum LookStatus {
+  pending
+  ready
+  failed
+}
+
+enum CoachRole {
+  user
+  assistant
+}
+
+enum CoachCategory {
+  skin
+  hair
+  beard
+  style
+  fitness
+  wedding
+  general
+}
+
 enum MessageChannel {
   email
   whatsapp
@@ -343,6 +382,9 @@ model Client {
   scans        Scan[]
   roadmapItems RoadmapItem[]
   outboundMessages OutboundMessage[]
+  outfitChecks  OutfitCheck[]
+  lookPreviews  LookPreview[]
+  coachThreads  CoachConversation[]
 
   @@index([status])
   @@index([type])
@@ -968,9 +1010,24 @@ model Scan {
   highlights String[]
   /// Improvement pointers feeding the roadmap ("Hydration routine, twice daily").
   suggestions String[]
+  /// Attribute-level appearance metrics, JSON array of { key, label, score }
+  /// (tone evenness, clarity, hydration look, under-eye, hair density…). Neutral
+  /// appearance names only — never condition names.
+  attributes Json?
+
+  // Self-reported inputs to the composite Groom Score (a face photo can't
+  // honestly rate fitness or confidence). Raw answers + derived 0–100 scores.
+  selfReport      Json?
+  fitnessScore    Int?
+  confidenceScore Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  photos        ScanPhoto[]
+  outfitChecks  OutfitCheck[]
+  lookPreviews  LookPreview[]
+  coachThreads  CoachConversation[]
 
   @@index([clientId, createdAt])
   @@index([status, createdAt])
@@ -979,6 +1036,27 @@ model Scan {
   @@allow('read', client.assignments?[staffId == auth().id && isActive])
   @@allow('read', client.userId == auth().id)
   @@allow('delete', auth().role == founder || auth().role == ops_head)
+}
+
+/// Additional angles for a scan (front is Scan.photoPath). A full-body photo
+/// unlocks the Style score; side angles sharpen hair/beard scoring. Same
+/// bucket, same retention, same read policy as the parent scan.
+model ScanPhoto {
+  id     String @id @default(uuid()) @deny('update', true)
+  scanId String @deny('update', true)
+  scan   Scan   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+
+  angle ScanPhotoAngle
+  /// Storage object path in the private scan-photos bucket.
+  path  String
+
+  createdAt DateTime @default(now())
+
+  @@index([scanId])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', scan.client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', scan.client.userId == auth().id)
 }
 
 /// A self-serve prep task on the client's readiness roadmap — weekly focus items
@@ -1045,6 +1123,132 @@ model OutboundMessage {
 
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', client.assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
+}
+
+// ============================================================================
+// Phase 6 — outfit analysis, look previews, AI coach
+// ============================================================================
+
+/// One outfit check: up to three garment photos judged against the person's
+/// skin tone (from their scan's front selfie). Anchored to a scan so funnel
+/// leads can use it from their report page (scanId = bearer secret); enrolled
+/// clients see history in the portal. Photos live in the scan-photos bucket.
+model OutfitCheck {
+  id       String  @id @default(uuid()) @deny('update', true)
+  scanId   String  @deny('update', true)
+  scan     Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  clientId String? @deny('update', true)
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  /// Storage paths of the garment photos, in upload order.
+  photoPaths   String[]
+  modelVersion String?
+  /// Per-garment results: [{ index, verdict, score, colorNote, fitNote, suggestion }]
+  results Json?
+  /// Palette guidance: { tryColors: string[], avoidColors: string[], summary }
+  palette Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([scanId])
+  @@index([clientId, createdAt])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+}
+
+/// A generated hairstyle / beard preview rendered onto the person's own
+/// selfie. Costs real money per render, so creation is server-only and capped
+/// per scan per day and globally per month (see looks.ts).
+model LookPreview {
+  id       String  @id @default(uuid()) @deny('update', true)
+  scanId   String  @deny('update', true)
+  scan     Scan    @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  clientId String? @deny('update', true)
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  kind     LookKind
+  /// Catalog key from packages/shared/src/looks.ts (e.g. "textured_crop").
+  styleKey String
+  status   LookStatus @default(pending)
+  /// Storage path of the generated image (scan-photos bucket) once ready.
+  path         String?
+  modelVersion String?
+  error        String?
+
+  createdAt DateTime @default(now())
+
+  @@index([scanId, createdAt])
+  @@index([clientId, createdAt])
+  @@index([createdAt])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+}
+
+/// The coach's knowledge base: GTB's methodology as staff-editable articles.
+/// The coach answers ONLY from active articles plus the user's own scan
+/// context. Ships empty (a starter set can be created from Settings) — GTB
+/// owns the content.
+model CoachArticle {
+  id       String        @id @default(uuid()) @deny('update', true)
+  title    String
+  category CoachCategory
+  /// Markdown body. Keep articles focused: one topic, one answerable question.
+  content  String
+  tags     String[]
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category, isActive])
+
+  // Staff read everything; clients only what's live (they never see drafts).
+  @@allow('read', auth() != null && (auth().role != client || isActive))
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+}
+
+/// A coach chat thread. Anchored to a scan (funnel leads, bearer secret) and,
+/// once known, the client. Messages are server-written.
+model CoachConversation {
+  id       String  @id @default(uuid()) @deny('update', true)
+  scanId   String? @deny('update', true)
+  scan     Scan?   @relation(fields: [scanId], references: [id], onDelete: Cascade)
+  clientId String? @deny('update', true)
+  client   Client? @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages CoachMessage[]
+
+  @@index([clientId, updatedAt])
+  @@index([scanId])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive && (role == coach || role == cro)])
+  @@allow('read', client.userId == auth().id)
+}
+
+model CoachMessage {
+  id             String            @id @default(uuid())
+  conversationId String
+  conversation   CoachConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  role           CoachRole
+  content        String
+  /// Titles of the knowledge articles the answer drew on (assistant turns).
+  sources String[]
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', conversation.client.assignments?[staffId == auth().id && isActive && (role == coach || role == cro)])
+  @@allow('read', conversation.client.userId == auth().id)
 }
 
 // ============================================================================

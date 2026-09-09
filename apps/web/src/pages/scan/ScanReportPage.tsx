@@ -46,7 +46,7 @@ export function ScanReportPage() {
           <Spinner className="h-6 w-6" />
         </div>
       ) : (
-        <ScanReportView report={report} emailed={initial?.emailed} />
+        <ScanReportView report={report} emailed={initial?.emailed} onReportChange={setReport} />
       )}
     </ScanShell>
   );
