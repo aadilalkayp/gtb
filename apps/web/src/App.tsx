@@ -103,6 +103,15 @@ const PortalScan = lazy(() =>
   import("@/pages/portal/PortalScan").then((m) => ({ default: m.PortalScan })),
 );
 const ScanPage = lazy(() => import("@/pages/scan/ScanPage").then((m) => ({ default: m.ScanPage })));
+const ScanReportPage = lazy(() =>
+  import("@/pages/scan/ScanReportPage").then((m) => ({ default: m.ScanReportPage })),
+);
+const PrivacyPage = lazy(() =>
+  import("@/pages/legal/LegalPages").then((m) => ({ default: m.PrivacyPage })),
+);
+const TermsPage = lazy(() =>
+  import("@/pages/legal/LegalPages").then((m) => ({ default: m.TermsPage })),
+);
 
 /** Sends users to their portal home based on auth state. */
 function IndexRedirect() {
@@ -123,6 +132,10 @@ export default function App() {
         <Route path="/portal/register" element={<RegisterPage />} />
         {/* Transformation Readiness Scan — the public lead-gen funnel (no auth). */}
         <Route path="/scan" element={<ScanPage />} />
+        {/* Report permalink (emailed + shared); scanId is a bearer secret. */}
+        <Route path="/scan/r/:scanId" element={<ScanReportPage />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage portal="staff" />} />
         <Route path="/portal/forgot-password" element={<ForgotPasswordPage portal="client" />} />
         {/* Reached from the recovery email; Supabase establishes the session from the link. */}

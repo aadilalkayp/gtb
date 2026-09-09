@@ -9,6 +9,19 @@
     # Uploads (payment proofs, scan selfies) stream through the API.
     client_max_body_size 25M;
 
+    # The public funnel is the only unauthenticated write path: a second rate
+    # limit in front of the app's in-memory one (10 req/min per IP, small burst).
+    location /api/scan/start {
+        limit_req zone=scan_start burst=5 nodelay;
+        proxy_pass         http://127.0.0.1:3001;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 90s;
+    }
+
     location / {
         proxy_pass         http://127.0.0.1:3001;
         proxy_http_version 1.1;
@@ -22,6 +35,11 @@
         proxy_read_timeout 90s;
     }
 {% endmacro %}
+# limit_req zones must be declared at http level; a sites-enabled file is
+# included there, so this is valid outside any server block.
+limit_req_zone $binary_remote_addr zone=scan_start:1m rate=10r/m;
+limit_req_status 429;
+
 server {
     listen 80;
     listen [::]:80;

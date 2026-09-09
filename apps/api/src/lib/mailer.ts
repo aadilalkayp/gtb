@@ -34,6 +34,8 @@ export interface SendMailInput {
   subject: string;
   html: string;
   text: string;
+  /** Marketing mail only: adds the RFC 8058 List-Unsubscribe headers. */
+  listUnsubscribe?: string;
 }
 
 export interface SendMailResult {
@@ -53,6 +55,12 @@ export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
       subject: input.subject,
       text: input.text,
       html: input.html,
+      headers: input.listUnsubscribe
+        ? {
+            "List-Unsubscribe": `<${input.listUnsubscribe}>`,
+            "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+          }
+        : undefined,
     });
     return { sent: true };
   } catch (e) {

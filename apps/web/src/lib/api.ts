@@ -195,13 +195,47 @@ export async function getDocumentUrl(documentId: string): Promise<string> {
 // Transformation Readiness Scan
 // ---------------------------------------------------------------------------
 
+export type ScanPhotoAngle = "front" | "left" | "right" | "full_body";
+
+export interface SelfReportAnswers {
+  fitnessLevel?: "beginner" | "intermediate" | "advanced";
+  workoutsPerWeek?: number;
+  sleepHours?: number;
+  waterLitres?: number;
+  photoComfort?: number;
+  styleConfidence?: number;
+  routineConsistency?: number;
+  socialEase?: number;
+}
+
 export interface ScanReport {
   scanId: string;
   status: string;
   createdAt: string;
+  type: "groom" | "bride";
   daysToWedding: number;
   weddingDate: string;
-  scores: { skin: number; hair: number; beard: number; style: number; readiness: number } | null;
+  categoryLabels: Record<"skin" | "hair" | "beard" | "style", string>;
+  photos: ScanPhotoAngle[];
+  scores: {
+    skin: number;
+    hair: number;
+    beard: number;
+    style: number | null;
+    appearance: number;
+    /** Headline composite Groom Score. */
+    readiness: number;
+  } | null;
+  groomScore: {
+    overall: number;
+    appearance: number;
+    fitness: number | null;
+    confidence: number | null;
+    prepProgress: number | null;
+    inputs: { fitness: boolean; confidence: boolean; prep: boolean };
+  } | null;
+  attributes: { key: string; label: string; score: number }[];
+  selfReport: SelfReportAnswers | null;
   focusAreas: { area: string; weight: number }[];
   highlights: string[];
   suggestions: string[];
@@ -227,11 +261,18 @@ export interface ScanTeaser {
  *  rescan attaches to their record and returns the full report directly. */
 export async function startScan(args: {
   file: File;
+  /** Optional extra angles — a full-body photo unlocks the Style score. */
+  fullBody?: File | null;
+  left?: File | null;
+  right?: File | null;
   weddingDate?: string;
   type?: "groom" | "bride";
 }): Promise<{ scanId?: string; teaser?: ScanTeaser; report?: ScanReport }> {
   const form = new FormData();
   form.append("file", args.file);
+  if (args.fullBody) form.append("fullBody", args.fullBody);
+  if (args.left) form.append("left", args.left);
+  if (args.right) form.append("right", args.right);
   if (args.weddingDate) form.append("weddingDate", args.weddingDate);
   if (args.type) form.append("type", args.type);
   const res = await authedFetch(`${env.apiUrl}/api/scan/start`, { method: "POST", body: form });
@@ -252,7 +293,7 @@ export function claimScan(args: {
   email: string;
   phone: string;
   city?: string;
-}): Promise<{ ok: boolean; report: ScanReport }> {
+}): Promise<{ ok: boolean; emailed: boolean; report: ScanReport }> {
   return postJson("/api/scan/claim", args);
 }
 
@@ -267,6 +308,137 @@ export async function fetchScanReport(scanId: string): Promise<ScanReport> {
   } | null;
   if (!res.ok || !json?.report) throw new Error(json?.error || `Request failed (${res.status})`);
   return json.report;
+}
+
+/** Save the self-assessment (fitness habits + confidence) on a scan. */
+export function submitSelfReport(
+  scanId: string,
+  answers: SelfReportAnswers,
+): Promise<{ ok: boolean; report: ScanReport }> {
+  return postJson("/api/scan/self-report", { scanId, answers });
+}
+
+// ---- Outfit analysis --------------------------------------------------------
+
+export interface OutfitResult {
+  index: number;
+  verdict: "great" | "good" | "avoid";
+  score: number;
+  colorNote: string;
+  fitNote: string;
+  suggestion: string;
+}
+
+export interface OutfitCheck {
+  id: string;
+  createdAt: string;
+  /** Signed URLs of the garment photos, in upload order. */
+  photos: string[];
+  results: OutfitResult[];
+  palette: { tryColors: string[]; avoidColors: string[]; summary: string } | null;
+  modelVersion: string | null;
+}
+
+export async function submitOutfitCheck(args: {
+  scanId: string;
+  garments: File[];
+}): Promise<{ ok: boolean; check: OutfitCheck }> {
+  const form = new FormData();
+  form.append("scanId", args.scanId);
+  args.garments.slice(0, 3).forEach((f, i) => form.append(`garment${i + 1}`, f));
+  const res = await authedFetch(`${env.apiUrl}/api/scan/outfit`, { method: "POST", body: form });
+  const json = (await res.json().catch(() => null)) as {
+    ok: boolean;
+    check: OutfitCheck;
+    error?: string;
+  } | null;
+  if (!res.ok || !json?.check) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json;
+}
+
+export async function fetchOutfitChecks(scanId: string): Promise<OutfitCheck[]> {
+  const res = await authedFetch(
+    `${env.apiUrl}/api/scan/outfit?scanId=${encodeURIComponent(scanId)}`,
+  );
+  const json = (await res.json().catch(() => null)) as {
+    checks?: OutfitCheck[];
+    error?: string;
+  } | null;
+  if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json?.checks ?? [];
+}
+
+// ---- Look previews ----------------------------------------------------------
+
+export interface LookPreview {
+  id: string;
+  kind: "hairstyle" | "beard";
+  styleKey: string;
+  status: "pending" | "ready" | "failed";
+  url: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export function requestLook(
+  scanId: string,
+  styleKey: string,
+): Promise<{ ok: boolean; look: LookPreview; cached?: boolean }> {
+  return postJson("/api/scan/look", { scanId, styleKey });
+}
+
+export async function fetchLooks(
+  scanId: string,
+): Promise<{ looks: LookPreview[]; remainingToday: number }> {
+  const res = await authedFetch(`${env.apiUrl}/api/scan/look?scanId=${encodeURIComponent(scanId)}`);
+  const json = (await res.json().catch(() => null)) as {
+    looks?: LookPreview[];
+    remainingToday?: number;
+    error?: string;
+  } | null;
+  if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
+  return { looks: json?.looks ?? [], remainingToday: json?.remainingToday ?? 0 };
+}
+
+// ---- Coach ------------------------------------------------------------------
+
+export interface CoachChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources: string[];
+  createdAt: string;
+}
+
+export function askCoach(args: {
+  scanId: string;
+  conversationId?: string | null;
+  message: string;
+}): Promise<{
+  ok: boolean;
+  conversationId: string;
+  message: CoachChatMessage;
+  knowledgeArticles: number;
+}> {
+  return postJson("/api/coach/ask", args);
+}
+
+export async function fetchCoachHistory(
+  scanId: string,
+): Promise<{
+  conversationId: string | null;
+  messages: CoachChatMessage[];
+  knowledgeArticles: number;
+}> {
+  const res = await authedFetch(`${env.apiUrl}/api/coach/ask?scanId=${encodeURIComponent(scanId)}`);
+  const json = (await res.json().catch(() => null)) as {
+    conversationId: string | null;
+    messages: CoachChatMessage[];
+    knowledgeArticles: number;
+    error?: string;
+  } | null;
+  if (!res.ok || !json) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json;
 }
 
 /** Mint a signed URL for a scan photo (staff 360° / portal history). */

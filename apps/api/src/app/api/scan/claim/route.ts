@@ -5,6 +5,8 @@ import { buildScanReport, clientIp, rateLimit } from "@/lib/scan";
 import { syncRoadmap } from "@/lib/scan";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 import { withRequestLog } from "@/lib/handler";
+import { sendFunnelMessage } from "@/lib/channels";
+import { scanReportTemplateKey } from "@/lib/funnelTemplates";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -125,7 +127,16 @@ async function handlePost(req: NextRequest): Promise<Response> {
   });
   await syncRoadmap(client.id, claimed, client.weddingDate);
 
-  return json(req, { ok: true, report: await buildScanReport(claimed, client.weddingDate) });
+  // "Your report is saved to your email" — deliver on it. Best-effort and
+  // idempotent per scan; a mail failure never fails the claim.
+  const mail = await sendFunnelMessage(client.id, scanReportTemplateKey(claimed.id));
+  const emailed = mail.results.some((r) => r.channel === "email" && r.status === "sent");
+
+  return json(req, {
+    ok: true,
+    emailed,
+    report: await buildScanReport(claimed, client.weddingDate),
+  });
 }
 
 export const POST = withRequestLog(handlePost);

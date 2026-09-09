@@ -109,3 +109,19 @@ jobs:
           # Replace only the tag line — .env also carries GTB_IMAGE (set by Ansible).
           ssh -i ~/.ssh/deploy_key "$VPS_USER@$VPS_HOST" \
             "cd /opt/gtb && sed -i '/^GTB_IMAGE_TAG=/d' .env && echo \"GTB_IMAGE_TAG=$IMAGE_TAG\" >> .env && docker compose pull -q api && docker compose up -d api && docker image prune -f"
+
+      # Health gate: a bad image must fail the deploy loudly, not sit there
+      # unhealthy until someone notices. Waits for the container to pass its
+      # healthcheck and the API to answer through nginx/TLS.
+      - name: Verify the new API is healthy
+        env:
+          API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          for i in $(seq 1 20); do
+            if curl -sf --max-time 10 "$API_URL/api/health" >/dev/null; then
+              echo "healthy after $i checks"; exit 0
+            fi
+            sleep 5
+          done
+          echo "API did not become healthy at $API_URL/api/health" >&2
+          exit 1
