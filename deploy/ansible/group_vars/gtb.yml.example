@@ -45,6 +45,10 @@ gtb_api_env:
   WEB_PUBLIC_URL: https://app.yourdomain.com
   API_PUBLIC_URL: "https://{{ api_domain }}"
   CRON_SECRET: "{{ vault_cron_secret }}"
+  # Optional: image model for hairstyle/beard previews and the monthly render
+  # budget (each render costs money). Defaults shown.
+  GEMINI_IMAGE_MODEL: gemini-3.6-flash-image
+  LOOK_PREVIEW_MONTHLY_CAP: "500"
   # Optional: error tracking. Empty = Sentry disabled.
   SENTRY_DSN: ""
   # Optional: WhatsApp channel for funnel drips ("none" until a provider adapter

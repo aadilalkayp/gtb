@@ -126,7 +126,9 @@ SUPABASE_JWT_SECRET="<jwt-secret>"
 # ---- Gemini (Transformation Readiness Scan; optional — if unset, scans use a
 # ----          deterministic stub scorer, fine for testing, never for launch) ----
 GEMINI_API_KEY="<google-ai-studio-key>"
-GEMINI_MODEL="gemini-2.5-flash"        # optional; this is the default
+GEMINI_MODEL="gemini-3.6-flash"        # optional; this is the default
+GEMINI_IMAGE_MODEL="gemini-3.6-flash-image"   # optional; hairstyle/beard previews
+LOOK_PREVIEW_MONTHLY_CAP="500"         # optional; global monthly render budget
 
 # ---- Mailgun SMTP (optional; if unset, invite links are shown in the UI to copy) ----
 MAILGUN_SMTP_HOST="smtp.mailgun.org"

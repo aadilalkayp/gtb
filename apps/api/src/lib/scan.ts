@@ -284,3 +284,48 @@ export async function syncRoadmap(
   ]);
   return toCreate.length;
 }
+
+// ---------------------------------------------------------------------------
+// Scan-anchored access (report page features: outfit checks, looks, coach)
+// ---------------------------------------------------------------------------
+
+import { resolveAuthUser } from "./auth.js";
+
+export type ScanAccess =
+  | {
+      ok: true;
+      scan: ScanRow & { client: { userId: string | null; weddingDate: Date } | null };
+      userId: string | null;
+    }
+  | { ok: false; status: 401 | 403 | 404 | 409; error: string };
+
+/**
+ * Authorize a request against a scan. Mirrors /api/scan/report: possession of
+ * the scanId is authorization for anonymous funnel traffic, but a logged-in
+ * user may only touch their own scans (admins excepted). Optionally requires
+ * the scan to be claimed (email captured) — used to gate paid features.
+ */
+export async function authorizeScanAccess(
+  req: Request,
+  scanId: string | null | undefined,
+  opts: { requireClaimed?: boolean; requireScored?: boolean } = {},
+): Promise<ScanAccess> {
+  if (!scanId) return { ok: false, status: 404, error: "scanId is required" };
+  const scan = await prisma.scan.findUnique({
+    where: { id: scanId },
+    include: { client: { select: { userId: true, weddingDate: true } } },
+  });
+  if (!scan) return { ok: false, status: 404, error: "Scan not found" };
+  if (opts.requireScored !== false && scan.status !== "scored") {
+    return { ok: false, status: 409, error: "This scan has no result yet" };
+  }
+  if (opts.requireClaimed && !scan.clientId) {
+    return { ok: false, status: 403, error: "Unlock your report first" };
+  }
+  const authUser = await resolveAuthUser(req).catch(() => undefined);
+  if (authUser && scan.client?.userId && scan.client.userId !== authUser.id) {
+    const isAdmin = authUser.role === "founder" || authUser.role === "ops_head";
+    if (!isAdmin) return { ok: false, status: 403, error: "Forbidden" };
+  }
+  return { ok: true, scan, userId: authUser?.id ?? null };
+}

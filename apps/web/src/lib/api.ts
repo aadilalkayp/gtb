@@ -318,6 +318,129 @@ export function submitSelfReport(
   return postJson("/api/scan/self-report", { scanId, answers });
 }
 
+// ---- Outfit analysis --------------------------------------------------------
+
+export interface OutfitResult {
+  index: number;
+  verdict: "great" | "good" | "avoid";
+  score: number;
+  colorNote: string;
+  fitNote: string;
+  suggestion: string;
+}
+
+export interface OutfitCheck {
+  id: string;
+  createdAt: string;
+  /** Signed URLs of the garment photos, in upload order. */
+  photos: string[];
+  results: OutfitResult[];
+  palette: { tryColors: string[]; avoidColors: string[]; summary: string } | null;
+  modelVersion: string | null;
+}
+
+export async function submitOutfitCheck(args: {
+  scanId: string;
+  garments: File[];
+}): Promise<{ ok: boolean; check: OutfitCheck }> {
+  const form = new FormData();
+  form.append("scanId", args.scanId);
+  args.garments.slice(0, 3).forEach((f, i) => form.append(`garment${i + 1}`, f));
+  const res = await authedFetch(`${env.apiUrl}/api/scan/outfit`, { method: "POST", body: form });
+  const json = (await res.json().catch(() => null)) as {
+    ok: boolean;
+    check: OutfitCheck;
+    error?: string;
+  } | null;
+  if (!res.ok || !json?.check) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json;
+}
+
+export async function fetchOutfitChecks(scanId: string): Promise<OutfitCheck[]> {
+  const res = await authedFetch(
+    `${env.apiUrl}/api/scan/outfit?scanId=${encodeURIComponent(scanId)}`,
+  );
+  const json = (await res.json().catch(() => null)) as {
+    checks?: OutfitCheck[];
+    error?: string;
+  } | null;
+  if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json?.checks ?? [];
+}
+
+// ---- Look previews ----------------------------------------------------------
+
+export interface LookPreview {
+  id: string;
+  kind: "hairstyle" | "beard";
+  styleKey: string;
+  status: "pending" | "ready" | "failed";
+  url: string | null;
+  error: string | null;
+  createdAt: string;
+}
+
+export function requestLook(
+  scanId: string,
+  styleKey: string,
+): Promise<{ ok: boolean; look: LookPreview; cached?: boolean }> {
+  return postJson("/api/scan/look", { scanId, styleKey });
+}
+
+export async function fetchLooks(
+  scanId: string,
+): Promise<{ looks: LookPreview[]; remainingToday: number }> {
+  const res = await authedFetch(`${env.apiUrl}/api/scan/look?scanId=${encodeURIComponent(scanId)}`);
+  const json = (await res.json().catch(() => null)) as {
+    looks?: LookPreview[];
+    remainingToday?: number;
+    error?: string;
+  } | null;
+  if (!res.ok) throw new Error(json?.error || `Request failed (${res.status})`);
+  return { looks: json?.looks ?? [], remainingToday: json?.remainingToday ?? 0 };
+}
+
+// ---- Coach ------------------------------------------------------------------
+
+export interface CoachChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  sources: string[];
+  createdAt: string;
+}
+
+export function askCoach(args: {
+  scanId: string;
+  conversationId?: string | null;
+  message: string;
+}): Promise<{
+  ok: boolean;
+  conversationId: string;
+  message: CoachChatMessage;
+  knowledgeArticles: number;
+}> {
+  return postJson("/api/coach/ask", args);
+}
+
+export async function fetchCoachHistory(
+  scanId: string,
+): Promise<{
+  conversationId: string | null;
+  messages: CoachChatMessage[];
+  knowledgeArticles: number;
+}> {
+  const res = await authedFetch(`${env.apiUrl}/api/coach/ask?scanId=${encodeURIComponent(scanId)}`);
+  const json = (await res.json().catch(() => null)) as {
+    conversationId: string | null;
+    messages: CoachChatMessage[];
+    knowledgeArticles: number;
+    error?: string;
+  } | null;
+  if (!res.ok || !json) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json;
+}
+
 /** Mint a signed URL for a scan photo (staff 360° / portal history). */
 export async function getScanPhotoUrl(scanId: string): Promise<string> {
   const { url } = await postJson<{ url: string }>("/api/scan/photo-url", { scanId });
