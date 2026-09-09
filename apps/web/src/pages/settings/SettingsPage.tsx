@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { PlansSettings } from "./plans/PlansSettings";
 import { LeadSourcesSettings, ExpenseCategoriesSettings } from "./LookupSettings";
 import { UsersSettings } from "./users/UsersSettings";
+import { CoachKnowledgeSettings } from "./CoachKnowledgeSettings";
 
 interface Tab {
   id: string;
@@ -33,6 +34,12 @@ const TABS: Tab[] = [
     label: "Team & Users",
     capability: "user.manage",
     render: () => <UsersSettings />,
+  },
+  {
+    id: "coach",
+    label: "Coach Knowledge",
+    capability: "settings.manage",
+    render: () => <CoachKnowledgeSettings />,
   },
 ];
 

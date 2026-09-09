@@ -14,6 +14,9 @@ import {
   ScoreBars,
 } from "@/components/ScanResults";
 import { SelfReportForm } from "@/components/SelfReportForm";
+import { OutfitCheckPanel } from "@/components/OutfitCheckPanel";
+import { LookPreviewPanel } from "@/components/LookPreviewPanel";
+import { CoachChat } from "@/components/CoachChat";
 
 export const PRODUCT_NAME = "Transformation Readiness Scan";
 
@@ -171,6 +174,20 @@ export function ScanReportView({
             <RoadmapList items={report.roadmap} />
           </div>
         </div>
+      )}
+
+      {report.claimed && (
+        <>
+          <div className="card p-6">
+            <LookPreviewPanel scanId={report.scanId} type={report.type} />
+          </div>
+          <div className="card p-6">
+            <OutfitCheckPanel scanId={report.scanId} />
+          </div>
+          <div className="card p-6">
+            <CoachChat scanId={report.scanId} compact />
+          </div>
+        </>
       )}
 
       <div className="card bg-gradient-to-br from-primary via-primary to-primary/80 p-6 text-primary-foreground">

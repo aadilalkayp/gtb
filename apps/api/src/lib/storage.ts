@@ -60,3 +60,11 @@ export async function deleteScanObject(path: string): Promise<void> {
   const { error } = await supabaseAdmin.storage.from(SCAN_BUCKET).remove([path]);
   if (error) log.warn("scan photo delete failed", { path, reason: error.message });
 }
+
+/** Read a scan-bucket object back (e.g. the front selfie as context for
+ *  outfit analysis or look generation). */
+export async function downloadScanObject(path: string): Promise<Buffer> {
+  const { data, error } = await supabaseAdmin.storage.from(SCAN_BUCKET).download(path);
+  if (error || !data) throw new Error(error?.message ?? "Could not read scan photo");
+  return Buffer.from(await data.arrayBuffer());
+}

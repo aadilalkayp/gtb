@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Camera, ScanFace, TrendingUp } from "lucide-react";
 import {
   Area,
@@ -19,7 +20,10 @@ import {
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { startScan } from "@/lib/api";
-import { Button, Modal, Spinner } from "@/components/ui";
+import { Button, Modal, Spinner, Tabs, type TabDef } from "@/components/ui";
+import { OutfitCheckPanel } from "@/components/OutfitCheckPanel";
+import { LookPreviewPanel } from "@/components/LookPreviewPanel";
+import { CoachChat } from "@/components/CoachChat";
 import { EmptyState } from "@/components/EmptyState";
 import {
   AttributeList,
@@ -46,6 +50,16 @@ export function PortalScan() {
   const type = user?.client?.type ?? "groom";
   const labels = scanCategoryLabels(type);
 
+  const [params, setParams] = useSearchParams();
+  type HubTab = "score" | "outfits" | "looks" | "coach";
+  const hubTab = (params.get("tab") as HubTab | null) ?? "score";
+  const setHubTab = (t: HubTab) => setParams(t === "score" ? {} : { tab: t }, { replace: true });
+  const hubTabs: TabDef<HubTab>[] = [
+    { id: "score", label: "Score" },
+    { id: "outfits", label: "Outfits" },
+    { id: "looks", label: "Looks" },
+    { id: "coach", label: "Coach" },
+  ];
   const [rescanOpen, setRescanOpen] = useState(false);
   const [selfReportOpen, setSelfReportOpen] = useState(false);
   const [photos, setPhotos] = useState<CapturedPhotos>(EMPTY_PHOTOS);
@@ -182,130 +196,159 @@ export function PortalScan() {
 
   return (
     <div className="animate-fade-up space-y-5">
-      <section className="card p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <ReadinessHero
-            readiness={groom?.overall ?? latest.readinessScore ?? 0}
-            appearance={latest.readinessScore ?? undefined}
-            daysToWedding={Math.max(
-              0,
-              Math.ceil(
-                (new Date(latest.weddingDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000),
-              ),
-            )}
-          />
-          <Button variant="secondary" onClick={() => setRescanOpen(true)}>
-            <Camera className="mr-1.5 h-4 w-4" /> Rescan
-          </Button>
-        </div>
-        {delta != null && delta !== 0 && (
-          <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-success">
-            <TrendingUp className="h-4 w-4" />
-            {delta > 0
-              ? `Your appearance score improved by ${delta} points since your last scan.`
-              : `Down ${Math.abs(delta)} points since last scan — this week's roadmap gets you back.`}
-          </p>
-        )}
-        <div className="mt-6">
-          <GroomScoreGrid
-            score={{
-              appearance: latest.readinessScore ?? 0,
-              fitness: latest.fitnessScore,
-              confidence: latest.confidenceScore,
-              prepProgress,
-              scores,
-              labels,
-            }}
-            onUnlockStyle={() => setRescanOpen(true)}
-            onUnlockSelfReport={() => setSelfReportOpen(true)}
-          />
-        </div>
-        {(latest.fitnessScore != null || latest.confidenceScore != null) && (
-          <button
-            type="button"
-            onClick={() => setSelfReportOpen(true)}
-            className="mt-3 text-xs font-medium text-primary hover:underline"
-          >
-            Update my fitness & confidence answers
-          </button>
-        )}
-      </section>
+      <Tabs tabs={hubTabs} active={hubTab} onChange={setHubTab} />
 
-      {chartData.length > 1 && (
-        <section className="card p-5">
-          <h2 className="text-sm font-semibold">Your progress</h2>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Appearance score, scan after scan — compared with yourself only.
-          </p>
-          <div className="mt-3 h-48 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="gradReadiness" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                <XAxis
-                  dataKey="label"
-                  tickLine={false}
-                  axisLine={false}
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                />
-                <YAxis
-                  domain={[0, 100]}
-                  tickLine={false}
-                  axisLine={false}
-                  width={40}
-                  tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "hsl(var(--surface))",
-                    borderRadius: 10,
-                    border: "1px solid hsl(var(--border))",
-                    fontSize: 13,
-                    boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="appearance"
-                  stroke="hsl(var(--primary))"
-                  strokeWidth={2.5}
-                  fill="url(#gradReadiness)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+      {hubTab === "outfits" && (
+        <section className="card p-6">
+          <OutfitCheckPanel scanId={latest.id} />
+        </section>
+      )}
+      {hubTab === "looks" && (
+        <section className="card p-6">
+          <LookPreviewPanel scanId={latest.id} type={type} />
+        </section>
+      )}
+      {hubTab === "coach" && (
+        <section className="card p-6">
+          <CoachChat scanId={latest.id} />
         </section>
       )}
 
-      <section className="card space-y-5 p-6">
-        <ScoreBars scores={scores} labels={labels} />
-        <FocusAreas
-          areas={(latest.focusAreas as { area: string; weight: number }[] | null) ?? []}
-        />
-        <AttributeList
-          attributes={
-            (latest.attributes as { key: string; label: string; score: number }[] | null) ?? []
-          }
-        />
-        <HighlightsAndSuggestions highlights={latest.highlights} suggestions={latest.suggestions} />
-      </section>
+      {hubTab === "score" && (
+        <>
+          <section className="card p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <ReadinessHero
+                readiness={groom?.overall ?? latest.readinessScore ?? 0}
+                appearance={latest.readinessScore ?? undefined}
+                daysToWedding={Math.max(
+                  0,
+                  Math.ceil(
+                    (new Date(latest.weddingDate).getTime() - Date.now()) / (24 * 60 * 60 * 1000),
+                  ),
+                )}
+              />
+              <Button variant="secondary" onClick={() => setRescanOpen(true)}>
+                <Camera className="mr-1.5 h-4 w-4" /> Rescan
+              </Button>
+            </div>
+            {delta != null && delta !== 0 && (
+              <p className="mt-3 flex items-center gap-1.5 text-sm font-medium text-success">
+                <TrendingUp className="h-4 w-4" />
+                {delta > 0
+                  ? `Your appearance score improved by ${delta} points since your last scan.`
+                  : `Down ${Math.abs(delta)} points since last scan — this week's roadmap gets you back.`}
+              </p>
+            )}
+            <div className="mt-6">
+              <GroomScoreGrid
+                score={{
+                  appearance: latest.readinessScore ?? 0,
+                  fitness: latest.fitnessScore,
+                  confidence: latest.confidenceScore,
+                  prepProgress,
+                  scores,
+                  labels,
+                }}
+                onUnlockStyle={() => setRescanOpen(true)}
+                onUnlockSelfReport={() => setSelfReportOpen(true)}
+              />
+            </div>
+            {(latest.fitnessScore != null || latest.confidenceScore != null) && (
+              <button
+                type="button"
+                onClick={() => setSelfReportOpen(true)}
+                className="mt-3 text-xs font-medium text-primary hover:underline"
+              >
+                Update my fitness & confidence answers
+              </button>
+            )}
+          </section>
 
-      {(roadmap?.length ?? 0) > 0 && (
-        <section className="card p-6">
-          <h2 className="font-display text-lg font-semibold">Your prep roadmap</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Tick items off as you go — every on-time tick lifts your readiness, and weekly focus
-            refreshes with every rescan.
-          </p>
-          <div className="mt-4">
-            <RoadmapList items={roadmap ?? []} onToggle={toggleItem} />
-          </div>
-        </section>
+          {chartData.length > 1 && (
+            <section className="card p-5">
+              <h2 className="text-sm font-semibold">Your progress</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Appearance score, scan after scan — compared with yourself only.
+              </p>
+              <div className="mt-3 h-48 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="gradReadiness" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity={0.35} />
+                        <stop offset="100%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="hsl(var(--border))"
+                      vertical={false}
+                    />
+                    <XAxis
+                      dataKey="label"
+                      tickLine={false}
+                      axisLine={false}
+                      tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <YAxis
+                      domain={[0, 100]}
+                      tickLine={false}
+                      axisLine={false}
+                      width={40}
+                      tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }}
+                    />
+                    <Tooltip
+                      contentStyle={{
+                        background: "hsl(var(--surface))",
+                        borderRadius: 10,
+                        border: "1px solid hsl(var(--border))",
+                        fontSize: 13,
+                        boxShadow: "0 8px 24px rgba(0,0,0,0.08)",
+                      }}
+                    />
+                    <Area
+                      type="monotone"
+                      dataKey="appearance"
+                      stroke="hsl(var(--primary))"
+                      strokeWidth={2.5}
+                      fill="url(#gradReadiness)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </section>
+          )}
+
+          <section className="card space-y-5 p-6">
+            <ScoreBars scores={scores} labels={labels} />
+            <FocusAreas
+              areas={(latest.focusAreas as { area: string; weight: number }[] | null) ?? []}
+            />
+            <AttributeList
+              attributes={
+                (latest.attributes as { key: string; label: string; score: number }[] | null) ?? []
+              }
+            />
+            <HighlightsAndSuggestions
+              highlights={latest.highlights}
+              suggestions={latest.suggestions}
+            />
+          </section>
+
+          {(roadmap?.length ?? 0) > 0 && (
+            <section className="card p-6">
+              <h2 className="font-display text-lg font-semibold">Your prep roadmap</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Tick items off as you go — every on-time tick lifts your readiness, and weekly focus
+                refreshes with every rescan.
+              </p>
+              <div className="mt-4">
+                <RoadmapList items={roadmap ?? []} onToggle={toggleItem} />
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {rescanModal}

@@ -343,3 +343,263 @@ function stubAnalysis(
     modelVersion: "stub",
   };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 6 — outfit analysis, look previews (image generation), coach (text)
+// ---------------------------------------------------------------------------
+
+const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.6-flash-image";
+
+async function callGemini(model: string, body: unknown): Promise<GeminiResponse> {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": API_KEY },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => "");
+    throw new Error(`Gemini request failed (${res.status}): ${detail.slice(0, 300)}`);
+  }
+  return (await res.json()) as GeminiResponse;
+}
+
+interface GeminiResponse {
+  candidates?: {
+    content?: { parts?: { text?: string; inlineData?: { mimeType: string; data: string } }[] };
+  }[];
+  modelVersion?: string;
+}
+
+function firstText(json: GeminiResponse): string {
+  const t = json.candidates?.[0]?.content?.parts?.find((p) => p.text)?.text;
+  if (!t) throw new Error("Gemini returned no content");
+  return t;
+}
+
+// ---- Outfit analysis --------------------------------------------------------
+
+export interface GarmentInput {
+  data: Buffer;
+  mimeType: string;
+}
+
+export interface OutfitResult {
+  index: number;
+  verdict: "great" | "good" | "avoid";
+  /** 0–100 wedding-suitability score for this garment on this person. */
+  score: number;
+  colorNote: string;
+  fitNote: string;
+  suggestion: string;
+}
+
+export interface OutfitAnalysis {
+  results: OutfitResult[];
+  palette: { tryColors: string[]; avoidColors: string[]; summary: string };
+  modelVersion: string;
+}
+
+const OUTFIT_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    results: {
+      type: "ARRAY",
+      items: {
+        type: "OBJECT",
+        properties: {
+          index: { type: "INTEGER", description: "1-based garment photo number" },
+          verdict: { type: "STRING", enum: ["great", "good", "avoid"] },
+          score: {
+            type: "INTEGER",
+            description: "0-100 suitability for the wedding on this person",
+          },
+          colorNote: { type: "STRING", description: "one sentence on colour vs skin tone" },
+          fitNote: {
+            type: "STRING",
+            description: "one sentence on fit/silhouette (or 'fit not visible' if on a hanger)",
+          },
+          suggestion: { type: "STRING", description: "one concrete, actionable improvement" },
+        },
+        required: ["index", "verdict", "score", "colorNote", "fitNote", "suggestion"],
+      },
+    },
+    tryColors: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "3-5 colour names that flatter this skin tone",
+    },
+    avoidColors: {
+      type: "ARRAY",
+      items: { type: "STRING" },
+      description: "2-4 colour names to avoid near the face",
+    },
+    summary: { type: "STRING", description: "two sentences of overall styling direction" },
+  },
+  required: ["results", "tryColors", "avoidColors", "summary"],
+} as const;
+
+export async function analyzeOutfits(args: {
+  type: ScanClientType;
+  face: GarmentInput | null;
+  garments: GarmentInput[];
+}): Promise<OutfitAnalysis> {
+  if (!geminiConfigured) return stubOutfits(args.garments.length);
+
+  const who = args.type === "bride" ? "bride-to-be" : "groom-to-be";
+  const prompt = `You are a wedding stylist advising a ${who}. ${
+    args.face
+      ? "Photo 1 is their face — read skin tone and undertone from it."
+      : "No face photo is available; give general guidance."
+  } The following ${args.garments.length} photo(s) are garments they are considering (on a hanger, laid flat, or worn).
+
+For each garment, judge: colour harmony with their skin tone (the biggest lever), fit/silhouette if it is being worn (say "fit not visible" if not), and suitability for wedding-related events and photography. Be direct and specific in plain language ("this washes you out — try navy"), never snobbish, never brand names. Then give a personal palette: colours to try and colours to avoid near the face, plus a two-sentence direction.
+
+Appearance and styling only — no comments on body weight beyond fit, nothing medical.`;
+
+  const parts: unknown[] = [{ text: prompt }];
+  if (args.face)
+    parts.push({
+      inline_data: { mime_type: args.face.mimeType, data: args.face.data.toString("base64") },
+    });
+  for (const g of args.garments) {
+    parts.push({ inline_data: { mime_type: g.mimeType, data: g.data.toString("base64") } });
+  }
+  const json = await callGemini(GEMINI_MODEL, {
+    contents: [{ parts }],
+    generationConfig: {
+      temperature: 0.2,
+      responseMimeType: "application/json",
+      responseSchema: OUTFIT_SCHEMA,
+    },
+  });
+  const raw = JSON.parse(firstText(json)) as {
+    results: OutfitResult[];
+    tryColors: string[];
+    avoidColors: string[];
+    summary: string;
+  };
+  const verdicts = new Set(["great", "good", "avoid"]);
+  return {
+    results: (raw.results ?? []).slice(0, args.garments.length).map((r, i) => ({
+      index: Number.isFinite(r.index) ? Number(r.index) : i + 1,
+      verdict: verdicts.has(r.verdict) ? r.verdict : "good",
+      score: clamp(r.score),
+      colorNote: String(r.colorNote ?? ""),
+      fitNote: String(r.fitNote ?? ""),
+      suggestion: String(r.suggestion ?? ""),
+    })),
+    palette: {
+      tryColors: (raw.tryColors ?? []).filter((c) => typeof c === "string").slice(0, 5),
+      avoidColors: (raw.avoidColors ?? []).filter((c) => typeof c === "string").slice(0, 4),
+      summary: String(raw.summary ?? ""),
+    },
+    modelVersion: json.modelVersion ?? GEMINI_MODEL,
+  };
+}
+
+function stubOutfits(n: number): OutfitAnalysis {
+  const verdicts: OutfitResult["verdict"][] = ["great", "good", "avoid"];
+  return {
+    results: Array.from({ length: n }, (_, i) => ({
+      index: i + 1,
+      verdict: verdicts[i % 3]!,
+      score: [82, 68, 41][i % 3]!,
+      colorNote: [
+        "Deep tone sits well against your skin.",
+        "Works, but a shade deeper would lift your face more.",
+        "This washes you out under daylight.",
+      ][i % 3]!,
+      fitNote: "Fit not visible",
+      suggestion: [
+        "Pair with a darker trouser to anchor it.",
+        "Try the same cut in navy or forest.",
+        "Swap for burgundy or charcoal near the face.",
+      ][i % 3]!,
+    })),
+    palette: {
+      tryColors: ["Navy", "Burgundy", "Forest green", "Charcoal"],
+      avoidColors: ["Pale yellow", "Light grey", "Washed pastels"],
+      summary:
+        "Deep, saturated colours give your face the most contrast in photographs. Keep lighter shades away from the face or pair them with a strong dark layer.",
+    },
+    modelVersion: "stub",
+  };
+}
+
+// ---- Look previews (image generation) ---------------------------------------
+
+export interface GeneratedImage {
+  data: Buffer;
+  mimeType: string;
+  modelVersion: string;
+}
+
+/**
+ * Render a hairstyle/beard onto the person's own selfie. Uses the image-capable
+ * Gemini model; identity, lighting and background are preserved by instruction.
+ * Throws on provider errors (caller records the failure).
+ */
+export async function generateLook(args: {
+  face: GarmentInput;
+  stylePrompt: string;
+  kind: "hairstyle" | "beard";
+}): Promise<GeneratedImage> {
+  if (!geminiConfigured) {
+    // Stub: hand back the original so the UI path is testable end to end.
+    return { data: args.face.data, mimeType: args.face.mimeType, modelVersion: "stub" };
+  }
+  const instruction = `Edit this photo of a person. Change ONLY their ${args.kind === "beard" ? "facial hair" : "hairstyle"} to: ${args.stylePrompt}. Keep their face, identity, skin, expression, clothing, lighting, camera angle and background exactly the same. Photorealistic, natural result, no text or watermark.`;
+  const json = await callGemini(GEMINI_IMAGE_MODEL, {
+    contents: [
+      {
+        parts: [
+          { text: instruction },
+          {
+            inline_data: { mime_type: args.face.mimeType, data: args.face.data.toString("base64") },
+          },
+        ],
+      },
+    ],
+    generationConfig: { responseModalities: ["TEXT", "IMAGE"] },
+  });
+  const part = json.candidates?.[0]?.content?.parts?.find((p) => p.inlineData);
+  if (!part?.inlineData) throw new Error("Image model returned no image");
+  return {
+    data: Buffer.from(part.inlineData.data, "base64"),
+    mimeType: part.inlineData.mimeType || "image/png",
+    modelVersion: json.modelVersion ?? GEMINI_IMAGE_MODEL,
+  };
+}
+
+// ---- Coach (text) -----------------------------------------------------------
+
+export interface CoachTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export async function coachAnswer(args: {
+  system: string;
+  history: CoachTurn[];
+  question: string;
+}): Promise<{ text: string; modelVersion: string }> {
+  if (!geminiConfigured) {
+    return {
+      text: "[stub coach — set GEMINI_API_KEY] Based on your scan, keep the daily routine consistent this week: cleanser and moisturizer morning and night, sunscreen every morning, and tick off this week's roadmap item. For anything medical, please see a professional.",
+      modelVersion: "stub",
+    };
+  }
+  const json = await callGemini(GEMINI_MODEL, {
+    systemInstruction: { parts: [{ text: args.system }] },
+    contents: [
+      ...args.history.slice(-10).map((t) => ({
+        role: t.role === "assistant" ? "model" : "user",
+        parts: [{ text: t.content }],
+      })),
+      { role: "user", parts: [{ text: args.question }] },
+    ],
+    generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
+  });
+  return { text: firstText(json).trim(), modelVersion: json.modelVersion ?? GEMINI_MODEL };
+}
