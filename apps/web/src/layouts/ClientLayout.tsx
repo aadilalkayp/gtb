@@ -23,7 +23,7 @@ export function ClientLayout() {
 
   return (
     <div data-theme={type === "bride" ? "bride" : undefined} className="min-h-screen bg-background">
-      <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur-sm">
+      <header className="sticky top-0 z-40 border-b border-border bg-surface/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <div className="flex items-center gap-2">
             <img src="/logo.png" alt="GTB" className="h-8 w-8 rounded-lg" />

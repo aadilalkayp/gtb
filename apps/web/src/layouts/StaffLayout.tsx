@@ -12,7 +12,7 @@ export function StaffLayout() {
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center justify-end gap-1 border-b border-border bg-surface/80 px-6 backdrop-blur-sm">
+        <header className="relative z-40 flex h-14 shrink-0 items-center justify-end gap-1 border-b border-border bg-surface/80 px-6 backdrop-blur-sm">
           <NotificationsBell />
           <button
             onClick={() => void signOut()}
