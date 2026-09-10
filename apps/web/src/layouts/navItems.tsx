@@ -48,7 +48,9 @@ export const STAFF_NAV: NavItem[] = [
     label: "Styling Operations",
     to: "/styling-operations",
     icon: Scissors,
-    visible: (r) => canAny(r, ["client.view_all", "session.mark_complete"]),
+    // Styling-only: fitness/skincare consultants share session.mark_complete
+    // but must not see the styling team's section (client feedback).
+    visible: (r) => canAny(r, ["styling.manage"]),
   },
   {
     label: "Payments",
