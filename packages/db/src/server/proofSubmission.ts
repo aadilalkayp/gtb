@@ -2,43 +2,58 @@ import { prisma } from "../index.js";
 import { LEAD_PHASE_ORDER, type LeadPhase } from "@gtb/shared";
 import { logActivity } from "./activityLog.js";
 
-/** Thrown when a concurrent submit won the race (or the installment is no longer payable). */
+/** Thrown when the submission can't be accepted (proof re-use, no balance…). */
 export class ProofConflictError extends Error {
-  constructor() {
-    super("This installment can no longer accept a proof");
+  constructor(message = "This payment can no longer be submitted") {
+    super(message);
   }
 }
 
-export interface SubmitProofInput {
-  installmentId: string;
-  proofDocumentId: string;
+export interface SubmitPaymentInput {
+  /** Portal user submitting (must be the client's own user). */
   actorId: string;
+  amount: number;
+  proofDocumentId: string;
 }
 
 /**
- * Client submits a payment proof (SRS §8.3 step 7) — STATE-6 core.
- *
- * The installment → proof_submitted write and the client → leadPhase:
- * payment_submitted advance happen in ONE transaction (previously two gateway
- * calls that could desync). The conditional updateMany (`status IN payable`)
- * is the guard against double-submit; the proof document must belong to the
- * submitting client.
+ * Client submits a payment of any amount with a proof (SRS §8.3 step 7) —
+ * STATE-6 core. Creates a pending_review Payment and advances the client to
+ * leadPhase: payment_submitted in ONE transaction. The proof document must
+ * belong to the submitting client, and the amount may not exceed what's left
+ * of the balance once other still-under-review submissions are counted.
  */
-export async function submitPaymentProof(input: SubmitProofInput): Promise<void> {
-  const installment = await prisma.installment.findUnique({
-    where: { id: input.installmentId },
+export async function submitPayment(input: SubmitPaymentInput): Promise<{ paymentId: string }> {
+  if (!Number.isInteger(input.amount) || input.amount <= 0) {
+    throw new Error("BAD_AMOUNT");
+  }
+
+  const client = await prisma.client.findFirst({
+    where: { userId: input.actorId },
     select: {
       id: true,
-      status: true,
-      clientPlan: { select: { client: { select: { id: true, userId: true, leadPhase: true } } } },
+      leadPhase: true,
+      clientPlan: {
+        select: {
+          id: true,
+          priceAtEnrollment: true,
+          payments: { select: { amount: true, status: true } },
+        },
+      },
     },
   });
-  if (!installment) throw new Error("NOT_FOUND");
-  const client = installment.clientPlan.client;
-  if (client.userId !== input.actorId) throw new Error("FORBIDDEN");
-  if (!["pending", "overdue", "rejected"].includes(installment.status)) {
-    throw new ProofConflictError();
-  }
+  if (!client || !client.clientPlan) throw new Error("NO_PLAN");
+  const plan = client.clientPlan;
+
+  const approved = plan.payments
+    .filter((p) => p.status === "approved")
+    .reduce((t, p) => t + p.amount, 0);
+  const underReview = plan.payments
+    .filter((p) => p.status === "pending_review")
+    .reduce((t, p) => t + p.amount, 0);
+  const submittable = Math.max(plan.priceAtEnrollment - approved - underReview, 0);
+  if (submittable === 0) throw new ProofConflictError("There is nothing left to pay");
+  if (input.amount > submittable) throw new Error("AMOUNT_TOO_HIGH");
 
   const proof = await prisma.document.findUnique({
     where: { id: input.proofDocumentId },
@@ -47,20 +62,25 @@ export async function submitPaymentProof(input: SubmitProofInput): Promise<void>
   if (!proof || proof.clientId !== client.id) throw new Error("Invalid proof document");
 
   try {
-    await prisma.$transaction(async (tx) => {
-      const updated = await tx.installment.updateMany({
-        where: { id: installment.id, status: { in: ["pending", "overdue", "rejected"] } },
-        data: { status: "proof_submitted", proofDocumentId: input.proofDocumentId },
+    return await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          clientPlanId: plan.id,
+          amount: input.amount,
+          status: "pending_review",
+          proofDocumentId: input.proofDocumentId,
+          submittedById: input.actorId,
+        },
+        select: { id: true },
       });
-      if (updated.count !== 1) throw new ProofConflictError();
 
       await logActivity(tx, {
-        entityType: "installment",
-        entityId: installment.id,
-        action: "status_changed",
+        entityType: "payment",
+        entityId: payment.id,
+        action: "created",
         performedById: input.actorId,
         summary: "Payment proof submitted",
-        changes: { status: "proof_submitted", proofDocumentId: input.proofDocumentId },
+        changes: { amount: input.amount, proofDocumentId: input.proofDocumentId },
       });
 
       if (LEAD_PHASE_ORDER[client.leadPhase as LeadPhase] < LEAD_PHASE_ORDER.payment_submitted) {
@@ -69,13 +89,16 @@ export async function submitPaymentProof(input: SubmitProofInput): Promise<void>
           data: { leadPhase: "payment_submitted" },
         });
       }
+      return { paymentId: payment.id };
     });
   } catch (e) {
     // proofDocumentId is globally @unique: re-submitting a document that is
-    // already linked to another installment (e.g. one rejected earlier, where
+    // already attached to another payment (e.g. one rejected earlier, where
     // the link is intentionally kept for audit — MISC-1) is a conflict the
     // client can act on, not a 500.
-    if (isUniqueViolation(e)) throw new ProofConflictError();
+    if (isUniqueViolation(e)) {
+      throw new ProofConflictError("This proof was already submitted — upload a fresh one");
+    }
     throw e;
   }
 }

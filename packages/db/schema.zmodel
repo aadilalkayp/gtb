@@ -92,13 +92,17 @@ enum SessionStatus {
   cancelled
 }
 
-enum InstallmentStatus {
-  pending
-  proof_submitted
+enum PaymentStatus {
+  pending_review
   approved
   rejected
-  overdue
-  waived
+}
+
+// A `waiver` settles balance without money changing hands (cancellation
+// write-offs, discounts) — excluded from cash/collections metrics.
+enum PaymentKind {
+  payment
+  waiver
 }
 
 enum PaymentMethod {
@@ -291,7 +295,8 @@ model User {
   convertedClients  Client[]           @relation("ConvertedBy")
   assignments         Assignment[]     @relation("StaffAssignments")
   assignmentsMade     Assignment[]     @relation("AssignmentAssigner")
-  installmentsApproved Installment[]   @relation("InstallmentApprover")
+  paymentsApproved    Payment[]        @relation("PaymentApprover")
+  paymentsSubmitted   Payment[]        @relation("PaymentSubmitter")
   consultantRates     ConsultantRate[]
   sessions          Session[]          @relation("ConsultantSessions")
   followUps         FollowUp[]         @relation("CroFollowUps")
@@ -493,6 +498,8 @@ model Plan {
   durationMonths  Int
   price           Int // whole INR
   description     String?
+  // TEMPLATE only: pre-fills the per-client milestone schedule at enrollment
+  // (evenly split); staff can edit the schedule per client.
   installmentCount Int       @default(1)
   isActive        Boolean    @default(true)
 
@@ -541,7 +548,8 @@ model ClientPlan {
   servicesSnapshot Json?
   enrolledAt       DateTime @default(now())
 
-  installments Installment[]
+  milestones PaymentMilestone[]
+  payments   Payment[]
 
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', client.assignments?[staffId == auth().id && isActive])
@@ -553,30 +561,21 @@ model ClientPlan {
   @@allow('create,update', auth().role == founder || auth().role == ops_head)
 }
 
-model Installment {
-  id                String            @id @default(uuid()) @deny('update', true)
-  clientPlanId      String @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
-  clientPlan        ClientPlan        @relation(fields: [clientPlanId], references: [id], onDelete: Restrict)
-  installmentNumber Int @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
-  amount            Int @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
-  dueDate           DateTime @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
-  status            InstallmentStatus @default(pending)
-  paymentMethod     PaymentMethod? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
-  proofDocumentId   String?           @unique
-  proofDocument     Document?         @relation("InstallmentProof", fields: [proofDocumentId], references: [id])
-  approvedById      String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
-  approvedBy        User?             @relation("InstallmentApprover", fields: [approvedById], references: [id])
-  approvedAt        DateTime? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
-  rejectionReason   String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
-  notes             String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+/// An expected payment checkpoint — a plan for the money, not the money itself
+/// (that's Payment). "Behind"/"overdue" is DERIVED: at each due date, is the
+/// cumulative approved amount >= the cumulative expected amount? Never stored.
+model PaymentMilestone {
+  id              String     @id @default(uuid()) @deny('update', true)
+  clientPlanId    String @deny('update', true)
+  clientPlan      ClientPlan @relation(fields: [clientPlanId], references: [id], onDelete: Restrict)
+  milestoneNumber Int
+  amount          Int
+  dueDate         DateTime
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  // STATE-4: the DB backstop for the double-approval race — an installment can
-  // only ever be approved once per (plan, number).
-  @@unique([clientPlanId, installmentNumber])
-  @@index([status])
+  @@unique([clientPlanId, milestoneNumber])
   @@index([dueDate])
   // DATA-5: Postgres doesn't auto-index FKs; payment pages filter by plan.
   @@index([clientPlanId])
@@ -584,8 +583,47 @@ model Installment {
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', clientPlan.client.assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
   @@allow('read', clientPlan.client.userId == auth().id)
-  // Writes mirror the read scope: a CRO touches only installments of clients
-  // they are actively assigned to — never arbitrary plans across the business.
+  // Schedule edits go exclusively through the payments/milestones server route
+  // (sum-equals-price invariant + audit log live there). Gateway writes are
+  // admin-only correction paths.
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+}
+
+/// An actual payment (or waiver) against the plan balance. Clients submit any
+/// amount with a proof; staff review it (approve/reject) or record money
+/// directly. Approved rows reduce the balance; the first approved real payment
+/// converts the lead (SRS §8.3/§8.5).
+model Payment {
+  id              String        @id @default(uuid()) @deny('update', true)
+  clientPlanId    String @deny('update', true)
+  clientPlan      ClientPlan    @relation(fields: [clientPlanId], references: [id], onDelete: Restrict)
+  amount          Int @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  kind            PaymentKind   @default(payment) @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  status          PaymentStatus @default(pending_review)
+  paymentMethod   PaymentMethod? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  proofDocumentId String?       @unique
+  proofDocument   Document?     @relation("PaymentProof", fields: [proofDocumentId], references: [id])
+  submittedById   String? @deny('update', true)
+  submittedBy     User?         @relation("PaymentSubmitter", fields: [submittedById], references: [id])
+  approvedById    String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  approvedBy      User?         @relation("PaymentApprover", fields: [approvedById], references: [id])
+  approvedAt      DateTime? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  rejectionReason String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  notes           String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([approvedAt])
+  // DATA-5: Postgres doesn't auto-index FKs; payment pages filter by plan.
+  @@index([clientPlanId])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', clientPlan.client.assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
+  @@allow('read', clientPlan.client.userId == auth().id)
+  // Writes mirror the read scope: a CRO touches only payments of clients they
+  // are actively assigned to — never arbitrary plans across the business.
   @@allow('create', auth().role == founder || auth().role == ops_head)
   @@allow('create', auth().role == cro && clientPlan.client.assignments?[staffId == auth().id && isActive && role == cro])
   @@allow('update', auth().role == founder || auth().role == ops_head)
@@ -595,11 +633,11 @@ model Installment {
   // the nullable pre-value trips ZenStack's null-comparison semantics and
   // denies legitimate first approvals.
   @@deny('update', auth().role == cro && future().approvedById != null && future().approvedById != auth().id)
-  // Clients have NO gateway write path: proof submission goes exclusively
-  // through the payments/submit-proof server route, which validates that the
-  // proof document belongs to the client and advances leadPhase atomically
-  // (SEC-2 + STATE-6 — a gateway path would let a client attach any document
-  // id, including another client's, as their payment proof).
+  // Clients have NO gateway write path: payment submission goes exclusively
+  // through the payments/submit server route, which validates the amount
+  // against the balance, that the proof document belongs to the client, and
+  // advances leadPhase atomically (SEC-2 + STATE-6 — a gateway path would let
+  // a client attach any document id, including another client's, as proof).
 }
 
 // ============================================================================
@@ -792,7 +830,7 @@ model Document {
 
   createdAt DateTime @default(now())
 
-  installmentProof Installment? @relation("InstallmentProof")
+  paymentProof     Payment?     @relation("PaymentProof")
   expenseReceipt   Expense?     @relation("ExpenseReceipt")
 
   @@index([clientId])

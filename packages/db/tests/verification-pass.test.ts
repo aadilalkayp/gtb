@@ -3,7 +3,7 @@ import { prisma, getEnhancedPrisma } from "../src/index.js";
 import { cancelSession } from "../src/server/sessionCancellation.js";
 import { cancelClientPlan } from "../src/server/clientCancellation.js";
 import { rescheduleSession } from "../src/server/sessionReschedule.js";
-import { submitPaymentProof, ProofConflictError } from "../src/server/proofSubmission.js";
+import { submitPayment, ProofConflictError } from "../src/server/proofSubmission.js";
 import { activateClientPlan } from "../src/server/clientActivation.js";
 import { runDailyJobs } from "../src/server/cronJobs.js";
 import {
@@ -11,7 +11,8 @@ import {
   seedClient,
   seedPlan,
   seedClientPlan,
-  seedInstallment,
+  seedMilestone,
+  seedPayment,
   seedAssignment,
   seedSession,
   seedDocument,
@@ -30,7 +31,7 @@ async function expectDenied(p: Promise<unknown>) {
 // Gateway policy gaps found in the 2026-08-14 verification pass
 // ---------------------------------------------------------------------------
 
-describe("Verification — Installment write scoping (V-1/V-5)", () => {
+describe("Verification — Payment write scoping (V-1/V-5)", () => {
   async function scene() {
     await seedUser({ id: "cro1", role: "cro" });
     await seedUser({ id: "cro2", role: "cro" });
@@ -41,46 +42,54 @@ describe("Verification — Installment write scoping (V-1/V-5)", () => {
     return { c, cp };
   }
 
-  it("denies a CRO updating an installment of a client they are not assigned to", async () => {
+  it("denies a CRO updating a payment of a client they are not assigned to", async () => {
     const { cp } = await scene();
-    const inst = await seedInstallment(cp.id, 1);
+    const p = await seedPayment(cp.id);
     await expectDenied(
-      as("cro2", "cro").installment.update({
-        where: { id: inst.id },
+      as("cro2", "cro").payment.update({
+        where: { id: p.id },
         data: { status: "approved", approvedById: "cro2", approvedAt: new Date() },
       }),
     );
-    const row = await prisma.installment.findUniqueOrThrow({ where: { id: inst.id } });
-    expect(row.status).toBe("pending");
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: p.id } });
+    expect(row.status).toBe("pending_review");
   });
 
   it("allows the assigned CRO to update, but not to attribute the approval to someone else", async () => {
     const { cp } = await scene();
-    const inst = await seedInstallment(cp.id, 1);
+    const p = await seedPayment(cp.id);
     await expectDenied(
-      as("cro1", "cro").installment.update({
-        where: { id: inst.id },
+      as("cro1", "cro").payment.update({
+        where: { id: p.id },
         data: { status: "approved", approvedById: "cro2", approvedAt: new Date() },
       }),
     );
-    await as("cro1", "cro").installment.update({
-      where: { id: inst.id },
+    await as("cro1", "cro").payment.update({
+      where: { id: p.id },
       data: { status: "approved", approvedById: "cro1", approvedAt: new Date() },
     });
-    const row = await prisma.installment.findUniqueOrThrow({ where: { id: inst.id } });
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: p.id } });
     expect(row.approvedById).toBe("cro1");
   });
 
-  it("denies a CRO creating installments on an unassigned client's plan", async () => {
+  it("denies a CRO creating payments on an unassigned client's plan", async () => {
     const { cp } = await scene();
     await expectDenied(
-      as("cro2", "cro").installment.create({
-        data: {
-          clientPlanId: cp.id,
-          installmentNumber: 9,
-          amount: 1,
-          dueDate: new Date(),
-        },
+      as("cro2", "cro").payment.create({
+        data: { clientPlanId: cp.id, amount: 1 },
+      }),
+    );
+  });
+
+  it("denies a CRO rewriting the milestone schedule (admin/server-route only)", async () => {
+    const { cp } = await scene();
+    const m = await seedMilestone(cp.id, 1);
+    await expectDenied(
+      as("cro1", "cro").paymentMilestone.update({ where: { id: m.id }, data: { amount: 1 } }),
+    );
+    await expectDenied(
+      as("cro1", "cro").paymentMilestone.create({
+        data: { clientPlanId: cp.id, milestoneNumber: 9, amount: 1, dueDate: new Date() },
       }),
     );
   });
@@ -327,12 +336,10 @@ describe("Verification — proof re-submission P2002 → conflict", () => {
     const c = await seedClient({ id: "c1", userId: "client1" });
     const plan = await seedPlan();
     const cp = await seedClientPlan(c.id, plan.id);
-    const i1 = await seedInstallment(cp.id, 1);
-    const i2 = await seedInstallment(cp.id, 2);
     const doc = await seedDocument({ clientId: c.id, type: "payment_proof", uploadedById: "client1" });
-    await submitPaymentProof({ installmentId: i1.id, proofDocumentId: doc.id, actorId: "client1" });
+    await submitPayment({ actorId: "client1", amount: 10000, proofDocumentId: doc.id });
     await expect(
-      submitPaymentProof({ installmentId: i2.id, proofDocumentId: doc.id, actorId: "client1" }),
+      submitPayment({ actorId: "client1", amount: 10000, proofDocumentId: doc.id }),
     ).rejects.toBeInstanceOf(ProofConflictError);
   });
 });
@@ -376,38 +383,6 @@ describe("Verification — activation actor + seed guard (MISC-6)", () => {
 });
 
 describe("Verification — cron idempotency & day-boundary fixes", () => {
-  it("does not flip an installment overdue on its due date", async () => {
-    await seedUser({ id: "cro1", role: "cro" });
-    const c = await seedClient({ id: "c1", status: "active" });
-    const plan = await seedPlan();
-    const cp = await seedClientPlan(c.id, plan.id);
-    await prisma.installment.create({
-      data: {
-        clientPlanId: cp.id,
-        installmentNumber: 1,
-        amount: 1000,
-        dueDate: new Date(), // due today (IST) — not yet overdue
-        status: "pending",
-      },
-    });
-    await prisma.installment.create({
-      data: {
-        clientPlanId: cp.id,
-        installmentNumber: 2,
-        amount: 1000,
-        dueDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), // clearly past
-        status: "pending",
-      },
-    });
-    await runDailyJobs();
-    const rows = await prisma.installment.findMany({
-      where: { clientPlanId: cp.id },
-      orderBy: { installmentNumber: "asc" },
-    });
-    expect(rows[0].status).toBe("pending");
-    expect(rows[1].status).toBe("overdue");
-  });
-
   it("does not regenerate a satisfaction check after the CRO completes it", async () => {
     await seedUser({ id: "cro1", role: "cro" });
     const c = await seedClient({ id: "c1", status: "active" });
@@ -433,21 +408,13 @@ describe("Verification — cron idempotency & day-boundary fixes", () => {
     expect(count).toBe(1);
   });
 
-  it("payment reminders are one-per-installment-window even after completion", async () => {
+  it("payment reminders are one-per-milestone-window even after completion", async () => {
     await seedUser({ id: "cro1", role: "cro" });
     const c = await seedClient({ id: "c1", status: "active" });
     await seedAssignment({ clientId: c.id, staffId: "cro1", role: "cro" });
     const plan = await seedPlan();
     const cp = await seedClientPlan(c.id, plan.id);
-    await prisma.installment.create({
-      data: {
-        clientPlanId: cp.id,
-        installmentNumber: 1,
-        amount: 1000,
-        dueDate: new Date(), // due today
-        status: "pending",
-      },
-    });
+    await seedMilestone(cp.id, 1, { amount: 1000, dueDate: new Date() }); // due today
     await runDailyJobs();
     const after1 = await prisma.followUp.count({
       where: { clientId: c.id, type: "payment_reminder" },

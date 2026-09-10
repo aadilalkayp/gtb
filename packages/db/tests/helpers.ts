@@ -79,14 +79,36 @@ export async function seedClientPlan(clientId: string, planId: string) {
   });
 }
 
-export async function seedInstallment(clientPlanId: string, n: number, status = "pending") {
-  return prisma.installment.create({
+export async function seedMilestone(clientPlanId: string, n: number, overrides: { amount?: number; dueDate?: Date } = {}) {
+  return prisma.paymentMilestone.create({
     data: {
       clientPlanId,
-      installmentNumber: n,
-      amount: 30000,
-      dueDate: new Date("2026-09-30T00:00:00.000Z"),
-      status: status as "pending",
+      milestoneNumber: n,
+      amount: overrides.amount ?? 30000,
+      dueDate: overrides.dueDate ?? new Date("2026-09-30T00:00:00.000Z"),
+    },
+  });
+}
+
+export async function seedPayment(
+  clientPlanId: string,
+  overrides: Partial<{
+    amount: number;
+    status: "pending_review" | "approved" | "rejected";
+    kind: "payment" | "waiver";
+    proofDocumentId: string;
+    submittedById: string;
+    approvedAt: Date;
+  }> = {},
+) {
+  const { status = "pending_review", amount = 30000, ...rest } = overrides;
+  return prisma.payment.create({
+    data: {
+      clientPlanId,
+      amount,
+      status,
+      ...(status === "approved" ? { approvedAt: overrides.approvedAt ?? new Date() } : {}),
+      ...rest,
     },
   });
 }
@@ -102,13 +124,13 @@ export async function seedAssignment(args: { clientId: string; staffId: string; 
   });
 }
 
-export async function seedSession(args: { clientId: string; serviceType?: string; consultantId?: string; status?: string; sessionNumber?: number }) {
+export async function seedSession(args: { clientId: string; serviceType?: string; consultantId?: string; status?: string; sessionNumber?: number; scheduledDate?: Date }) {
   return prisma.session.create({
     data: {
       clientId: args.clientId,
       serviceType: (args.serviceType ?? "skincare") as "skincare",
       sessionNumber: args.sessionNumber ?? 1,
-      scheduledDate: new Date("2026-09-01T00:00:00.000Z"),
+      scheduledDate: args.scheduledDate ?? new Date("2026-09-01T00:00:00.000Z"),
       consultantId: args.consultantId,
       status: (args.status ?? "scheduled") as "scheduled",
     },

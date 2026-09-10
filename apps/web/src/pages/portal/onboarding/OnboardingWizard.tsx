@@ -16,8 +16,6 @@ const STEPS: Step[] = [
   { key: "payment", label: "Payment" },
 ];
 
-const PAYABLE = new Set(["pending", "overdue", "rejected"]);
-
 export function OnboardingWizard() {
   const navigate = useNavigate();
   const { user, signOut, refetchUser } = useAuth();
@@ -33,7 +31,13 @@ export function OnboardingWizard() {
       where: { id: clientId ?? "" },
       include: {
         assessment: true,
-        clientPlan: { include: { plan: { include: { services: true } }, installments: true } },
+        clientPlan: {
+          include: {
+            plan: { include: { services: true } },
+            milestones: { orderBy: { milestoneNumber: "asc" } },
+            payments: { select: { amount: true, status: true, kind: true } },
+          },
+        },
       },
     },
     { enabled: Boolean(clientId) },
@@ -46,9 +50,11 @@ export function OnboardingWizard() {
 
   if (isLoading || !client) return <FullPageSpinner />;
 
-  const firstInstallment = client.clientPlan?.installments
-    ?.slice()
-    .sort((a, b) => a.installmentNumber - b.installmentNumber)[0];
+  // The payment step is done once something has been submitted (or approved):
+  // any payment row that isn't rejected counts as "money is on its way".
+  const hasLivePayment = (client.clientPlan?.payments ?? []).some(
+    (p) => p.status !== "rejected",
+  );
 
   const stepKey: "assessment" | "plan" | "payment" | "done" =
     client.status !== "lead"
@@ -57,9 +63,9 @@ export function OnboardingWizard() {
         ? "assessment"
         : !client.clientPlan
           ? "plan"
-          : firstInstallment && PAYABLE.has(firstInstallment.status)
-            ? "payment"
-            : "done";
+          : hasLivePayment
+            ? "done"
+            : "payment";
 
   const currentIndex =
     stepKey === "assessment" ? 0 : stepKey === "plan" ? 1 : stepKey === "payment" ? 2 : 3;

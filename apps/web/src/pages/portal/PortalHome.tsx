@@ -12,7 +12,7 @@ import {
   type ServiceType,
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
-import { installmentDisplayStatus, isInstallmentOverdue } from "@/lib/insights";
+import { planPace } from "@/lib/insights";
 import { Avatar } from "@/components/ui/Avatar";
 import { ProgressRing, StatusBadge } from "@/components/ui";
 import { StylingDayCard } from "@/components/StylingDayCard";
@@ -26,7 +26,12 @@ export function PortalHome() {
     {
       where: { id: clientId ?? "" },
       include: {
-        clientPlan: { include: { installments: true } },
+        clientPlan: {
+          include: {
+            milestones: true,
+            payments: { orderBy: { createdAt: "desc" } },
+          },
+        },
         sessions: { orderBy: { scheduledDate: "asc" } },
         assignments: {
           where: { isActive: true },
@@ -50,14 +55,11 @@ export function PortalHome() {
     (s) => (s.status === "scheduled" || s.status === "delayed") && daysUntil(s.scheduledDate) >= 0,
   );
 
-  const installments = client.clientPlan?.installments ?? [];
-  const paid = installments
-    .filter((i) => i.status === "approved")
-    .reduce((sum, i) => sum + i.amount, 0);
-  const total = client.clientPlan?.priceAtEnrollment ?? 0;
-  const nextDue = [...installments]
-    .filter((i) => i.status !== "approved" && i.status !== "waived")
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())[0];
+  const plan = client.clientPlan ?? null;
+  const pace = plan ? planPace(plan) : null;
+  const paid = pace?.paidTotal ?? 0;
+  const total = plan?.priceAtEnrollment ?? 0;
+  const recentPayments = plan?.payments.slice(0, 3) ?? [];
 
   // Per-service progress rings
   const services = [...new Set(sessions.map((s) => s.serviceType))] as ServiceType[];
@@ -153,13 +155,19 @@ export function PortalHome() {
               of {formatINR(total)} paid
             </span>
           </p>
-          {nextDue ? (
-            <p className="mt-0.5 text-sm text-muted-foreground">
-              Next: {formatINR(nextDue.amount)} due {formatDate(nextDue.dueDate)}{" "}
-              {isInstallmentOverdue(nextDue) && (
-                <span className="font-medium text-danger">(overdue)</span>
-              )}
-            </p>
+          {pace && pace.balance > 0 ? (
+            pace.nextDue ? (
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                Next: {formatINR(pace.nextDue.remaining)} by {formatDate(pace.nextDue.dueDate)}{" "}
+                {pace.behindAmount > 0 && (
+                  <span className="font-medium text-danger">(behind)</span>
+                )}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-sm text-muted-foreground">
+                {formatINR(pace.balance)} remaining — pay anytime
+              </p>
+            )
           ) : (
             <p className="mt-0.5 text-sm text-muted-foreground">All payments settled 🎉</p>
           )}
@@ -219,7 +227,7 @@ export function PortalHome() {
       )}
 
       {/* Recent payments strip */}
-      {installments.length > 0 && (
+      {recentPayments.length > 0 && (
         <section className="card p-5">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold">Payments</h2>
@@ -231,14 +239,15 @@ export function PortalHome() {
             </Link>
           </div>
           <div className="mt-3 space-y-2">
-            {installments.slice(0, 3).map((i) => (
-              <div key={i.id} className="flex items-center justify-between text-sm">
+            {recentPayments.map((p) => (
+              <div key={p.id} className="flex items-center justify-between text-sm">
                 <span className="text-muted-foreground">
-                  Installment {i.installmentNumber} · {formatDate(i.dueDate)}
+                  {p.kind === "waiver" ? "Waiver" : "Payment"} ·{" "}
+                  {formatDate(p.approvedAt ?? p.createdAt)}
                 </span>
                 <span className="flex items-center gap-2">
-                  <span className="font-num font-medium">{formatINR(i.amount)}</span>
-                  <StatusBadge status={installmentDisplayStatus(i)} />
+                  <span className="font-num font-medium">{formatINR(p.amount)}</span>
+                  <StatusBadge status={p.status} />
                 </span>
               </div>
             ))}

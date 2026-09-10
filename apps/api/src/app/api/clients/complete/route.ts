@@ -15,8 +15,8 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 
 /**
  * Complete a client (SRS §5.2 — SYS-3). Server-side preconditions (SRS §5.2):
- * all sessions must be completed or cancelled, and no mandatory outstanding
- * payments may remain (pending/overdue/proof_submitted count must be 0).
+ * all sessions must be completed or cancelled, the plan balance must be zero
+ * (paid or waived), and nothing may still be under review.
  * Only founder/ops may complete.
  */
 async function handlePost(req: NextRequest): Promise<Response> {
@@ -45,19 +45,26 @@ async function handlePost(req: NextRequest): Promise<Response> {
   // the write) interleaves into a completed client with open sessions.
   try {
     await prisma.$transaction(async (tx) => {
-      const [openSessions, outstanding] = await Promise.all([
+      const [openSessions, plan, underReview] = await Promise.all([
         tx.session.count({
           where: { clientId: client.id, status: { in: ["scheduled", "delayed", "missed"] } },
         }),
-        tx.installment.count({
-          where: {
-            clientPlan: { clientId: client.id },
-            status: { in: ["pending", "overdue", "proof_submitted", "rejected"] },
+        tx.clientPlan.findUnique({
+          where: { clientId: client.id },
+          select: {
+            priceAtEnrollment: true,
+            payments: { where: { status: "approved" }, select: { amount: true } },
           },
+        }),
+        tx.payment.count({
+          where: { clientPlan: { clientId: client.id }, status: "pending_review" },
         }),
       ]);
       if (openSessions > 0) throw new PreconditionError(`All sessions must be completed or cancelled first (${openSessions} still open)`);
-      if (outstanding > 0) throw new PreconditionError(`Outstanding payments must be settled or waived first (${outstanding} remaining)`);
+      const approved = plan?.payments.reduce((t, p) => t + p.amount, 0) ?? 0;
+      const balance = plan ? Math.max(plan.priceAtEnrollment - approved, 0) : 0;
+      if (balance > 0) throw new PreconditionError(`The outstanding balance must be settled or waived first (${balance} remaining)`);
+      if (underReview > 0) throw new PreconditionError(`Submitted payments must be reviewed first (${underReview} awaiting review)`);
 
       const flipped = await tx.client.updateMany({
         where: { id: client.id, status: { notIn: ["completed", "cancelled"] } },

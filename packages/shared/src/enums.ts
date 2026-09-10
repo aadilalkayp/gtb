@@ -126,15 +126,17 @@ export const SESSION_STATUSES = [
 ] as const;
 export type SessionStatus = (typeof SESSION_STATUSES)[number];
 
-export const INSTALLMENT_STATUSES = [
-  "pending",
-  "proof_submitted",
-  "approved",
-  "rejected",
-  "overdue",
-  "waived",
-] as const;
-export type InstallmentStatus = (typeof INSTALLMENT_STATUSES)[number];
+export const PAYMENT_STATUSES = ["pending_review", "approved", "rejected"] as const;
+export type PaymentStatus = (typeof PAYMENT_STATUSES)[number];
+
+/** A `waiver` reduces the balance without money changing hands (cancellation
+ *  write-offs, discounts). Excluded from cash/collections metrics. */
+export const PAYMENT_KINDS = ["payment", "waiver"] as const;
+export type PaymentKind = (typeof PAYMENT_KINDS)[number];
+
+/** Derived display status of a payment milestone — never stored. */
+export const MILESTONE_PACE_STATUSES = ["paid", "upcoming", "due_today", "behind"] as const;
+export type MilestonePaceStatus = (typeof MILESTONE_PACE_STATUSES)[number];
 
 export const PAYMENT_METHODS = ["upi", "bank_transfer", "cash", "other"] as const;
 export type PaymentMethod = (typeof PAYMENT_METHODS)[number];

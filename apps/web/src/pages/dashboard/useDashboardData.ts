@@ -12,22 +12,31 @@ import {
   asDate,
   startOfDay,
   isSameDay,
-  isInstallmentOverdue,
   istDayOfMonth,
   istYearMonth,
   deriveAtRisk,
   lastMonths,
+  planPace,
 } from "@/lib/insights";
 import { deriveAlerts, sortAlerts, type AlertItem } from "@/lib/alerts";
 
 // ---- Raw row shapes (subset of what the generated hooks return) ------------
 
-interface InstallmentLite {
-  id: string;
+interface MilestoneLiteRow {
   amount: number;
   dueDate: string | Date;
+}
+interface PaymentLiteRow {
+  id: string;
+  amount: number;
   status: string;
+  kind: string;
   approvedAt: string | Date | null;
+}
+interface ClientPlanLite {
+  priceAtEnrollment: number;
+  milestones: MilestoneLiteRow[];
+  payments: PaymentLiteRow[];
 }
 interface ClientRow {
   id: string;
@@ -40,7 +49,7 @@ interface ClientRow {
   conversionDate: string | Date | null;
   convertedById: string | null;
   createdAt: string | Date;
-  clientPlan: { priceAtEnrollment: number; installments: InstallmentLite[] } | null;
+  clientPlan: ClientPlanLite | null;
   assignments: { role: string; staffId: string }[];
   _count: { sessions: number }; // lifetime completed sessions (server-side)
 }
@@ -147,8 +156,9 @@ export function useDashboardData() {
       clientPlan: {
         select: {
           priceAtEnrollment: true,
-          installments: {
-            select: { id: true, amount: true, dueDate: true, status: true, approvedAt: true },
+          milestones: { select: { amount: true, dueDate: true } },
+          payments: {
+            select: { id: true, amount: true, status: true, kind: true, approvedAt: true },
           },
         },
       },
@@ -277,12 +287,16 @@ export function useDashboardData() {
         actualDate: s.actualDate,
         rating: s.rating,
       })),
-      installments: c.clientPlan?.installments ?? [],
+      plan: c.clientPlan,
       totalCompletedSessions: c._count?.sessions ?? undefined,
     }));
 
     const active = clients.filter((c) => c.status === "active");
-    const allInstallments = clients.flatMap((c) => c.clientPlan?.installments ?? []);
+    // Cash collections = approved real payments (waivers settle balance but
+    // are not money in the bank).
+    const allCashPayments = clients
+      .flatMap((c) => c.clientPlan?.payments ?? [])
+      .filter((p) => p.status === "approved" && p.kind === "payment");
 
     const inMonth = (d: string | Date | null, year: number, month: number) => {
       if (d == null) return false;
@@ -291,9 +305,9 @@ export function useDashboardData() {
     };
     const inThisMonth = (d: string | Date | null) => inMonth(d, curYear, curMonth);
 
-    const monthCollections = allInstallments
-      .filter((i) => i.status === "approved" && inThisMonth(i.approvedAt))
-      .reduce((t, i) => t + i.amount, 0);
+    const monthCollections = allCashPayments
+      .filter((p) => inThisMonth(p.approvedAt))
+      .reduce((t, p) => t + p.amount, 0);
 
     // CALC-10: compare the same day-window — the PREVIOUS month's collections
     // through the same day-of-month ("so far vs so far"). The prior version
@@ -301,22 +315,20 @@ export function useDashboardData() {
     // current month inside the "previous month" bucket and double-counted it.
     const prevAnchor = new Date(Date.UTC(curYear, curMonth - 1, 1));
     const [prevYear, prevMonthIdx] = [prevAnchor.getUTCFullYear(), prevAnchor.getUTCMonth()];
-    const prevCollections = allInstallments
-      .filter((i) => i.status === "approved" && i.approvedAt != null)
+    const prevCollections = allCashPayments
+      .filter((p) => p.approvedAt != null)
       .filter(
-        (i) =>
-          inMonth(i.approvedAt, prevYear, prevMonthIdx) &&
-          istDayOfMonth(i.approvedAt as string | Date) <= dayOfMonth,
+        (p) =>
+          inMonth(p.approvedAt, prevYear, prevMonthIdx) &&
+          istDayOfMonth(p.approvedAt as string | Date) <= dayOfMonth,
       )
-      .reduce((t, i) => t + i.amount, 0);
+      .reduce((t, p) => t + p.amount, 0);
 
-    const outstanding = allInstallments
-      .filter((i) => i.status !== "approved" && i.status !== "waived")
-      .reduce((t, i) => t + i.amount, 0);
-
-    const overdueAmount = allInstallments
-      .filter(isInstallmentOverdue)
-      .reduce((t, i) => t + i.amount, 0);
+    const paces = clients
+      .filter((c) => c.clientPlan)
+      .map((c) => planPace(c.clientPlan as ClientPlanLite));
+    const outstanding = paces.reduce((t, p) => t + p.balance, 0);
+    const overdueAmount = paces.reduce((t, p) => t + p.behindAmount, 0);
 
     const openSessions = sessions.filter((s) => s.status === "scheduled" || s.status === "delayed");
     const consultationsNext7 = openSessions.filter((s) => {
@@ -364,9 +376,9 @@ export function useDashboardData() {
       sales: clients
         .filter((c) => inMonth(c.conversionDate, m.year, m.month))
         .reduce((t, c) => t + (c.clientPlan?.priceAtEnrollment ?? 0), 0),
-      collections: allInstallments
-        .filter((i) => i.status === "approved" && inMonth(i.approvedAt, m.year, m.month))
-        .reduce((t, i) => t + i.amount, 0),
+      collections: allCashPayments
+        .filter((p) => inMonth(p.approvedAt, m.year, m.month))
+        .reduce((t, p) => t + p.amount, 0),
     }));
 
     const pipeline = {
@@ -453,11 +465,11 @@ export function useDashboardData() {
           kind: "session" as const,
         })),
       ...clients.flatMap((c) =>
-        (c.clientPlan?.installments ?? [])
-          .filter((i) => i.status === "approved" && i.approvedAt)
-          .map((i) => ({
-            id: `ap-${i.id}`,
-            when: asDate(i.approvedAt as string | Date),
+        (c.clientPlan?.payments ?? [])
+          .filter((p) => p.status === "approved" && p.kind === "payment" && p.approvedAt)
+          .map((p) => ({
+            id: `ap-${p.id}`,
+            when: asDate(p.approvedAt as string | Date),
             text: `Payment approved`,
             client: c.name,
             kind: "payment" as const,

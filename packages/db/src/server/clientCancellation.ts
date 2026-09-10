@@ -10,7 +10,8 @@ export interface CancelClientInput {
 
 export interface CancelClientResult {
   sessionsCancelled: number;
-  installmentsWaived: number;
+  /** Amount written off as a waiver Payment (0 when nothing was outstanding). */
+  amountWaived: number;
   loginBlocked: boolean;
 }
 
@@ -18,7 +19,8 @@ export interface CancelClientResult {
  * Cancel a client (SRS §24.3) — SYS-3 core. One transaction:
  *   - status → cancelled + cancellationReason;
  *   - all future sessions cancelled;
- *   - outstanding installments waived (staff decision);
+ *   - the outstanding balance written off as a waiver Payment, and any
+ *     still-under-review submissions rejected (staff decision);
  *   - portal login blocked (User.isActive → false);
  *   - ActivityLog rows for each side-effect.
  * Client data is retained (no delete anywhere).
@@ -57,14 +59,40 @@ export async function cancelClientPlan(input: CancelClientInput): Promise<Cancel
 
     let waived = 0;
     if (input.waiveOutstanding !== false) {
-      const res = await tx.installment.updateMany({
-        where: {
-          clientPlan: { clientId: client.id },
-          status: { in: ["pending", "overdue", "proof_submitted", "rejected"] },
+      const plan = await tx.clientPlan.findUnique({
+        where: { clientId: client.id },
+        select: {
+          id: true,
+          priceAtEnrollment: true,
+          payments: { select: { amount: true, status: true } },
         },
-        data: { status: "waived" },
       });
-      waived = res.count;
+      if (plan) {
+        // A cancelled programme accepts no more money: close the review queue
+        // first, then write off whatever balance remains as a waiver entry.
+        await tx.payment.updateMany({
+          where: { clientPlanId: plan.id, status: "pending_review" },
+          data: { status: "rejected", rejectionReason: "Programme cancelled" },
+        });
+        const approved = plan.payments
+          .filter((p) => p.status === "approved")
+          .reduce((t, p) => t + p.amount, 0);
+        const balance = Math.max(plan.priceAtEnrollment - approved, 0);
+        if (balance > 0) {
+          await tx.payment.create({
+            data: {
+              clientPlanId: plan.id,
+              amount: balance,
+              kind: "waiver",
+              status: "approved",
+              approvedById: input.actorId,
+              approvedAt: new Date(),
+              notes: "Outstanding balance waived on cancellation",
+            },
+          });
+          waived = balance;
+        }
+      }
     }
 
     let loginBlocked = false;
@@ -91,10 +119,10 @@ export async function cancelClientPlan(input: CancelClientInput): Promise<Cancel
         entityId: client.id,
         action: "updated",
         performedById: input.actorId,
-        summary: `Waived ${waived} outstanding installment(s)`,
+        summary: `Waived outstanding balance (${waived})`,
       });
     }
 
-    return { sessionsCancelled: sessions.count, installmentsWaived: waived, loginBlocked };
+    return { sessionsCancelled: sessions.count, amountWaived: waived, loginBlocked };
   });
 }

@@ -67,12 +67,14 @@ export function inviteClient(clientId: string): Promise<InviteResult> {
   return postJson<InviteResult>("/api/clients/invite", { clientId });
 }
 
-/** Enroll a client in a plan (creates the ClientPlan + installment schedule). */
+/** Enroll a client in a plan (creates the ClientPlan + milestone schedule).
+ *  Staff may pass a custom schedule; it must sum to the plan price. */
 export function enrollClient(
   clientId: string,
   planId: string,
+  milestones?: { amount: number; dueDate: string }[],
 ): Promise<{ clientPlan: { id: string } }> {
-  return postJson("/api/clients/enroll", { clientId, planId });
+  return postJson("/api/clients/enroll", { clientId, planId, milestones });
 }
 
 export interface UploadedDocument {
@@ -83,26 +85,46 @@ export interface UploadedDocument {
   fileSize: number;
 }
 
-/** Approve (or manually record) a payment. Returns whether it converted the client. */
+/** Approve a client-submitted payment. Returns whether it converted the client. */
 export function approvePayment(
-  installmentId: string,
+  paymentId: string,
   paymentMethod: string,
   notes?: string,
 ): Promise<{ ok: boolean; converted: boolean }> {
-  return postJson("/api/payments/approve", { installmentId, paymentMethod, notes });
+  return postJson("/api/payments/approve", { paymentId, paymentMethod, notes });
 }
 
-/** Reject a submitted payment proof with a reason. */
-export function rejectPayment(installmentId: string, reason: string): Promise<{ ok: boolean }> {
-  return postJson("/api/payments/reject", { installmentId, reason });
+/** Staff records money received outside the portal (or, founder/ops, a waiver). */
+export function recordPayment(args: {
+  clientId: string;
+  amount: number;
+  paymentMethod?: string;
+  kind?: "payment" | "waiver";
+  notes?: string;
+}): Promise<{ ok: boolean; converted: boolean; paymentId: string }> {
+  return postJson("/api/payments/record", args);
 }
 
-/** Client submits a payment proof — advances leadPhase atomically (STATE-6). */
-export function submitPaymentProof(
-  installmentId: string,
+/** Reject a submitted payment with a reason. */
+export function rejectPayment(paymentId: string, reason: string): Promise<{ ok: boolean }> {
+  return postJson("/api/payments/reject", { paymentId, reason });
+}
+
+/** Client submits a payment of any amount — advances leadPhase atomically (STATE-6). */
+export function submitPayment(
+  amount: number,
   proofDocumentId: string,
-): Promise<{ ok: boolean }> {
-  return postJson("/api/payments/submit-proof", { installmentId, proofDocumentId });
+): Promise<{ ok: boolean; paymentId: string }> {
+  return postJson("/api/payments/submit", { amount, proofDocumentId });
+}
+
+/** Replace a client's expected payment schedule (founder/ops). Must sum to the
+ *  enrolled price; audit-logged server-side. */
+export function updateMilestones(
+  clientId: string,
+  milestones: { amount: number; dueDate: string }[],
+): Promise<{ ok: boolean; count: number }> {
+  return postJson("/api/payments/milestones", { clientId, milestones });
 }
 
 /** Create + invite a staff member (founder only). Also resends for pending staff. */
@@ -130,13 +152,13 @@ export function activateClient(
   return postJson("/api/clients/activate", { clientId });
 }
 
-/** Cancel a client (SYS-3): cancels future sessions, waives outstanding
- *  installments, blocks portal login — one server transaction. */
+/** Cancel a client (SYS-3): cancels future sessions, waives the outstanding
+ *  balance, blocks portal login — one server transaction. */
 export function cancelClient(
   clientId: string,
   reason: string,
   waiveOutstanding = true,
-): Promise<{ ok: boolean; sessionsCancelled: number; installmentsWaived: number }> {
+): Promise<{ ok: boolean; sessionsCancelled: number; amountWaived: number }> {
   return postJson("/api/clients/cancel", { clientId, reason, waiveOutstanding });
 }
 

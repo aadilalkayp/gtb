@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
-import { rejectPaymentProof } from "@gtb/db/server";
+import { rejectPayment } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { notifyUsers } from "@/lib/notify";
 import { corsHeaders, handleOptions } from "@/lib/cors";
@@ -15,34 +15,35 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 }
 
 /**
- * Reject a submitted payment proof (SRS §8.3 step 6). MISC-1: the rejected
- * proof document link is kept for the audit trail (rejectPaymentProof).
+ * Reject a submitted payment (SRS §8.3 step 6). MISC-1: the rejected proof
+ * document link is kept for the audit trail (rejectPayment); the client
+ * simply submits a fresh payment.
  */
 async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
   if (!APPROVERS.has(authUser.role)) return json(req, { error: "Forbidden" }, 403);
 
-  let body: { installmentId?: string; reason?: string };
+  let body: { paymentId?: string; reason?: string };
   try {
     body = (await req.json()) as typeof body;
   } catch {
     return json(req, { error: "Invalid JSON body" }, 400);
   }
-  const { installmentId, reason } = body;
-  if (!installmentId) return json(req, { error: "installmentId is required" }, 400);
+  const { paymentId, reason } = body;
+  if (!paymentId) return json(req, { error: "paymentId is required" }, 400);
   if (!reason || !reason.trim()) return json(req, { error: "A reason is required" }, 400);
 
-  const installment = await prisma.installment.findUnique({
-    where: { id: installmentId },
+  const payment = await prisma.payment.findUnique({
+    where: { id: paymentId },
     select: {
       id: true,
       clientPlan: { select: { client: { select: { id: true, userId: true } } } },
     },
   });
-  if (!installment) return json(req, { error: "Installment not found" }, 404);
+  if (!payment) return json(req, { error: "Payment not found" }, 404);
 
-  const client = installment.clientPlan.client;
+  const client = payment.clientPlan.client;
   if (authUser.role === "cro") {
     const assigned = await prisma.assignment.findFirst({
       where: { clientId: client.id, staffId: authUser.id, role: "cro", isActive: true },
@@ -52,10 +53,10 @@ async function handlePost(req: NextRequest): Promise<Response> {
   }
 
   try {
-    await rejectPaymentProof({ installmentId, reason, actorId: authUser.id });
+    await rejectPayment({ paymentId, reason, actorId: authUser.id });
   } catch (e) {
     const msg = (e as Error).message;
-    if (msg === "NOT_FOUND") return json(req, { error: "Installment not found" }, 404);
+    if (msg === "NOT_FOUND") return json(req, { error: "Payment not found" }, 404);
     if (msg === "NOT_SUBMITTED") {
       return json(req, { error: "Only a submitted proof can be rejected" }, 409);
     }

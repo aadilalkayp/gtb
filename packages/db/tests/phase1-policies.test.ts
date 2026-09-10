@@ -6,7 +6,8 @@ import {
   seedClient,
   seedPlan,
   seedClientPlan,
-  seedInstallment,
+  seedMilestone,
+  seedPayment,
   seedAssignment,
   seedSession,
   seedExpenseCategory,
@@ -68,7 +69,7 @@ describe("Phase 1 — SEC-1: User privilege escalation", () => {
   });
 });
 
-describe("Phase 1 — SEC-2: clients cannot self-approve installments", () => {
+describe("Phase 1 — SEC-2: clients cannot self-approve payments", () => {
   async function seedPaidClient() {
     await seedUser({ id: "client1", role: "client" });
     await seedUser({ id: "cro1", role: "cro" });
@@ -79,76 +80,75 @@ describe("Phase 1 — SEC-2: clients cannot self-approve installments", () => {
     return { client, cp };
   }
 
-  it("rejects client setting status: approved on their own installment", async () => {
+  it("rejects client setting status: approved on their own payment", async () => {
     const { cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1);
+    const p = await seedPayment(cp.id);
     const db = as("client1", "client");
     await expectDenied(
-      db.installment.update({
-        where: { id: inst.id },
+      db.payment.update({
+        where: { id: p.id },
         data: { status: "approved", approvedById: "client1", approvedAt: new Date() },
       }),
     );
-    const row = await prisma.installment.findUniqueOrThrow({ where: { id: inst.id } });
-    expect(row.status).toBe("pending");
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: p.id } });
+    expect(row.status).toBe("pending_review");
     expect(row.approvedById).toBeNull();
   });
 
   it("rejects client changing the amount", async () => {
     const { cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1);
-    await expectDenied(as("client1", "client").installment.update({ where: { id: inst.id }, data: { amount: 1 } }));
+    const p = await seedPayment(cp.id);
+    await expectDenied(as("client1", "client").payment.update({ where: { id: p.id }, data: { amount: 1 } }));
   });
 
-  it("rejects client writing paymentMethod/approvedById/approvedAt", async () => {
+  it("rejects client writing paymentMethod/approvedById/approvedAt/kind", async () => {
     const { cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1);
+    const p = await seedPayment(cp.id);
     const db = as("client1", "client");
-    await expectDenied(db.installment.update({ where: { id: inst.id }, data: { paymentMethod: "upi" } }));
-    await expectDenied(db.installment.update({ where: { id: inst.id }, data: { approvedById: "client1" } }));
-    await expectDenied(db.installment.update({ where: { id: inst.id }, data: { approvedAt: new Date() } }));
+    await expectDenied(db.payment.update({ where: { id: p.id }, data: { paymentMethod: "upi" } }));
+    await expectDenied(db.payment.update({ where: { id: p.id }, data: { approvedById: "client1" } }));
+    await expectDenied(db.payment.update({ where: { id: p.id }, data: { approvedAt: new Date() } }));
+    await expectDenied(db.payment.update({ where: { id: p.id }, data: { kind: "waiver" } }));
   });
 
-  it("denies the gateway proof-submission write — proofs go through payments/submit-proof only", async () => {
-    // Verification pass: the gateway path let a client attach ANY document id
-    // (including another client's) as their proof, bypassing the route's
-    // ownership check. The client update path is removed entirely; the route
-    // flow is covered by the Phase 2 STATE-6 tests.
+  it("denies the gateway submission write — payments go through payments/submit only", async () => {
+    // Verification pass: a gateway path would let a client attach ANY document
+    // id (including another client's) as their proof and skip the amount
+    // validation. The client create path is denied entirely; the route flow is
+    // covered by the Phase 2 STATE-6 tests.
     const { cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1);
     const doc = await seedDocument({ clientId: "c1", type: "payment_proof", uploadedById: "client1" });
     await expectDenied(
-      as("client1", "client").installment.update({
-        where: { id: inst.id },
-        data: { status: "proof_submitted", proofDocumentId: doc.id },
+      as("client1", "client").payment.create({
+        data: { clientPlanId: cp.id, amount: 100, proofDocumentId: doc.id },
       }),
     );
   });
 
-  it("rejects client regressing an approved installment back to proof_submitted", async () => {
+  it("rejects client regressing an approved payment back to pending_review", async () => {
     const { cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1, "approved");
+    const p = await seedPayment(cp.id, { status: "approved" });
     await expectDenied(
-      as("client1", "client").installment.update({ where: { id: inst.id }, data: { status: "proof_submitted" } }),
+      as("client1", "client").payment.update({ where: { id: p.id }, data: { status: "pending_review" } }),
     );
   });
 
-  it("rejects client regressing proof_submitted back to pending", async () => {
+  it("rejects client editing their milestone schedule", async () => {
     const { cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1, "proof_submitted");
-    await expectDenied(
-      as("client1", "client").installment.update({ where: { id: inst.id }, data: { status: "pending" } }),
-    );
+    const m = await seedMilestone(cp.id, 1);
+    const db = as("client1", "client");
+    await expectDenied(db.paymentMilestone.update({ where: { id: m.id }, data: { amount: 1 } }));
+    await expectDenied(db.paymentMilestone.delete({ where: { id: m.id } }));
   });
 
   it("still allows a CRO to approve", async () => {
     const { cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1);
-    await as("cro1", "cro").installment.update({
-      where: { id: inst.id },
+    const p = await seedPayment(cp.id);
+    await as("cro1", "cro").payment.update({
+      where: { id: p.id },
       data: { status: "approved", approvedById: "cro1", approvedAt: new Date() },
     });
-    const row = await prisma.installment.findUniqueOrThrow({ where: { id: inst.id } });
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: p.id } });
     expect(row.status).toBe("approved");
     expect(row.approvedById).toBe("cro1");
   });

@@ -1,20 +1,11 @@
 import { useMemo, useState } from "react";
 import { formatINR, formatDate } from "@gtb/shared";
-import { submitPaymentProof } from "@/lib/api";
-import { Button, StatusBadge } from "@/components/ui";
+import { submitPayment } from "@/lib/api";
+import { milestonePaces, planPace, type PlanPaymentLite } from "@/lib/insights";
+import { Button, Input } from "@/components/ui";
 import { FileUploadField } from "@/components/FileUploadField";
 import { cn } from "@/lib/utils";
 import type { UploadedDocument } from "@/lib/api";
-
-interface Installment {
-  id: string;
-  installmentNumber: number;
-  amount: number;
-  dueDate: string | Date;
-  status: string;
-}
-
-const PAYABLE = new Set(["pending", "overdue", "rejected"]);
 
 export function PaymentStep({
   client,
@@ -22,29 +13,42 @@ export function PaymentStep({
   onDone,
 }: {
   client: { id: string; leadPhase: string };
-  clientPlan: { planNameSnapshot: string; priceAtEnrollment: number; installments: Installment[] };
+  clientPlan: PlanPaymentLite & { planNameSnapshot: string };
   onDone: () => void | Promise<void>;
 }) {
   const [doc, setDoc] = useState<UploadedDocument | null>(null);
+  const pace = useMemo(() => planPace(clientPlan), [clientPlan]);
+  const paces = useMemo(() => milestonePaces(clientPlan), [clientPlan]);
+  const underReview = clientPlan.payments
+    .filter((p) => p.status === "pending_review")
+    .reduce((t, p) => t + p.amount, 0);
+  const submittable = Math.max(pace.balance - underReview, 0);
+  // The first milestone is the expected down payment — prefilled, and the
+  // client may pay more (up to the balance) but the field is theirs to edit.
+  const suggested = Math.min(pace.nextDue?.remaining ?? submittable, submittable);
+  const [amount, setAmount] = useState(String(suggested));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
 
-  const installments = useMemo(
-    () => [...clientPlan.installments].sort((a, b) => a.installmentNumber - b.installmentNumber),
-    [clientPlan.installments],
-  );
-  const payable = installments.find((i) => PAYABLE.has(i.status));
-
   async function submit() {
-    if (!payable || !doc) return;
+    const value = Number(amount);
+    if (!Number.isInteger(value) || value <= 0) {
+      setError("Enter a positive whole amount.");
+      return;
+    }
+    if (value > submittable) {
+      setError(`You can submit at most ${formatINR(submittable)}.`);
+      return;
+    }
+    if (!doc) return;
     setSubmitting(true);
     setError(undefined);
     try {
-      // STATE-6: proof submission + leadPhase advance are atomic server-side.
-      await submitPaymentProof(payable.id, doc.id);
+      // STATE-6: payment submission + leadPhase advance are atomic server-side.
+      await submitPayment(value, doc.id);
       await onDone();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not submit your payment proof");
+      setError(e instanceof Error ? e.message : "Could not submit your payment");
       setSubmitting(false);
     }
   }
@@ -57,43 +61,57 @@ export function PaymentStep({
         <p className="text-xs text-muted-foreground">Total package value</p>
       </div>
 
-      <div className="card divide-y divide-border">
-        {installments.map((i) => {
-          const isActive = payable?.id === i.id;
-          return (
-            <div
-              key={i.id}
-              className={cn(
-                "flex items-center justify-between px-4 py-3",
-                isActive && "bg-primary/5",
-              )}
-            >
-              <div>
-                <p className="text-sm font-medium">
-                  Installment {i.installmentNumber}
-                  {installments.length > 1 && ` of ${installments.length}`}
-                </p>
-                <p className="text-xs text-muted-foreground">Due {formatDate(i.dueDate)}</p>
+      {paces.length > 0 && (
+        <div className="card divide-y divide-border">
+          {paces.map((p, i) => {
+            const isFirst = i === 0;
+            return (
+              <div
+                key={i}
+                className={cn(
+                  "flex items-center justify-between px-4 py-3",
+                  isFirst && p.status !== "paid" && "bg-primary/5",
+                )}
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    {isFirst ? "First payment" : `Milestone ${i + 1}`}
+                    {paces.length > 1 && ` of ${paces.length}`}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Expected by {formatDate(p.milestone.dueDate)}
+                  </p>
+                </div>
+                <span className="font-num text-sm font-semibold">
+                  {formatINR(p.milestone.amount)}
+                </span>
               </div>
-              <div className="flex items-center gap-3">
-                <span className="font-num text-sm font-semibold">{formatINR(i.amount)}</span>
-                <StatusBadge status={i.status} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
-      {payable ? (
+      {submittable > 0 ? (
         <div className="card space-y-3 p-4">
           <div>
             <h3 className="text-sm font-semibold">
-              Pay installment {payable.installmentNumber}: {formatINR(payable.amount)}
+              Pay your first {formatINR(Number(amount) || suggested)}
             </h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Pay via UPI, bank transfer, or cash, then upload a screenshot or receipt. Your CRO
-              will verify it to activate your program.
+              Pay via UPI, bank transfer, or cash, then submit the amount with a screenshot or
+              receipt. Your CRO will verify it to activate your program. You can pay the rest in
+              parts, any amounts, as you go.
             </p>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Amount (₹)</p>
+            <Input
+              type="number"
+              min={1}
+              max={submittable}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
           </div>
           <FileUploadField
             clientId={client.id}
@@ -104,13 +122,13 @@ export function PaymentStep({
           {error && <p className="text-sm text-danger">{error}</p>}
           <div className="flex justify-end">
             <Button size="lg" disabled={!doc} loading={submitting} onClick={submit}>
-              Submit payment proof
+              Submit payment
             </Button>
           </div>
         </div>
       ) : (
         <div className="card p-6 text-center text-sm text-muted-foreground">
-          Your payment proof has been submitted and is awaiting review.
+          Your payment has been submitted and is awaiting review.
         </div>
       )}
     </div>
