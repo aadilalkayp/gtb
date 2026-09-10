@@ -43,3 +43,11 @@ coverage/
 deploy/ansible/inventory.ini
 deploy/ansible/group_vars/gtb.yml
 .vault-pass
+
+# Eval harness (apps/api/evals): response cache, run reports, and golden
+# photos (photos of real people are never committed — see evals/golden/README.md)
+apps/api/evals/.cache/
+apps/api/evals/reports/
+apps/api/evals/golden/*
+!apps/api/evals/golden/README.md
+!apps/api/evals/golden/manifest.json
