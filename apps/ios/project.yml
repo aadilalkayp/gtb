@@ -1,0 +1,33 @@
+# XcodeGen spec — regenerate GTBScan.xcodeproj with `xcodegen generate`.
+# The .xcodeproj is NOT committed; this file is the project definition.
+name: GTBScan
+options:
+  bundleIdPrefix: com.gtb
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+targets:
+  GTBScan:
+    type: application
+    platform: iOS
+    sources: [GTBScan]
+    info:
+      path: GTBScan/Info.plist
+      properties:
+        NSCameraUsageDescription: "GTB Scan uses the camera to capture your readiness scan photos. Framing is checked on this device before anything is uploaded."
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Dev convenience: the API defaults to http://localhost:3005 in DEBUG.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.gtb.scan
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        # Swift 5 language mode with minimal concurrency checking: the camera
+        # pipeline passes CVPixelBuffers across queues, which Swift 6 strict
+        # mode rejects wholesale. Revisit when AVFoundation's Sendable story
+        # catches up.
+        SWIFT_VERSION: "5.0"
+        SWIFT_STRICT_CONCURRENCY: minimal
