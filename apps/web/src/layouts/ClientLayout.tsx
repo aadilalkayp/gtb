@@ -26,7 +26,7 @@ export function ClientLayout() {
       <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <img src="/logo-ink.png" alt="GTB" className="h-5 w-auto" />
+            <img src="/logo.png" alt="GTB" className="h-8 w-8 rounded-lg" />
             <span className="text-sm font-semibold">{brand}</span>
           </div>
           <div className="flex items-center gap-1">

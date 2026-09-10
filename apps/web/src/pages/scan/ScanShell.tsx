@@ -8,9 +8,9 @@ export function ScanShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-surface/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-xl items-center justify-between px-4">
-          <Link to="/scan" className="flex flex-col justify-center" aria-label={`GTB · ${PRODUCT_NAME}`}>
-            <img src="/logo-ink.png" alt="GTB" className="h-6 w-auto" />
-            <span className="mt-0.5 text-[8px] font-medium uppercase tracking-[0.35em] text-muted-foreground">
+          <Link to="/scan" className="flex items-center gap-2.5" aria-label={`GTB · ${PRODUCT_NAME}`}>
+            <img src="/logo.png" alt="GTB" className="h-9 w-9 rounded-lg" />
+            <span className="text-[9px] font-medium uppercase tracking-[0.3em] text-muted-foreground">
               Groom To Be
             </span>
           </Link>
