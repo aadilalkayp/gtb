@@ -135,7 +135,7 @@ export function PortalPayments() {
         <section className="card space-y-3 p-5">
           <div>
             <h2 className="text-sm font-semibold">
-              Pay installment {payable.installmentNumber} — {formatINR(payable.amount)}
+              Pay installment {payable.installmentNumber}: {formatINR(payable.amount)}
             </h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Pay via UPI, bank transfer, or cash, then upload a screenshot or receipt.

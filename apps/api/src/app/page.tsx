@@ -5,13 +5,13 @@ export default function Home() {
       <p>This is the backend service. The app lives in the web client.</p>
       <ul>
         <li>
-          <code>/api/health</code> — health check
+          <code>/api/health</code>: health check
         </li>
         <li>
-          <code>/api/me</code> — current user
+          <code>/api/me</code>: current user
         </li>
         <li>
-          <code>/api/model/*</code> — ZenStack data API
+          <code>/api/model/*</code>: ZenStack data API
         </li>
       </ul>
     </main>

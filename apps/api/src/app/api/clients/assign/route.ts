@@ -101,7 +101,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
     // STATE-4 backstop: the partial unique index (one ACTIVE assignment per
     // client+role) rejects a concurrent reassignment — surface it, don't 500.
     if ((e as { code?: string }).code === "P2002") {
-      return json(req, { error: "This role was just reassigned — try again" }, 409);
+      return json(req, { error: "This role was just reassigned. Try again" }, 409);
     }
     throw e;
   }

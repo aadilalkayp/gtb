@@ -43,9 +43,7 @@ export function LoginPage({ portal }: { portal: "staff" | "client" }) {
       />
       <div className="card relative w-full max-w-sm animate-scale-in p-8 shadow-lg">
         <div className="mb-6 text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 font-display text-sm font-bold text-primary-foreground">
-            GTB
-          </div>
+          <img src="/logo-ink.png" alt="GTB" className="mx-auto mb-3 h-9 w-auto" />
           <h1 className="font-display text-2xl font-semibold tracking-display">
             {isClientPortal ? "Welcome back" : "GTB OS"}
           </h1>

@@ -60,23 +60,23 @@ const CHECKLIST_TEMPLATE: { daysBefore: number; title: string; description: stri
     daysBefore: 90,
     title: "Lock your grooming routine",
     description:
-      "Start the daily skincare and haircare routine from your scan report — results need runway.",
+      "Start the daily skincare and haircare routine from your scan report. Results need runway.",
   },
   {
     daysBefore: 60,
     title: "Outfit shopping",
     description:
-      "Finalize your wedding outfit direction and start shopping — alterations take time.",
+      "Finalize your big day outfit direction and start shopping. Alterations take time.",
   },
   {
     daysBefore: 45,
     title: "Hairstyle trial",
     description:
-      "Trial your wedding haircut now so there's one more grow-out cycle before the day.",
+      "Trial your big day haircut now so there's one more grow-out cycle before the day.",
   },
   {
     daysBefore: 30,
-    title: "Suit / sherwani trial",
+    title: "Outfit trial",
     description: "First full fitting. Book the alteration follow-up before you leave.",
   },
   {
@@ -87,27 +87,27 @@ const CHECKLIST_TEMPLATE: { daysBefore: number; title: string; description: stri
   {
     daysBefore: 14,
     title: "Facial / clean-up",
-    description: "Last deep facial — never closer than two weeks to the wedding, so skin settles.",
+    description: "Last deep facial, never closer than two weeks to your big day, so skin settles.",
   },
   {
     daysBefore: 10,
     title: "Perfume & grooming kit",
-    description: "Pick the wedding fragrance and assemble the day-of grooming kit.",
+    description: "Pick your big day fragrance and assemble the day-of grooming kit.",
   },
   {
     daysBefore: 7,
     title: "Documents & logistics",
-    description: "IDs, bookings, vendor contacts — one folder, one backup.",
+    description: "IDs, bookings, key contacts: one folder, one backup.",
   },
   {
     daysBefore: 5,
     title: "Final haircut & beard shape-up",
-    description: "The wedding cut. Close enough to look sharp, far enough to soften.",
+    description: "The big day cut. Close enough to look sharp, far enough to soften.",
   },
   {
     daysBefore: 3,
     title: "Packing",
-    description: "Pack for the wedding and honeymoon. Tick off the grooming kit.",
+    description: "Pack everything for the big day and any travel around it. Tick off the grooming kit.",
   },
   {
     daysBefore: 1,
@@ -122,7 +122,7 @@ const WEEKLY_TASKS: Record<ScanCategory, { title: string; description: string }[
     {
       title: "Daily skincare discipline",
       description:
-        "Cleanser morning and night, moisturizer after, sunscreen every morning — no skipped days this week.",
+        "Cleanser morning and night, moisturizer after, sunscreen every morning. No skipped days this week.",
     },
     {
       title: "Hydration week",
@@ -136,7 +136,7 @@ const WEEKLY_TASKS: Record<ScanCategory, { title: string; description: string }[
     {
       title: "Sleep for your skin",
       description:
-        "7+ hours nightly this week — dark circles respond to sleep faster than to any product.",
+        "7+ hours nightly this week. Dark circles respond to sleep faster than to any product.",
     },
   ],
   hair: [
@@ -147,12 +147,12 @@ const WEEKLY_TASKS: Record<ScanCategory, { title: string; description: string }[
     {
       title: "Style practice",
       description:
-        "Practice your intended wedding style twice this week so it's routine by the big day.",
+        "Practice your intended big day style twice this week so it's routine by then.",
     },
     {
       title: "Trim check",
       description:
-        "Assess length against the wedding-day plan; book a shaping trim if you're ahead of schedule.",
+        "Assess length against your big day plan; book a shaping trim if you're ahead of schedule.",
     },
   ],
   beard: [
@@ -167,7 +167,7 @@ const WEEKLY_TASKS: Record<ScanCategory, { title: string; description: string }[
     {
       title: "Shape rehearsal",
       description:
-        "Define the exact wedding beard shape and maintain it all week — no experiments after this.",
+        "Define the exact big day beard shape and maintain it all week. No experiments after this.",
     },
   ],
   style: [
@@ -182,7 +182,7 @@ const WEEKLY_TASKS: Record<ScanCategory, { title: string; description: string }[
     },
     {
       title: "Grooming details",
-      description: "Nails, brows, ears — the details cameras find. Twenty minutes, once this week.",
+      description: "Nails, brows, ears: the details cameras find. Twenty minutes, once this week.",
     },
   ],
 };
@@ -201,7 +201,7 @@ const BRIDE_BROW_TASKS: { title: string; description: string }[] = [
   {
     title: "Eye-area rehearsal",
     description:
-      "Trial your wedding brow and lash look once this week so there are no day-of surprises.",
+      "Trial your big day brow and lash look once this week so there are no day-of surprises.",
   },
 ];
 

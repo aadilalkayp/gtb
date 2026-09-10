@@ -26,9 +26,7 @@ export function ClientLayout() {
       <header className="sticky top-0 z-10 border-b border-border bg-surface/80 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-3xl items-center justify-between px-4">
           <div className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/70 font-display text-xs font-semibold text-primary-foreground shadow-button">
-              {type === "bride" ? "G" : "G"}
-            </div>
+            <img src="/logo-ink.png" alt="GTB" className="h-5 w-auto" />
             <span className="text-sm font-semibold">{brand}</span>
           </div>
           <div className="flex items-center gap-1">

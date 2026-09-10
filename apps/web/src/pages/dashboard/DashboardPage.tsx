@@ -97,7 +97,7 @@ function summaryLine(m: DashboardMetrics): string {
   if (m.alerts.length)
     bits.push(`${m.alerts.length} active alert${m.alerts.length > 1 ? "s" : ""}`);
   if (m.atRiskClients.length) bits.push(`${m.atRiskClients.length} at risk`);
-  return bits.length ? bits.join(" · ") : "Everything's calm — nice work.";
+  return bits.length ? bits.join(" · ") : "Everything's calm. Nice work.";
 }
 
 function RoleView({
@@ -214,7 +214,7 @@ function FounderView({ m }: { m: DashboardMetrics }) {
         </SectionCard>
       </div>
 
-      <SectionCard title="Upcoming weddings" icon={Heart}>
+      <SectionCard title="Upcoming big days" icon={Heart}>
         <WeddingsStrip weddings={m.weddings} />
       </SectionCard>
 
@@ -342,7 +342,7 @@ function OpsView({ m }: { m: DashboardMetrics }) {
         </SectionCard>
       </div>
 
-      <SectionCard title="Upcoming weddings" icon={Heart}>
+      <SectionCard title="Upcoming big days" icon={Heart}>
         <WeddingsStrip weddings={m.weddings} />
       </SectionCard>
 
@@ -446,7 +446,7 @@ function CroView({
         </SectionCard>
       </div>
 
-      <SectionCard title="Upcoming weddings" icon={Heart}>
+      <SectionCard title="Upcoming big days" icon={Heart}>
         <WeddingsStrip weddings={m.weddings} />
       </SectionCard>
     </>

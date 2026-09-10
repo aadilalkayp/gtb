@@ -71,7 +71,7 @@ export function OutfitCheckPanel({ scanId }: { scanId: string }) {
           <Shirt className="h-5 w-5 text-primary" /> Check an outfit
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Photograph up to three shirts, kurtas or jackets — on a hanger or worn. We judge colour
+          Photograph up to three shirts, kurtas or jackets, on a hanger or worn. We judge colour
           against your skin tone and fit if it's on you.
         </p>
       </div>

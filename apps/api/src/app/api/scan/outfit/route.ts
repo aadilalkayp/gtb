@@ -69,7 +69,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
       CHECKS_PER_DAY_PER_SCAN,
     )
   ) {
-    return json(req, { error: "That's the outfit checks for today — come back tomorrow." }, 429);
+    return json(req, { error: "That's the outfit checks for today. Come back tomorrow." }, 429);
   }
   if (!rateLimit(`outfit-ip:${clientIp(req)}`, 30))
     return json(req, { error: "Too many requests" }, 429);

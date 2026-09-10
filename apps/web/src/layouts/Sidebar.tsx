@@ -13,16 +13,11 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-60 flex-col bg-sidebar text-sidebar-foreground">
       {/* Brand */}
-      <div className="flex items-center gap-3 px-5 py-5">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-groom to-groom/60 font-display text-sm font-semibold text-white shadow-button">
-          GTB
-        </div>
-        <div className="leading-tight">
-          <p className="text-sm font-semibold">GTB OS</p>
-          <p className="text-[10px] uppercase tracking-wider text-sidebar-muted">
-            Groom · Glow To Be
-          </p>
-        </div>
+      <div className="flex flex-col gap-1.5 px-5 py-5">
+        <img src="/logo-white.png" alt="GTB" className="h-7 w-auto self-start" />
+        <p className="text-[10px] uppercase tracking-wider text-sidebar-muted">
+          Groom · Glow To Be
+        </p>
       </div>
 
       {/* Nav */}

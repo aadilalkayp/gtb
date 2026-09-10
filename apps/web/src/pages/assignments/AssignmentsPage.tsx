@@ -194,7 +194,7 @@ function ClientAssignmentCard({
     setDone(undefined);
     try {
       const res = await activateClient(client.id);
-      setDone(`Activated — ${res.sessionsCreated} sessions scheduled.`);
+      setDone(`Activated. ${res.sessionsCreated} sessions scheduled.`);
       onChanged();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not activate");
@@ -215,7 +215,7 @@ function ClientAssignmentCard({
             <StatusBadge status={client.status} />
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            {client.clientPlan?.planNameSnapshot ?? "No plan"} · Wedding{" "}
+            {client.clientPlan?.planNameSnapshot ?? "No plan"} · Big day{" "}
             {formatDate(client.weddingDate)}
             {cro?.staff && ` · CRO: ${cro.staff.name}`}
           </p>

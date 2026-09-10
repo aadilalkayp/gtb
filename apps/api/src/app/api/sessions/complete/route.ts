@@ -71,7 +71,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
     const label = SERVICE_TYPE_LABELS[result.serviceType as ServiceType];
     await notifyUsers([result.clientUserId], {
       type: "session_completed",
-      title: "Session complete — rate your experience",
+      title: "Session complete. Rate your experience",
       body: `How was your ${label.toLowerCase()} session?`,
       linkPath: "/portal/sessions",
     });

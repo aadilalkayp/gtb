@@ -141,7 +141,7 @@ function card(args: {
         h(
           "span",
           { fontSize: 56, fontWeight: 700, lineHeight: 1.1 },
-          args.days > 0 ? `Wedding in ${args.days} days` : "Wedding day",
+          args.days > 0 ? `Big day in ${args.days} days` : "The big day",
         ),
         args.focus ? h("span", { fontSize: 26, color: MUTED }, `Focus: ${args.focus}`) : null,
       ),

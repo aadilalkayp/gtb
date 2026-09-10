@@ -69,7 +69,7 @@ export function PlansSettings() {
     try {
       await deletePlan.mutateAsync({ where: { id } });
     } catch {
-      setError("Can't delete a plan that has enrolled clients — deactivate it instead.");
+      setError("Can't delete a plan that has enrolled clients. Deactivate it instead.");
     }
   }
 

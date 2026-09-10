@@ -56,7 +56,7 @@ export function PlanStep({
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
         Choose the program that fits your timeline. Your team will tailor the sessions to your
-        wedding date.
+        big day.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">

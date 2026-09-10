@@ -142,16 +142,16 @@ function responseSchema(type: ScanClientType) {
 }
 
 function rubric(type: ScanClientType, angles: ScanPhotoAngle[]): string {
-  const who = type === "bride" ? "bride-to-be" : "groom-to-be";
+  const who = type === "bride" ? "woman" : "man";
   const thirdCategory =
     type === "bride"
-      ? "- beardScore (BROWS & LASHES for a bride): brow shape and tidiness, lash definition, overall eye-area grooming."
+      ? "- beardScore (BROWS & LASHES for women): brow shape and tidiness, lash definition, overall eye-area grooming."
       : "- beardScore: edge definition, evenness, tidiness (a deliberately clean-shaven face with clean edges scores high).";
   const attrs = SCAN_ATTRIBUTE_KEYS[type].map(([k, l]) => `  - ${k}: ${l}`).join("\n");
   const hasBody = angles.includes("full_body");
   const photoList = angles.map((a, i) => `Photo ${i + 1}: ${a.replace("_", " ")} view`).join("; ");
 
-  return `You are a professional wedding-grooming consultant scoring photos of a ${who} for a "Transformation Readiness" report. Score APPEARANCE only — you are not a medical professional and must never name, imply, or hint at any medical or dermatological condition. Score what a portrait photographer would notice.
+  return `You are a professional grooming consultant scoring photos of a ${who} preparing for an important upcoming event (their "big day": a wedding, interview, new job, or similar) for a "Transformation Readiness" report. Score APPEARANCE only — you are not a medical professional and must never name, imply, or hint at any medical or dermatological condition. Score what a portrait photographer would notice.
 
 You receive ${angles.length} photo(s), in this order: ${photoList}. The FRONT photo is primary; side views refine hair and ${type === "bride" ? "brow" : "beard"} scores; the full-body photo is the ONLY basis for styleScore.
 
@@ -171,11 +171,11 @@ Attribute ratings (each 0-100, appearance only, same anchors):
 ${attrs}
 
 Also return:
-- focusAreas: the 2-4 appearance areas that would most improve wedding photos, with integer weights summing to 100 (e.g. "even skin tone" 60, "hydration" 25, "${type === "bride" ? "brow shaping" : "beard shaping"}" 15). Use plain appearance words, never condition names.
+- focusAreas: the 2-4 appearance areas that would most improve how they look in photos on their big day, with integer weights summing to 100 (e.g. "even skin tone" 60, "hydration" 25, "${type === "bride" ? "brow shaping" : "beard shaping"}" 15). Use plain appearance words, never condition names.
 - highlights: 2-3 genuine, specific positives.
 - suggestions: 3-5 actionable grooming/routine suggestions (product-category level, never brands or medication).
 
-Be consistent: identical photos must produce identical scores. Anchor to the rubric, not to relative impressions.`;
+Be consistent: identical photos must produce identical scores. Anchor to the rubric, not to relative impressions. Write all returned text in plain, natural sentences and never use em dashes.`;
 }
 
 interface GeminiRawResult {
@@ -387,7 +387,7 @@ export interface GarmentInput {
 export interface OutfitResult {
   index: number;
   verdict: "great" | "good" | "avoid";
-  /** 0–100 wedding-suitability score for this garment on this person. */
+  /** 0-100 occasion-suitability score for this garment on this person. */
   score: number;
   colorNote: string;
   fitNote: string;
@@ -412,7 +412,7 @@ const OUTFIT_SCHEMA = {
           verdict: { type: "STRING", enum: ["great", "good", "avoid"] },
           score: {
             type: "INTEGER",
-            description: "0-100 suitability for the wedding on this person",
+            description: "0-100 suitability for a dressed-up occasion on this person",
           },
           colorNote: { type: "STRING", description: "one sentence on colour vs skin tone" },
           fitNote: {
@@ -446,14 +446,14 @@ export async function analyzeOutfits(args: {
 }): Promise<OutfitAnalysis> {
   if (!geminiConfigured) return stubOutfits(args.garments.length);
 
-  const who = args.type === "bride" ? "bride-to-be" : "groom-to-be";
-  const prompt = `You are a wedding stylist advising a ${who}. ${
+  const who = args.type === "bride" ? "woman" : "man";
+  const prompt = `You are a personal stylist advising a ${who} preparing for an important upcoming event (a wedding, interview, or similar big day). ${
     args.face
       ? "Photo 1 is their face — read skin tone and undertone from it."
       : "No face photo is available; give general guidance."
   } The following ${args.garments.length} photo(s) are garments they are considering (on a hanger, laid flat, or worn).
 
-For each garment, judge: colour harmony with their skin tone (the biggest lever), fit/silhouette if it is being worn (say "fit not visible" if not), and suitability for wedding-related events and photography. Be direct and specific in plain language ("this washes you out — try navy"), never snobbish, never brand names. Then give a personal palette: colours to try and colours to avoid near the face, plus a two-sentence direction.
+For each garment, judge: colour harmony with their skin tone (the biggest lever), fit/silhouette if it is being worn (say "fit not visible" if not), and suitability for dressed-up occasions and photography. Be direct and specific in plain language ("this washes you out, try navy"), never snobbish, never brand names. Never use em dashes in your answers. Then give a personal palette: colours to try and colours to avoid near the face, plus a two-sentence direction.
 
 Appearance and styling only — no comments on body weight beyond fit, nothing medical.`;
 

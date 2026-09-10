@@ -424,7 +424,7 @@ function EditStaffModal({
         </div>
         {isConsultant && service && (
           <Field
-            label={`Per-session rate — ${SERVICE_TYPE_LABELS[service]} (₹)`}
+            label={`Per-session rate: ${SERVICE_TYPE_LABELS[service]} (₹)`}
             hint="Used to auto-create a payout expense when a session is completed."
           >
             <Input type="number" min={0} value={rate} onChange={(e) => setRate(e.target.value)} />
@@ -448,7 +448,7 @@ function InviteLinkModal({
   const [copied, setCopied] = useState(false);
 
   return (
-    <Modal open onClose={onClose} title={`Invite link — ${name}`} size="sm" footer={<Button onClick={onClose}>Done</Button>}>
+    <Modal open onClose={onClose} title={`Invite link for ${name}`} size="sm" footer={<Button onClick={onClose}>Done</Button>}>
       <div className="space-y-3">
         <p className="text-sm text-muted-foreground">
           A fresh invite has been emailed. You can also share this link directly:

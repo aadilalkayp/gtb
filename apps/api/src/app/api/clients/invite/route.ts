@@ -57,7 +57,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
     if (existing && existing.role !== "client") {
       return json(
         req,
-        { error: "This email belongs to a staff account — invite it as a client separately" },
+        { error: "This email belongs to a staff account. Invite it as a client separately" },
         409,
       );
     }

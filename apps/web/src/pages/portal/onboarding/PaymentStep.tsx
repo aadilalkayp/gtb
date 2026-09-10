@@ -88,7 +88,7 @@ export function PaymentStep({
         <div className="card space-y-3 p-4">
           <div>
             <h3 className="text-sm font-semibold">
-              Pay installment {payable.installmentNumber} — {formatINR(payable.amount)}
+              Pay installment {payable.installmentNumber}: {formatINR(payable.amount)}
             </h3>
             <p className="mt-0.5 text-sm text-muted-foreground">
               Pay via UPI, bank transfer, or cash, then upload a screenshot or receipt. Your CRO

@@ -28,10 +28,10 @@ export async function checkFraming(file: File): Promise<string | null> {
     const face = faces[0];
     if (!face) return "We couldn't find a face in that photo. Take a front-facing selfie.";
     if (face.boundingBox.height / img.height < 0.35) {
-      return "Come closer — your face should fill most of the frame.";
+      return "Come closer. Your face should fill most of the frame.";
     }
     if (face.boundingBox.top < img.height * 0.02) {
-      return "Keep your hair in the shot — tilt the camera up a little.";
+      return "Keep your hair in the shot. Tilt the camera up a little.";
     }
     return null;
   } catch {

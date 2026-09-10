@@ -42,7 +42,7 @@ export async function createPaymentReceipt(
   const done = new Promise<void>((resolve) => doc.on("end", () => resolve()));
 
   // Header
-  doc.fontSize(18).fillColor("#1c1917").text("GTB OS — Payment Receipt", { continued: false });
+  doc.fontSize(18).fillColor("#1c1917").text("GTB OS Payment Receipt", { continued: false });
   doc.moveDown(0.2);
   doc.fontSize(9).fillColor("#78716c").text(`Receipt #${data.receiptId.slice(0, 8).toUpperCase()}`);
   doc
@@ -76,12 +76,12 @@ export async function createPaymentReceipt(
   doc
     .fontSize(8)
     .fillColor("#a8a29e")
-    .text("Thank you — your payment has been recorded. This receipt was generated automatically.");
+    .text("Thank you. Your payment has been recorded. This receipt was generated automatically.");
   doc.moveDown(1.2);
   doc
     .fontSize(8)
     .fillColor("#a8a29e")
-    .text("Groom To Be · Glow To Be — GTB OS", { align: "center" });
+    .text("Groom To Be · Glow To Be · GTB OS", { align: "center" });
 
   doc.end();
   await done;

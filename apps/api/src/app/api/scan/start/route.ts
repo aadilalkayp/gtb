@@ -105,7 +105,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
       return json(req, { error: "weddingDate is not a valid date" }, 400);
     }
     if (weddingDate.getTime() < Date.now()) {
-      return json(req, { error: "The wedding date must be in the future" }, 400);
+      return json(req, { error: "Your big day must be in the future" }, 400);
     }
     const rawType = form.get("type");
     type = rawType === "bride" ? "bride" : "groom";
@@ -172,8 +172,8 @@ async function handlePost(req: NextRequest): Promise<Response> {
       const reason = !framing.faceDetected
         ? "We couldn't find a face in that photo. Take a front-facing selfie."
         : !framing.isCloseUp
-          ? "Come closer — your face should fill most of the frame."
-          : "Keep your hair in the shot — tilt the camera up a little.";
+          ? "Come closer. Your face should fill most of the frame."
+          : "Keep your hair in the shot. Tilt the camera up a little.";
       await prisma.scan.update({
         where: { id: scan.id },
         data: { status: "failed", failureReason: `framing: ${reason}` },

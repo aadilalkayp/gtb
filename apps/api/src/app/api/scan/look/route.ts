@@ -81,7 +81,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
   if (todayCount >= LOOK_DAILY_CAP_PER_SCAN) {
     return json(
       req,
-      { error: `That's ${LOOK_DAILY_CAP_PER_SCAN} previews for today — more tomorrow.` },
+      { error: `That's ${LOOK_DAILY_CAP_PER_SCAN} previews for today. More tomorrow.` },
       429,
     );
   }

@@ -31,7 +31,7 @@ export function ScanReportPage() {
         <div className="card p-10 text-center">
           <p className="font-display text-lg font-semibold">We couldn't find that report</p>
           <p className="mt-2 text-sm text-muted-foreground">
-            Unclaimed scans are deleted after 24 hours. Take a fresh {PRODUCT_NAME} — it only takes
+            Unclaimed scans are deleted after 24 hours. Take a fresh {PRODUCT_NAME}. It only takes
             a minute.
           </p>
           <Link

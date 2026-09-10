@@ -203,7 +203,7 @@ export function PaymentsPage() {
             void pendingCountQ.refetch();
             setFlash(
               converted
-                ? `${action.row.clientPlan.client.name} is now converted — assign their team.`
+                ? `${action.row.clientPlan.client.name} is now converted. Assign their team.`
                 : "Payment approved.",
             );
           }}
@@ -218,7 +218,7 @@ export function PaymentsPage() {
             void refetch();
             void reviewCountQ.refetch();
             void pendingCountQ.refetch();
-            setFlash("Payment proof rejected — the client has been notified.");
+            setFlash("Payment proof rejected. The client has been notified.");
           }}
         />
       )}
@@ -362,7 +362,7 @@ function RejectModal({
     >
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Let {row.clientPlan.client.name} know what to fix — they can re-upload their proof.
+          Let {row.clientPlan.client.name} know what to fix. They can re-upload their proof.
         </p>
         <Field label="Reason" required>
           <Textarea

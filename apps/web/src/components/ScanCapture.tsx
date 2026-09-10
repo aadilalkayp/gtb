@@ -105,7 +105,7 @@ export function ScanCapture({
             </span>
             <span className="text-sm font-medium">Take or upload a selfie</span>
             <span className="px-8 text-xs text-muted-foreground">
-              Face the camera straight on, in even daylight, no filters — the clearer the photo, the
+              Face the camera straight on, in even daylight, no filters. The clearer the photo, the
               truer the score.
             </span>
           </>
@@ -125,7 +125,7 @@ export function ScanCapture({
       {/* Optional angles */}
       <div>
         <p className="text-xs font-medium text-muted-foreground">
-          Optional — add more angles for a fuller score
+          Optional: add more angles for a fuller score
         </p>
         <div className="mt-2 grid grid-cols-3 gap-2">
           {OPTIONAL_SLOTS.map((s) => {

@@ -123,7 +123,7 @@ export const GROOM_LOOKS: LookStyle[] = [
     "short_boxed",
     "beard",
     "Short boxed beard",
-    "Structured, wedding-safe",
+    "Structured, occasion-safe",
     "a short boxed beard, trimmed close with crisp cheek lines and a defined neckline, connected moustache",
   ),
   g(

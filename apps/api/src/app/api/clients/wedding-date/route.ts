@@ -71,7 +71,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
     {
       type: "wedding_date_changed",
       title: "Wedding date changed",
-      body: `${client.name}'s wedding is now ${formatDate(weddingDate)} — ${result.sessionsRescheduled} future session(s) were rescheduled.`,
+      body: `${client.name}'s big day is now ${formatDate(weddingDate)}. ${result.sessionsRescheduled} future session(s) were rescheduled.`,
       linkPath: `/clients/${client.id}`,
     },
   );

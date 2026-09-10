@@ -191,7 +191,7 @@ export function CroTrackingPage() {
             title={tab === "today" ? "Nothing due today" : "No follow-ups here"}
             hint={
               tab === "overdue"
-                ? "Great — you're on top of every client."
+                ? "Great, you're on top of every client."
                 : "Follow-ups are seeded when a client is activated, and you can add your own."
             }
           />
@@ -211,7 +211,7 @@ export function CroTrackingPage() {
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     Due {formatDate(f.dueDate)}
-                    {f.notes && ` — ${f.notes}`}
+                    {f.notes && ` · ${f.notes}`}
                   </p>
                 </div>
                 {f.status !== "completed" &&
@@ -330,7 +330,7 @@ function CompleteFollowUpModal({
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
           {followUp.client.name}
-          {cadence > 0 && ` — the next one will be scheduled in ${cadence} days.`}
+          {cadence > 0 && `. The next one will be scheduled in ${cadence} days.`}
         </p>
         <Field label="Notes">
           <Textarea

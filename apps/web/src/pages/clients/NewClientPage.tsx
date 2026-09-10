@@ -78,7 +78,7 @@ export function NewClientPage() {
     // explicitly verifies it's a separate person.
     if (duplicateClients.length > 0 && !verifiedDupes) {
       setError(
-        "This email or phone already belongs to an existing client — verify it's a new person and confirm below.",
+        "This email or phone already belongs to an existing client. Verify it's a new person and confirm below.",
       );
       return;
     }
@@ -185,7 +185,7 @@ export function NewClientPage() {
               ))}
             </Select>
           </Field>
-          <Field label="Wedding date" error={errors.weddingDate?.message} required>
+          <Field label="Big day date" error={errors.weddingDate?.message} required>
             <Input {...register("weddingDate")} type="date" />
           </Field>
           <Field label="City" error={errors.city?.message} required>
@@ -221,7 +221,7 @@ export function NewClientPage() {
                   <Link to={`/clients/${d.id}`} className="font-medium text-primary hover:underline">
                     {d.name} ({d.clientCode})
                   </Link>{" "}
-                  — {d.status}
+                  ({d.status})
                 </li>
               ))}
             </ul>
@@ -232,7 +232,7 @@ export function NewClientPage() {
                 onChange={(e) => setVerifiedDupes(e.target.checked)}
                 className="h-4 w-4"
               />
-              I've verified this is a separate person — create anyway
+              I've verified this is a separate person. Create anyway
             </label>
           </div>
         )}

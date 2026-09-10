@@ -33,9 +33,9 @@ export default {
     const shell = await env.ASSETS.fetch(new Request(new URL("/", url).toString(), request));
     let html = await shell.text();
 
-    let title = `${PRODUCT} — GTB`;
+    let title = `${PRODUCT} · GTB`;
     let description =
-      "How wedding-ready are you? A free AI selfie scan with a week-by-week prep roadmap.";
+      "How ready are you for your big day? A free AI selfie scan with a week-by-week prep roadmap.";
     try {
       const res = await fetch(
         `${env.API_URL}/api/scan/report?scanId=${encodeURIComponent(scanId)}`,
@@ -44,8 +44,8 @@ export default {
       if (res.ok) {
         const { report } = (await res.json()) as { report: ReportSummary };
         if (report.scores) {
-          title = `I'm ${report.scores.readiness}% wedding-ready — ${report.daysToWedding} days to go`;
-          description = `Skin, hair, beard and style scored by the free ${PRODUCT}. See how you compare — scan yours in a minute.`;
+          title = `I'm ${report.scores.readiness}% ready for my big day, ${report.daysToWedding} days to go`;
+          description = `Skin, hair, beard and style scored by the free ${PRODUCT}. See how you compare. Scan yours in a minute.`;
         }
       }
     } catch {

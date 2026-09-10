@@ -297,7 +297,7 @@ export function WeddingsStrip({ weddings }: { weddings: WeddingEntry[] }) {
     return (
       <EmptyState
         icon={Heart}
-        title="No upcoming weddings"
+        title="No upcoming big days"
         hint="Active clients' big days will appear here."
       />
     );
@@ -405,7 +405,7 @@ export function ActivityFeed({ activity }: { activity: ActivityEntry[] }) {
           <div className="min-w-0 flex-1 pb-1">
             <p className="text-sm">
               <span className="font-medium">{a.client}</span>{" "}
-              <span className="text-muted-foreground">— {a.text}</span>
+              <span className="text-muted-foreground">· {a.text}</span>
             </p>
             <p className="text-xs text-muted-foreground/80">{timeAgo(a.when)}</p>
           </div>

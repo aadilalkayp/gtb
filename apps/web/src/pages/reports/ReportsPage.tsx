@@ -190,7 +190,7 @@ export function ReportsPage() {
     <div className="page">
       <PageHeader
         title="Reports"
-        subtitle="Revenue, collections, sales, performance, and spend — exportable to CSV."
+        subtitle="Revenue, collections, sales, performance, and spend, exportable to CSV."
         actions={
           <Select
             value={period}
@@ -395,13 +395,13 @@ function RevenueReport({
         />
         <StatCard
           icon={TrendingUp}
-          label="Groom revenue"
+          label="GTB (men) revenue"
           value={formatINR(groomRevenue)}
           accent="groom"
         />
         <StatCard
           icon={TrendingUp}
-          label="Bride revenue"
+          label="GLW (women) revenue"
           value={formatINR(brideRevenue)}
           accent="bride"
         />

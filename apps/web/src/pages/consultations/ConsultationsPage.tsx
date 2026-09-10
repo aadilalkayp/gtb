@@ -257,7 +257,7 @@ export function ConsultationsPage() {
                       {formatDate(s.actualDate ?? s.scheduledDate)}
                       {overdue && <span className="ml-1 font-medium text-danger">(past due)</span>}
                       {s.consultant && ` · ${s.consultant.name}`}
-                      {s.notes && ` — ${s.notes}`}
+                      {s.notes && ` · ${s.notes}`}
                     </p>
                   </div>
                   <StatusBadge status={s.status} />

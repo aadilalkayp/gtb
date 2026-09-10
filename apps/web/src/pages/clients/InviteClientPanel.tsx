@@ -69,7 +69,7 @@ export function InviteClientPanel({
             <span className="flex h-6 w-6 items-center justify-center rounded-full bg-warning/15 text-warning">
               <Mail className="h-4 w-4" />
             </span>
-            Email not sent — share this link
+            Email not sent. Share this link
           </>
         )}
       </div>

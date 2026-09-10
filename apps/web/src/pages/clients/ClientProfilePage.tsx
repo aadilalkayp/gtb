@@ -181,7 +181,7 @@ export function ClientProfilePage() {
                     type="button"
                     onClick={() => setShowWeddingEdit(true)}
                     className="text-muted-foreground transition-colors duration-150 hover:text-foreground"
-                    title="Change wedding date"
+                    title="Change big day date"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -381,7 +381,7 @@ export function ClientProfilePage() {
                     </p>
                     <p className="text-xs text-muted-foreground">
                       {formatDate(s.actualDate ?? s.scheduledDate)}
-                      {s.notes && ` — ${s.notes}`}
+                      {s.notes && ` · ${s.notes}`}
                     </p>
                   </div>
                   {s.rating != null && <RatingStars value={s.rating} />}
@@ -391,7 +391,7 @@ export function ClientProfilePage() {
             </div>
           ) : (
             <p className="card p-10 text-center text-sm text-muted-foreground">
-              No sessions yet — they're generated when the client is activated.
+              No sessions yet. They're generated when the client is activated.
             </p>
           ))}
 
@@ -420,7 +420,7 @@ export function ClientProfilePage() {
             </div>
           ) : (
             <p className="card p-10 text-center text-sm text-muted-foreground">
-              No installments yet — generated when the client selects a plan.
+              No installments yet. They're generated when the client selects a plan.
             </p>
           ))}
 
@@ -657,7 +657,7 @@ function StatusChangeModal({
         )}
         {action === "cancel" && (
           <p className="text-sm text-muted-foreground">
-            This is permanent — a cancelled client can't be reactivated. If they return, create a
+            This is permanent. A cancelled client can't be reactivated. If they return, create a
             new client entry.
           </p>
         )}
@@ -719,7 +719,7 @@ function WeddingDateModal({
       const res = await updateWeddingDate(clientId, date);
       setResult(res.sessionsRescheduled);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not update the wedding date");
+      setError(e instanceof Error ? e.message : "Could not update the date");
       setBusy(false);
     }
   }
@@ -728,7 +728,7 @@ function WeddingDateModal({
     <Modal
       open
       onClose={result != null ? onDone : onClose}
-      title={`Change ${clientName}'s wedding date`}
+      title={`Change ${clientName}'s big day`}
       size="sm"
       footer={
         result != null ? (
@@ -747,7 +747,7 @@ function WeddingDateModal({
     >
       {result != null ? (
         <p className="text-sm text-muted-foreground">
-          Wedding date updated — {result} future session{result === 1 ? "" : "s"} rescheduled.
+          Big day updated. {result} future session{result === 1 ? "" : "s"} rescheduled.
         </p>
       ) : (
         <div className="space-y-4">
@@ -755,7 +755,7 @@ function WeddingDateModal({
             Future sessions are rescheduled around the new date; completed and cancelled sessions
             are untouched. The team is notified.
           </p>
-          <Field label="Wedding date" required>
+          <Field label="Big day date" required>
             <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </Field>
           {error && <p className="text-sm text-danger">{error}</p>}

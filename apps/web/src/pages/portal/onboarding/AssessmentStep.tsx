@@ -151,7 +151,7 @@ export function AssessmentStep({
             <Input type="number" min={1} {...register("age")} placeholder="28" />
           </Field>
           <div className="col-span-2">
-            <Field label="Profile photo" hint="Optional — helps your team recognise you.">
+            <Field label="Profile photo" hint="Optional. Helps your team recognise you.">
               <FileUploadField
                 clientId={client.id}
                 type="client_photo"

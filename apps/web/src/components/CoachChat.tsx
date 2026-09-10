@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 import { Button, Spinner } from "@/components/ui";
 
 const SUGGESTIONS = [
-  "When should I get my wedding haircut?",
-  "My skin looks oily in photos — what should I change?",
+  "When should I get my big day haircut?",
+  "My skin looks oily in photos. What should I change?",
   "What colours suit me for the reception?",
   "What should the last two weeks look like?",
 ];
@@ -71,7 +71,7 @@ export function CoachChat({ scanId, compact = false }: { scanId: string; compact
           <MessageCircle className="h-5 w-5 text-primary" /> Ask the GTB coach
         </h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Grooming, hair, style and wedding-prep questions, answered from GTB's method and your own
+          Grooming, hair, style and big day prep questions, answered from GTB's method and your own
           scan. Not medical advice.
         </p>
       </div>

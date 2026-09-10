@@ -80,7 +80,7 @@ export function ReadinessHero({
         </div>
       </ProgressRing>
       <div>
-        <p className="font-display text-lg font-semibold">Wedding Readiness</p>
+        <p className="font-display text-lg font-semibold">Big Day Readiness</p>
         <p className="mt-0.5 text-sm text-muted-foreground">
           <span className="font-num font-semibold text-foreground">
             {Math.max(daysToWedding, 0)}
@@ -185,7 +185,7 @@ export function GroomScoreGrid({
           <div className="text-sm">
             <p className="font-medium">Prep progress</p>
             <p className="text-xs text-muted-foreground">
-              Roadmap tasks ticked off on time — every tick moves your readiness.
+              Roadmap tasks ticked off on time. Every tick moves your readiness.
             </p>
           </div>
         </div>
@@ -205,7 +205,7 @@ export function AttributeList({
     <div>
       <h3 className="text-sm font-semibold">Detailed analysis</h3>
       <p className="mt-0.5 text-xs text-muted-foreground">
-        Appearance ratings only — never a medical assessment.
+        Appearance ratings only, never a medical assessment.
       </p>
       <div className="mt-3 grid gap-x-6 gap-y-2 sm:grid-cols-2">
         {attributes.map((a) => (

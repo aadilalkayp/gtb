@@ -37,7 +37,7 @@ export function ShareScore({ report }: { report: ScanReport }) {
   const [copied, setCopied] = useState(false);
   const url = scanReportUrl(report.scanId);
   const readiness = report.scores?.readiness ?? 0;
-  const text = `I'm ${readiness}% wedding-ready with ${report.daysToWedding} days to go — take the free ${PRODUCT_NAME}`;
+  const text = `I'm ${readiness}% ready for my big day with ${report.daysToWedding} days to go. Take the free ${PRODUCT_NAME}`;
 
   const share = async () => {
     if (typeof navigator.share === "function") {
@@ -67,7 +67,7 @@ export function ShareScore({ report }: { report: ScanReport }) {
       />
       <div className="flex flex-wrap items-center justify-between gap-3 p-4">
         <p className="text-sm text-muted-foreground">
-          Share your score — friends can scan free too.
+          Share your score. Friends can scan free too.
         </p>
         <Button variant="secondary" onClick={() => void share()}>
           {copied ? (
@@ -120,7 +120,7 @@ export function ScanReportView({
     <div className="animate-fade-up space-y-5">
       {emailed && (
         <p className="rounded-lg bg-success/10 px-4 py-2.5 text-sm text-success">
-          Your report is in your inbox — this page is its permanent home.
+          Your report is in your inbox. This page is its permanent home.
         </p>
       )}
 
@@ -146,7 +146,7 @@ export function ScanReportView({
         </div>
         {report.scores.style == null && (
           <p className="mt-3 text-xs text-muted-foreground">
-            Style is scored from a full-body photo —{" "}
+            Style is scored from a full-body photo:{" "}
             <Link to="/scan" className="text-primary underline">
               rescan with one
             </Link>{" "}
@@ -168,7 +168,7 @@ export function ScanReportView({
         <div className="card p-6">
           <h2 className="font-display text-lg font-semibold">Your prep roadmap</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Week-by-week focus built from your scan, plus the milestones every wedding needs.
+            Week-by-week focus built from your scan, plus the milestones every big day needs.
           </p>
           <div className="mt-4">
             <RoadmapList items={report.roadmap} />
@@ -193,11 +193,11 @@ export function ScanReportView({
       <div className="card bg-gradient-to-br from-primary via-primary to-primary/80 p-6 text-primary-foreground">
         <h2 className="font-display text-xl font-semibold">Want the score to move?</h2>
         <p className="mt-1.5 text-sm leading-relaxed opacity-90">
-          The scan shows where you stand — the GTB program is how the number climbs. Our team has
+          The scan shows where you stand. The GTB program is how the number climbs. Our team has
           your report and will reach out, or reply to your report email any time.
         </p>
         <p className="mt-4 text-xs opacity-80">
-          Rescan monthly to watch your progress — use the same email so your history stays together.
+          Rescan monthly to watch your progress. Use the same email so your history stays together.
         </p>
       </div>
 
@@ -222,7 +222,7 @@ export function ScanReportView({
         >
           <p className="mb-4 text-sm text-muted-foreground">
             Eight quick questions. Fitness and Confidence can't be read from a photo, so they come
-            from you — and they count toward your headline readiness.
+            from you, and they count toward your headline readiness.
           </p>
           <SelfReportForm
             scanId={report.scanId}

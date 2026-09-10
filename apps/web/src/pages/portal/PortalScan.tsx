@@ -175,7 +175,7 @@ export function PortalScan() {
         <EmptyState
           icon={ScanFace}
           title="No scan yet"
-          hint="Take your first Transformation Readiness Scan — a selfie is all it takes."
+          hint="Take your first Transformation Readiness Scan. A selfie is all it takes."
           action={
             <Button onClick={() => setRescanOpen(true)}>
               <Camera className="mr-1.5 h-4 w-4" /> Scan now
@@ -237,7 +237,7 @@ export function PortalScan() {
                 <TrendingUp className="h-4 w-4" />
                 {delta > 0
                   ? `Your appearance score improved by ${delta} points since your last scan.`
-                  : `Down ${Math.abs(delta)} points since last scan — this week's roadmap gets you back.`}
+                  : `Down ${Math.abs(delta)} points since last scan. This week's roadmap gets you back.`}
               </p>
             )}
             <div className="mt-6">
@@ -269,7 +269,7 @@ export function PortalScan() {
             <section className="card p-5">
               <h2 className="text-sm font-semibold">Your progress</h2>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                Appearance score, scan after scan — compared with yourself only.
+                Appearance score, scan after scan, compared with yourself only.
               </p>
               <div className="mt-3 h-48 w-full">
                 <ResponsiveContainer width="100%" height="100%">
@@ -340,7 +340,7 @@ export function PortalScan() {
             <section className="card p-6">
               <h2 className="font-display text-lg font-semibold">Your prep roadmap</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Tick items off as you go — every on-time tick lifts your readiness, and weekly focus
+                Tick items off as you go. Every on-time tick lifts your readiness, and weekly focus
                 refreshes with every rescan.
               </p>
               <div className="mt-4">
@@ -360,7 +360,7 @@ export function PortalScan() {
         size="md"
       >
         <p className="mb-4 text-sm text-muted-foreground">
-          Fitness and Confidence can't be read from a photo, so they come from you — and they count
+          Fitness and Confidence can't be read from a photo, so they come from you, and they count
           toward your headline readiness.
         </p>
         <SelfReportForm

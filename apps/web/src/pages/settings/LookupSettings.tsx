@@ -101,7 +101,7 @@ export function LeadSourcesSettings() {
   return (
     <LookupManager
       title="Lead Sources"
-      subtitle="Where leads come from — shown in the new-lead form."
+      subtitle="Where leads come from, shown in the new-lead form."
       placeholder="e.g. Instagram"
       rows={data}
       isLoading={isLoading}

@@ -68,8 +68,8 @@ export function PrivacyPage() {
           are enrolled as a client.
         </li>
         <li>
-          <strong>Wedding and preferences.</strong> Your wedding date, roadmap progress, and — for
-          clients — the onboarding assessment you fill in (skin, fitness and style preferences).
+          <strong>Big day and preferences.</strong> Your big day date, roadmap progress, and, for
+          clients, the onboarding assessment you fill in (skin, fitness and style preferences).
         </li>
         <li>
           <strong>Usage data.</strong> Standard server logs (IP address, browser, timestamps) used
@@ -80,8 +80,8 @@ export function PrivacyPage() {
       <h2>How the scan analyses your photo</h2>
       <p>
         Photos are analysed by an AI vision model (currently Google Gemini, processed by Google on
-        our behalf under their API terms) to produce <strong>appearance ratings only</strong> —
-        skin, hair, beard and style — and grooming suggestions. The scan is{" "}
+        our behalf under their API terms) to produce <strong>appearance ratings only</strong>{" "}
+        (skin, hair, beard and style) and grooming suggestions. The scan is{" "}
         <strong>not a medical assessment</strong>, does not diagnose any condition, and must not be
         relied on as health advice. Photos are not used to train AI models.
       </p>

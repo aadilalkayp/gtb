@@ -115,7 +115,7 @@ export function CoachKnowledgeSettings() {
       {placeholders > 0 && (
         <p className="rounded-lg bg-warning/10 px-4 py-2.5 text-sm text-warning">
           {placeholders} {placeholders === 1 ? "article still contains" : "articles still contain"}{" "}
-          a [PLACEHOLDER] — replace with GTB's real methodology before launch.
+          a [PLACEHOLDER]. Replace with GTB's real methodology before launch.
         </p>
       )}
       {error && <p className="text-sm text-danger">{error}</p>}
@@ -126,7 +126,7 @@ export function CoachKnowledgeSettings() {
         </div>
       ) : !articles?.length ? (
         <p className="card p-10 text-center text-sm text-muted-foreground">
-          No articles yet — the coach will give only cautious general guidance until you add some.
+          No articles yet. The coach will give only cautious general guidance until you add some.
         </p>
       ) : (
         <div className="card divide-y divide-border">

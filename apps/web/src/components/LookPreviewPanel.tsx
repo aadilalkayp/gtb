@@ -133,7 +133,7 @@ export function LookPreviewPanel({ scanId, type }: { scanId: string; type: "groo
         })}
       </div>
       <p className="text-[11px] text-muted-foreground">
-        Previews are AI renderings for direction, not a promise of the exact result — take them to
+        Previews are AI renderings for direction, not a promise of the exact result. Take them to
         your barber or stylist.
       </p>
     </div>

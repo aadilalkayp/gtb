@@ -287,7 +287,7 @@ function ExpenseRowItem({
           {e.payee && ` · Payout to ${e.payee.name}`}
           {e.paidTo && ` · ${e.paidTo}`}
           {` · by ${e.submittedBy.name}`}
-          {e.notes && ` — ${e.notes}`}
+          {e.notes && ` · ${e.notes}`}
         </p>
         {e.status === "rejected" && e.rejectionReason && (
           <p className="mt-0.5 rounded-md bg-danger/10 px-2 py-1 text-xs text-danger">
@@ -442,7 +442,7 @@ function SubmitExpenseModal({
         </div>
         <Field
           label="Related client"
-          hint="Optional — links the expense and enables a receipt upload."
+          hint="Optional. Links the expense and enables a receipt upload."
         >
           <Select value={clientId} onChange={(e) => setClientId(e.target.value)}>
             <option value="">— None —</option>

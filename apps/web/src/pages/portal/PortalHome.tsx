@@ -82,7 +82,7 @@ export function PortalHome() {
               {days >= 0 ? days : 0}
               <span className="ml-2 text-lg font-medium opacity-80">days to go</span>
             </p>
-            <p className="mt-1 text-sm opacity-80">Wedding on {formatDate(client.weddingDate)}</p>
+            <p className="mt-1 text-sm opacity-80">Your big day is {formatDate(client.weddingDate)}</p>
           </div>
           <div className="flex items-center gap-3">
             <ProgressRing

@@ -28,7 +28,7 @@ export function ScanPage() {
 
   const runScan = async () => {
     if (!photos.front || !weddingDate) {
-      setError("Add a selfie and your wedding date to start.");
+      setError("Add a selfie and your big day to start.");
       return;
     }
     setError(null);
@@ -87,19 +87,19 @@ export function ScanPage() {
         <div className="animate-fade-up space-y-6">
           <div>
             <h1 className="font-display text-3xl font-semibold tracking-tight">
-              How wedding-ready are you?
+              How ready are you for your <span className="text-primary">Big Day</span>?
             </h1>
             <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-              Upload a selfie and your wedding date — our AI scores your skin, hair, beard and
-              style, then builds your week-by-week prep roadmap. Add a full-body photo to unlock
-              Style. Free, in under a minute.
+              Upload a selfie and tell us your big day. Our AI analyzes your skin, hair, beard and
+              style, then creates your personalized transformation roadmap. Add a full-body photo
+              to unlock Style. Quick, easy and free.
             </p>
           </div>
 
           <ScanCapture photos={photos} onChange={setPhotos} onError={setError} />
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Your wedding date" htmlFor="scan-date" required>
+            <Field label="Your big day" htmlFor="scan-date" required>
               <Input
                 id="scan-date"
                 type="date"
@@ -108,17 +108,21 @@ export function ScanPage() {
                 onChange={(e) => setWeddingDate(e.target.value)}
               />
             </Field>
-            <Field label="I'm the" htmlFor="scan-type">
+            <Field label="Grooming for" htmlFor="scan-type">
               <Select
                 id="scan-type"
                 value={type}
                 onChange={(e) => setType(e.target.value === "bride" ? "bride" : "groom")}
               >
-                <option value="groom">Groom</option>
-                <option value="bride">Bride</option>
+                <option value="groom">Men</option>
+                <option value="bride">Women</option>
               </Select>
             </Field>
           </div>
+          <p className="-mt-2 text-[11px] leading-relaxed text-muted-foreground">
+            A wedding, a new job, an interview, a first date, or any date you want to look your
+            best for.
+          </p>
 
           {error && <p className="text-sm text-danger">{error}</p>}
 
@@ -130,8 +134,8 @@ export function ScanPage() {
             Scan my readiness <ArrowRight className="ml-1.5 h-4 w-4" />
           </Button>
           <p className="text-center text-[11px] leading-relaxed text-muted-foreground">
-            Your photo is analyzed for appearance only — never a medical assessment — and is deleted
-            within 24 hours unless you save your report.{" "}
+            Your photo is analyzed for appearance only, never as a medical assessment, and is
+            deleted within 24 hours unless you save your report.{" "}
             <Link to="/privacy" className="underline">
               Privacy
             </Link>
@@ -165,11 +169,11 @@ export function ScanPage() {
             </ProgressRing>
             <div>
               <p className="font-display text-xl font-semibold">
-                Wedding in {teaser.daysToWedding} days
+                Your big day is in {teaser.daysToWedding} days
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                Your full breakdown — skin, hair, beard, style — plus a week-by-week roadmap is
-                ready.
+                Your full breakdown of skin, hair, beard and style, plus a week-by-week roadmap,
+                is ready.
               </p>
             </div>
             <div className="flex w-full items-center gap-2 rounded-lg bg-muted px-4 py-2.5 text-xs text-muted-foreground">

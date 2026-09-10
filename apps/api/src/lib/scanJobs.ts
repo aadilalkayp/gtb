@@ -71,7 +71,7 @@ export async function runScanJobs(): Promise<ScanJobReport> {
       const sent = await notifyOncePerDay(client.userId, {
         type: "roadmap_week",
         title: "Your prep plan this week",
-        body: `${n} readiness ${n === 1 ? "task" : "tasks"} on your roadmap this week — tick them off as you go.`,
+        body: `${n} readiness ${n === 1 ? "task" : "tasks"} on your roadmap this week. Tick them off as you go.`,
         linkPath: "/portal/scan",
       });
       report.roadmapRemindersSent += sent;
@@ -99,7 +99,7 @@ export async function runScanJobs(): Promise<ScanJobReport> {
     const sent = await notifyOncePerDay(client.userId, {
       type: "rescan_due",
       title: "Time for your monthly rescan",
-      body: "It's been a month since your last scan — rescan to see how far you've come.",
+      body: "It's been a month since your last scan. Rescan to see how far you've come.",
       linkPath: "/portal/scan",
     });
     report.rescanRemindersSent += sent;

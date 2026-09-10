@@ -43,7 +43,7 @@ export function inviteEmail(args: {
   registrationUrl: string;
 }): SendMailInput {
   const { to, clientName, brand, registrationUrl } = args;
-  const subject = `Welcome to ${brand} — finish setting up your account`;
+  const subject = `Welcome to ${brand}: finish setting up your account`;
   const html = layout(
     "You're invited to your client portal",
     `
@@ -67,7 +67,7 @@ ${registrationUrl}
 
 This link expires in 7 days.
 
-— Groom To Be / Glow To Be`;
+- Groom To Be / Glow To Be`;
   return { to, subject, html, text };
 }
 
@@ -100,6 +100,6 @@ You've been added to GTB OS as ${roleLabel}. Set your password here:
 
 ${registrationUrl}
 
-— GTB OS`;
+- GTB OS`;
   return { to, subject, html, text };
 }
