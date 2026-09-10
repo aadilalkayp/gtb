@@ -1,88 +1,91 @@
 import SwiftUI
 
+/// The on-device coach, styled like a considered messaging surface: user
+/// bubbles take the accent gradient, coach bubbles sit on white cards, and
+/// the input bar floats on material above the keyboard.
 struct CoachView: View {
     @Environment(ScanFlow.self) private var flow
     @State private var coach = LocalCoach()
     @State private var draft = ""
 
+    private var accent: Color { Theme.accent(for: flow.type) }
+
     var body: some View {
-        VStack(spacing: 0) {
+        ZStack {
+            AtelierBackground(type: flow.type)
+
             switch coach.availability {
             case .checking:
-                Spacer()
-                ProgressView("Checking the on-device model…")
-                Spacer()
+                ProgressView("Waking the on-device model…")
+                    .font(.system(size: 13))
+                    .tint(accent)
             case .unavailable(let message):
                 unavailableView(message)
             case .ready:
                 chat
             }
         }
-        .background(Theme.paper)
         .task { coach.prepare(report: flow.report, type: flow.type) }
     }
+
+    // MARK: Chat
 
     private var chat: some View {
         VStack(spacing: 0) {
             ScrollViewReader { proxy in
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 10) {
+                    LazyVStack(alignment: .leading, spacing: 12) {
                         privacyBanner
+                            .padding(.top, 8)
+
                         if coach.turns.isEmpty {
                             starterPrompts
                         }
+
                         ForEach(coach.turns) { turn in
                             bubble(turn)
+                                .transition(.opacity.combined(with: .offset(y: 10)))
                         }
+
                         if coach.thinking {
-                            HStack {
-                                ProgressView()
-                                Text("Thinking on this phone…")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .id("thinking")
+                            thinkingIndicator
+                                .id("thinking")
+                                .transition(.opacity)
                         }
                     }
-                    .padding()
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 12)
+                    .animation(Theme.spring, value: coach.turns)
+                    .animation(Theme.springFast, value: coach.thinking)
                 }
+                .scrollDismissesKeyboard(.interactively)
                 .onChange(of: coach.turns) {
                     if let last = coach.turns.last {
-                        withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                        withAnimation(Theme.spring) { proxy.scrollTo(last.id, anchor: .bottom) }
                     }
                 }
             }
 
-            HStack(spacing: 8) {
-                TextField("Ask about skin, hair, outfits…", text: $draft, axis: .vertical)
-                    .textFieldStyle(.roundedBorder)
-                    .lineLimit(1...4)
-                Button {
-                    let question = draft
-                    draft = ""
-                    Task { await coach.ask(question) }
-                } label: {
-                    Image(systemName: "arrow.up.circle.fill").font(.title2)
-                }
-                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || coach.thinking)
-            }
-            .padding()
-            .background(.white)
+            inputBar
         }
     }
 
     private var privacyBanner: some View {
-        Label(
-            "Answers come from Apple's on-device model. This chat never leaves your phone.",
-            systemImage: "lock.iphone"
-        )
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(spacing: 6) {
+            Image(systemName: "lock.iphone")
+                .font(.system(size: 11, weight: .medium))
+            Text("Runs on Apple's on-device model. This chat never leaves your phone.")
+                .font(.system(size: 12))
+        }
+        .foregroundStyle(Theme.inkSecondary)
+        .frame(maxWidth: .infinity)
+        .multilineTextAlignment(.center)
     }
 
     private var starterPrompts: some View {
         VStack(alignment: .leading, spacing: 8) {
+            Overline(text: "Ask me about")
+                .padding(.top, 12)
             ForEach(
                 [
                     "What should my daily routine be?",
@@ -93,53 +96,122 @@ struct CoachView: View {
                 Button {
                     Task { await coach.ask(prompt) }
                 } label: {
-                    Text(prompt)
-                        .font(.subheadline)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(.white, in: Capsule())
+                    HStack {
+                        Text(prompt)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Theme.ink)
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(accent)
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 13)
+                    .background {
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(.white)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .strokeBorder(Theme.hairline, lineWidth: 1)
+                            }
+                    }
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(PressableStyle())
             }
         }
-        .padding(.top, 8)
     }
 
     private func bubble(_ turn: LocalCoach.Turn) -> some View {
         HStack {
-            if turn.role == .user { Spacer(minLength: 40) }
+            if turn.role == .user { Spacer(minLength: 48) }
             Text(turn.text)
-                .font(.subheadline)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 10)
-                .background(
-                    turn.role == .user ? Theme.accent(for: flow.type).opacity(0.15) : .white,
-                    in: RoundedRectangle(cornerRadius: 14)
-                )
-            if turn.role == .coach { Spacer(minLength: 40) }
+                .font(.system(size: 15))
+                .foregroundStyle(turn.role == .user ? .white : Theme.ink)
+                .padding(.horizontal, 15)
+                .padding(.vertical, 11)
+                .background {
+                    if turn.role == .user {
+                        RoundedRectangle(cornerRadius: 19, style: .continuous)
+                            .fill(Theme.accentGradient(for: flow.type))
+                    } else {
+                        RoundedRectangle(cornerRadius: 19, style: .continuous)
+                            .fill(.white)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 19, style: .continuous)
+                                    .strokeBorder(Theme.hairline, lineWidth: 1)
+                            }
+                    }
+                }
+            if turn.role == .coach { Spacer(minLength: 48) }
         }
         .id(turn.id)
         .frame(maxWidth: .infinity, alignment: turn.role == .user ? .trailing : .leading)
     }
 
+    private var thinkingIndicator: some View {
+        HStack(spacing: 8) {
+            ProgressView().controlSize(.small).tint(accent)
+            Text("Thinking, on this phone")
+                .font(.system(size: 12))
+                .foregroundStyle(Theme.inkSecondary)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var inputBar: some View {
+        HStack(spacing: 10) {
+            TextField("Skin, hair, outfits…", text: $draft, axis: .vertical)
+                .font(.system(size: 15))
+                .lineLimit(1...4)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background {
+                    Capsule().fill(.white)
+                        .overlay { Capsule().strokeBorder(Theme.hairline, lineWidth: 1) }
+                }
+
+            Button {
+                let question = draft
+                draft = ""
+                Task { await coach.ask(question) }
+            } label: {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 38, height: 38)
+                    .background(Theme.accentGradient(for: flow.type), in: Circle())
+            }
+            .buttonStyle(PressableStyle())
+            .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty || coach.thinking)
+            .opacity(draft.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1)
+            .animation(.easeOut(duration: 0.15), value: draft.isEmpty)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    // MARK: Unavailable
+
     private func unavailableView(_ message: String) -> some View {
-        VStack(spacing: 14) {
-            Spacer()
-            Image(systemName: "iphone.slash")
-                .font(.largeTitle)
-                .foregroundStyle(.secondary)
+        VStack(spacing: 16) {
+            Image(systemName: "iphone.gen3")
+                .font(.system(size: 34))
+                .foregroundStyle(Theme.inkSecondary.opacity(0.6))
             Text(message)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                .font(.system(size: 15))
+                .foregroundStyle(Theme.inkSecondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
+                .frame(maxWidth: 300)
             if let scanId = flow.report?.scanId {
                 Link(destination: Settings.webBaseURL.appending(path: "/scan/r/\(scanId)")) {
-                    Label("Open the full coach on the web", systemImage: "safari")
-                        .font(.subheadline.weight(.medium))
+                    Label("Open the full coach on the web", systemImage: "arrow.up.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(accent)
                 }
+                .buttonStyle(PressableStyle())
             }
-            Spacer()
         }
+        .padding(32)
     }
 }
