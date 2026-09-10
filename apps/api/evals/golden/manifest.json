@@ -1,0 +1,38 @@
+{
+  "$comment": "Golden set for the scan eval. `synthetic` cases are generated at runtime (no face -> framing must reject) and are safe to run against the real model. `photos` cases reference real files in this directory (never committed - see README.md) and are skipped when a file is missing. `expect` score ranges are [min,max] checked against the mean over repeats.",
+  "cases": [
+    {
+      "id": "framing-noise",
+      "type": "groom",
+      "synthetic": "noise",
+      "expect": { "framingRejected": true }
+    },
+    {
+      "id": "framing-flat",
+      "type": "groom",
+      "synthetic": "flat",
+      "expect": { "framingRejected": true }
+    },
+    {
+      "id": "groom-baseline",
+      "type": "groom",
+      "photos": [{ "angle": "front", "file": "groom-baseline-front.jpg" }],
+      "expect": { "skinScore": [30, 90], "hairScore": [30, 90], "beardScore": [30, 90] }
+    },
+    {
+      "id": "groom-fullbody",
+      "type": "groom",
+      "photos": [
+        { "angle": "front", "file": "groom-fullbody-front.jpg" },
+        { "angle": "full_body", "file": "groom-fullbody-body.jpg" }
+      ],
+      "expect": { "styleScored": true }
+    },
+    {
+      "id": "bride-baseline",
+      "type": "bride",
+      "photos": [{ "angle": "front", "file": "bride-baseline-front.jpg" }],
+      "expect": { "skinScore": [30, 90] }
+    }
+  ]
+}
