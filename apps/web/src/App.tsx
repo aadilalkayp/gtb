@@ -150,7 +150,9 @@ export default function App() {
               <Route path="/clients/new" element={<NewClientPage />} />
               <Route path="/clients/:id" element={<ClientProfilePage />} />
               <Route path="/consultations" element={<ConsultationsPage />} />
-              <Route path="/styling-operations" element={<StylingOperationsPage />} />
+              <Route element={<RequireCapability capability="styling.manage" />}>
+                <Route path="/styling-operations" element={<StylingOperationsPage />} />
+              </Route>
               <Route path="/payments" element={<PaymentsPage />} />
               <Route path="/cro-tracking" element={<CroTrackingPage />} />
               <Route path="/team-tasks" element={<TeamTasksPage />} />

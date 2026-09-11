@@ -20,6 +20,7 @@ export const CAPABILITIES = [
   "payment.record_manual",
   "session.mark_complete",
   "session.upload_docs",
+  "styling.manage",
   "followup.conduct",
   "plan.manage",
   "user.manage",
@@ -54,6 +55,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, Capability[]> = {
     "expense.approve",
     "expense.view_reports",
     "leadsource.manage",
+    "styling.manage",
     "calendar.view_all",
     "task.assign",
   ],
@@ -94,6 +96,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, Capability[]> = {
   styling_consultant: [
     "client.view_assigned",
     "session.mark_complete",
+    "styling.manage",
     "session.upload_docs",
     "report.view_own",
     "expense.submit",
