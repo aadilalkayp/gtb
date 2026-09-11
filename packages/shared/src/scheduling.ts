@@ -107,24 +107,26 @@ export function generateSchedule(
 }
 
 /**
- * Build an evenly-spaced installment schedule for a plan (SRS §8.2).
- * First installment is due on the enrollment date; the rest are spread across
- * the plan duration.
+ * Build the default evenly-spaced milestone schedule for a plan (SRS §8.2).
+ * First milestone (the expected down payment) is due on the enrollment date;
+ * the rest are spread across the plan duration. This is only a TEMPLATE —
+ * staff can replace the amounts/dates per client at (or after) enrollment,
+ * as long as the schedule still sums to the plan price.
  */
-export interface GeneratedInstallment {
-  installmentNumber: number;
+export interface GeneratedMilestone {
+  milestoneNumber: number;
   amount: number;
   dueDate: Date;
 }
 
-export function generateInstallments(
+export function generateMilestoneTemplate(
   totalPrice: number,
-  installmentCount: number,
+  milestoneCount: number,
   durationMonths: number,
   enrollmentDate: Date,
-): GeneratedInstallment[] {
-  const count = Math.max(installmentCount, 1);
-  // Split into whole rupees, putting any remainder on the first installment.
+): GeneratedMilestone[] {
+  const count = Math.max(milestoneCount, 1);
+  // Split into whole rupees, putting any remainder on the first milestone.
   const base = Math.floor(totalPrice / count);
   const remainder = totalPrice - base * count;
   const start = stripTime(enrollmentDate);
@@ -132,7 +134,7 @@ export function generateInstallments(
   const step = count > 1 ? spanDays / count : 0;
 
   return Array.from({ length: count }, (_, i) => ({
-    installmentNumber: i + 1,
+    milestoneNumber: i + 1,
     amount: i === 0 ? base + remainder : base,
     dueDate: addDays(start, Math.round(i * step)),
   }));

@@ -56,6 +56,12 @@ const STATUS_TONES: Record<string, Tone> = {
   approved: "success",
   partially_paid: "warning",
   waived: "neutral",
+  pending_review: "warning",
+  due_today: "warning",
+  behind: "danger",
+  waiver: "neutral",
+  on_track: "success",
+  paid_in_full: "success",
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

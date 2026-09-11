@@ -15,15 +15,21 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 
 /**
  * Enroll a client in a plan (SRS §6.1 step 5 + §8.2). Creates the ClientPlan
- * (with a price/name snapshot) and the generated installment schedule.
- * STATE-7: creation + leadPhase advance are one transaction, and the
- * double-enroll race returns 409 (EnrollmentConflictError) instead of a 500.
+ * (with a price/name snapshot) and the milestone schedule — the plan's
+ * evenly-split template by default, or a custom schedule when staff pass
+ * `milestones` (amounts must sum to the plan price). STATE-7: creation +
+ * leadPhase advance are one transaction, and the double-enroll race returns
+ * 409 (EnrollmentConflictError) instead of a 500.
  */
 async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
   if (!authUser) return json(req, { error: "Unauthorized" }, 401);
 
-  let body: { clientId?: string; planId?: string };
+  let body: {
+    clientId?: string;
+    planId?: string;
+    milestones?: { amount?: number; dueDate?: string }[];
+  };
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -38,6 +44,9 @@ async function handlePost(req: NextRequest): Promise<Response> {
   // path; staff (founder/ops/cro) may enroll anyone.
   const isStaff = STAFF_ENROLLERS.has(authUser.role);
   if (!isStaff) {
+    if (body.milestones) {
+      return json(req, { error: "Only staff can customise the payment schedule" }, 403);
+    }
     const client = await prisma.client.findUnique({
       where: { id: clientId },
       select: { id: true, userId: true },
@@ -46,8 +55,21 @@ async function handlePost(req: NextRequest): Promise<Response> {
     if (client.userId !== authUser.id) return json(req, { error: "Forbidden" }, 403);
   }
 
+  let milestones: { amount: number; dueDate: Date }[] | undefined;
+  if (body.milestones) {
+    milestones = body.milestones.map((m) => ({
+      amount: Number(m.amount),
+      dueDate: new Date(m.dueDate ?? NaN),
+    }));
+  }
+
   try {
-    const clientPlan = await enrollClientInPlan({ clientId, planId, actorId: authUser.id });
+    const clientPlan = await enrollClientInPlan({
+      clientId,
+      planId,
+      actorId: authUser.id,
+      milestones,
+    });
     return json(req, { clientPlan });
   } catch (e) {
     const msg = (e as Error).message;
@@ -60,6 +82,9 @@ async function handlePost(req: NextRequest): Promise<Response> {
     if (msg === "PLAN_UNAVAILABLE") return json(req, { error: "Plan not available" }, 404);
     if (msg === "PLAN_MISMATCH") {
       return json(req, { error: "Plan does not match the client's program" }, 409);
+    }
+    if (msg === "BAD_SCHEDULE") {
+      return json(req, { error: "The milestone schedule must sum exactly to the plan price" }, 400);
     }
     throw e;
   }

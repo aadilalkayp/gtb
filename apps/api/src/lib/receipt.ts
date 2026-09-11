@@ -9,8 +9,11 @@ export interface ReceiptData {
   clientName: string;
   clientCode: string;
   planName: string;
-  installmentNumber: number;
+  /** Sequence of this payment among the client's approved payments (1-based). */
+  paymentNumber: number;
   amount: number;
+  /** Plan balance remaining after this payment. */
+  balanceAfter: number;
   paymentMethod: string;
   paidAt: Date;
   receiptId: string;
@@ -59,8 +62,9 @@ export async function createPaymentReceipt(
   };
   row("Client", `${data.clientName} (${data.clientCode})`);
   row("Plan", data.planName);
-  row("Installment", `${data.installmentNumber} of the payment schedule`);
+  row("Payment", `#${data.paymentNumber}`);
   row("Payment method", methodLabel(data.paymentMethod));
+  row("Balance remaining", formatINR(data.balanceAfter));
 
   doc.moveDown(0.8);
 

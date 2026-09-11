@@ -9,7 +9,7 @@ import {
   useFindManyTask,
 } from "@gtb/db/hooks";
 import { formatINR, humanize, type ServiceType, SERVICE_TYPE_LABELS } from "@gtb/shared";
-import { asDate, isInstallmentOverdue, istYearMonth, downloadCsv } from "@/lib/insights";
+import { asDate, istYearMonth, downloadCsv, planPace } from "@/lib/insights";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -79,10 +79,14 @@ function monthsInRange(start: Date): { key: string; label: string; year: number;
 
 // ---- Raw shapes -------------------------------------------------------------
 
-interface InstallmentLite {
+interface MilestoneLite {
   amount: number;
   dueDate: string | Date;
+}
+interface PaymentLite {
+  amount: number;
   status: string;
+  kind: string;
   approvedAt: string | Date | null;
 }
 interface SessionLite {
@@ -106,7 +110,8 @@ interface ClientLite {
   clientPlan: {
     planNameSnapshot: string;
     priceAtEnrollment: number;
-    installments: InstallmentLite[];
+    milestones: MilestoneLite[];
+    payments: PaymentLite[];
   } | null;
   sessions: SessionLite[];
 }
@@ -140,7 +145,8 @@ export function ReportsPage() {
         select: {
           planNameSnapshot: true,
           priceAtEnrollment: true,
-          installments: { select: { amount: true, dueDate: true, status: true, approvedAt: true } },
+          milestones: { select: { amount: true, dueDate: true } },
+          payments: { select: { amount: true, status: true, kind: true, approvedAt: true } },
         },
       },
       sessions: {
@@ -324,10 +330,11 @@ function DataTable({
 
 // ---- Revenue ----------------------------------------------------------------
 
+/** Approved real money in range — waivers settle balance but are not revenue. */
 function approvedInRange(c: ClientLite, inRange: (d: string | Date | null) => boolean): number {
-  return (c.clientPlan?.installments ?? [])
-    .filter((i) => i.status === "approved" && inRange(i.approvedAt))
-    .reduce((t, i) => t + i.amount, 0);
+  return (c.clientPlan?.payments ?? [])
+    .filter((p) => p.status === "approved" && p.kind === "payment" && inRange(p.approvedAt))
+    .reduce((t, p) => t + p.amount, 0);
 }
 
 function RevenueReport({
@@ -344,12 +351,15 @@ function RevenueReport({
     const collections = clients.reduce(
       (t, c) =>
         t +
-        (c.clientPlan?.installments ?? [])
+        (c.clientPlan?.payments ?? [])
           .filter(
-            (i) =>
-              i.status === "approved" && i.approvedAt && sameMonth(i.approvedAt, m.year, m.month),
+            (p) =>
+              p.status === "approved" &&
+              p.kind === "payment" &&
+              p.approvedAt &&
+              sameMonth(p.approvedAt, m.year, m.month),
           )
-          .reduce((s, i) => s + i.amount, 0),
+          .reduce((s, p) => s + p.amount, 0),
       0,
     );
     const sales = clients
@@ -467,29 +477,36 @@ function CollectionsReport({
   clients: ClientLite[];
   inRange: (d: string | Date | null) => boolean;
 }) {
-  const allInstallments = clients.flatMap((c) => c.clientPlan?.installments ?? []);
-  // CALC-4: collection rate = approved amount among installments DUE in the
-  // period / amount due in the period — one set, so it can never exceed 100%
-  // from early payments or understate from late collections.
-  const dueInPeriod = allInstallments.filter((i) => inRange(i.dueDate));
-  const collectedOnDue = dueInPeriod
-    .filter((i) => i.status === "approved")
-    .reduce((t, i) => t + i.amount, 0);
-  const due = dueInPeriod.reduce((t, i) => t + i.amount, 0);
-  const rate = due ? Math.round((collectedOnDue / due) * 100) : 0;
+  // CALC-4 (flexible payments): payments aren't tied to milestones, so the
+  // collection rate compares CUMULATIVE coverage — per client, how much of
+  // what fell due in the period is covered by everything approved so far
+  // (early payments count toward later checkpoints, so the rate can't exceed
+  // 100% or punish odd chunk sizes).
+  let due = 0;
+  let covered = 0;
+  for (const c of clients) {
+    const plan = c.clientPlan;
+    if (!plan) continue;
+    const milestones = plan.milestones;
+    const dueBefore = milestones
+      .filter((m) => !inRange(m.dueDate))
+      .reduce((t, m) => t + m.amount, 0);
+    const dueIn = milestones.filter((m) => inRange(m.dueDate)).reduce((t, m) => t + m.amount, 0);
+    const paid = plan.payments
+      .filter((p) => p.status === "approved")
+      .reduce((t, p) => t + p.amount, 0);
+    due += dueIn;
+    covered += Math.min(Math.max(paid - dueBefore, 0), dueIn);
+  }
+  const rate = due ? Math.round((covered / due) * 100) : 0;
   // "Collected (period)" stays the cash view — approvals that landed in range.
-  const collected = allInstallments
-    .filter((i) => i.status === "approved" && inRange(i.approvedAt))
-    .reduce((t, i) => t + i.amount, 0);
+  const collected = clients.reduce((t, c) => t + approvedInRange(c, inRange), 0);
 
   const outstanding = clients
     .map((c) => {
-      const ins = c.clientPlan?.installments ?? [];
-      const amount = ins
-        .filter((i) => i.status !== "approved" && i.status !== "waived")
-        .reduce((t, i) => t + i.amount, 0);
-      const overdue = ins.filter(isInstallmentOverdue).reduce((t, i) => t + i.amount, 0);
-      return { id: c.id, name: c.name, amount, overdue };
+      if (!c.clientPlan) return { id: c.id, name: c.name, amount: 0, overdue: 0 };
+      const pace = planPace(c.clientPlan);
+      return { id: c.id, name: c.name, amount: pace.balance, overdue: pace.behindAmount };
     })
     .filter((r) => r.amount > 0)
     .sort((a, b) => b.amount - a.amount);

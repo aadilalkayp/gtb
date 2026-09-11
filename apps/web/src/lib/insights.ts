@@ -6,6 +6,14 @@
  * shapes returned by the generated hooks (dates may arrive as strings).
  */
 
+import {
+  milestonePace,
+  planPaymentPace,
+  type MilestonePace,
+  type MilestonePaceStatus,
+  type PlanPaymentPace,
+} from "@gtb/shared";
+
 export type DateLike = Date | string;
 
 /** MISC-9: the business runs on IST (SRS §22.6) — all day math is IST-pinned. */
@@ -41,20 +49,33 @@ export function isSameDay(a: DateLike, b: Date = new Date()): boolean {
 }
 
 /**
- * THE shared overdue predicate (CALC-6): past its due date and not settled
- * (approved/waived). Used by the profile badge, the counts, the alerts, and
- * the portal — everywhere, so they can never disagree. SRS §18.3 "past due
- * date, not approved".
+ * THE shared payment-pace derivation (CALC-6, flexible-payments rework): the
+ * schedule (milestones) and the money (payments) are decoupled, so "behind"
+ * means the approved total doesn't cover the cumulative expected amount at a
+ * passed checkpoint. Everything on the web derives from this one wrapper —
+ * the profile, the alerts, the dashboard and the portal can never disagree.
+ * The IST day anchor is supplied here so the shared math stays pure.
  */
-export function isInstallmentOverdue(i: { dueDate: DateLike; status: string }): boolean {
-  if (i.status === "approved" || i.status === "waived") return false;
-  return asDate(i.dueDate).getTime() < startOfDay().getTime();
+export interface PlanPaymentLite {
+  priceAtEnrollment: number;
+  milestones: { amount: number; dueDate: DateLike }[];
+  payments: { amount: number; status: string; kind?: string | null }[];
 }
 
-/** Display status for an installment — maps derived-overdue onto the stored status. */
-export function installmentDisplayStatus(i: { dueDate: DateLike; status: string }): string {
-  if (isInstallmentOverdue(i)) return "overdue";
-  return i.status;
+export function planPace(plan: PlanPaymentLite): PlanPaymentPace {
+  return planPaymentPace(plan.priceAtEnrollment, plan.milestones, plan.payments, startOfDay());
+}
+
+export function milestonePaces<M extends { amount: number; dueDate: DateLike }>(
+  plan: PlanPaymentLite & { milestones: M[] },
+): MilestonePace<M>[] {
+  return milestonePace(plan.milestones, plan.payments, startOfDay());
+}
+
+/** Display status for a milestone row — layers "due_today" onto the pace. */
+export function milestoneDisplayStatus(p: MilestonePace): MilestonePaceStatus {
+  if (p.status !== "paid" && isSameDay(p.milestone.dueDate)) return "due_today";
+  return p.status;
 }
 
 export interface SessionLite {
@@ -67,7 +88,8 @@ export interface SessionLite {
 export interface AtRiskInput {
   status: string;
   sessions: SessionLite[];
-  installments: { dueDate: DateLike; status: string }[];
+  /** The client's plan payment state; null when no plan is enrolled yet. */
+  plan: PlanPaymentLite | null;
   /** Lifetime completed-session count from the server. The dashboard fetches
    *  only a recent window of sessions, so "has this client ever completed a
    *  session?" cannot be derived from the windowed list — without this, a
@@ -120,8 +142,11 @@ export function deriveAtRisk(client: AtRiskInput): AtRiskResult {
     reasons.push("No completed session in 7+ days");
   }
 
-  const overdueCount = client.installments.filter(isInstallmentOverdue).length;
-  if (overdueCount >= 2) reasons.push(`${overdueCount} overdue payments`);
+  // SRS §13.3 "2+ overdue payments" → 2+ milestone checkpoints behind pace.
+  const behindCount = client.plan
+    ? milestonePaces(client.plan).filter((p) => p.status === "behind").length
+    : 0;
+  if (behindCount >= 2) reasons.push(`Behind on ${behindCount} payment milestones`);
 
   if (last3.length === 3 && last3.every((s) => s.rating == null)) {
     reasons.push("Last 3 sessions unrated");

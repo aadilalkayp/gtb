@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { prisma } from "../src/index.js";
 import {
-  approveInstallment,
+  approvePayment,
+  recordPayment,
   PaymentConflictError,
+  PaymentAmountError,
   completeSession,
   SessionConflictError,
-  submitPaymentProof,
+  submitPayment,
   ProofConflictError,
   enrollClientInPlan,
   EnrollmentConflictError,
@@ -16,7 +18,8 @@ import {
   seedClient,
   seedPlan,
   seedClientPlan,
-  seedInstallment,
+  seedMilestone,
+  seedPayment,
   seedAssignment,
   seedSession,
   seedExpenseCategory,
@@ -26,16 +29,16 @@ import {
 } from "./helpers.js";
 
 describe("Phase 2 — STATE-4: unique-constraint backstops", () => {
-  it("rejects a duplicate installment for the same (plan, number)", async () => {
+  it("rejects a duplicate milestone for the same (plan, number)", async () => {
     const c = await seedClient({ id: "c1" });
     const plan = await seedPlan();
     const cp = await seedClientPlan(c.id, plan.id);
-    await seedInstallment(cp.id, 1);
+    await seedMilestone(cp.id, 1);
     await expect(
-      prisma.installment.create({
+      prisma.paymentMilestone.create({
         data: {
           clientPlanId: cp.id,
-          installmentNumber: 1,
+          milestoneNumber: 1,
           amount: 100,
           dueDate: new Date(),
         },
@@ -130,24 +133,24 @@ describe("Phase 2 — STATE-1: atomic payment approval", () => {
 
   it("approves and converts on the first approval (all in one tx)", async () => {
     const { c, cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1);
-    const res = await approveInstallment({ installmentId: inst.id, paymentMethod: "upi", actorId: "cro1" });
+    const p = await seedPayment(cp.id, { status: "pending_review", amount: 30000 });
+    const res = await approvePayment({ paymentId: p.id, paymentMethod: "upi", actorId: "cro1" });
     expect(res.converted).toBe(true);
-    const row = await prisma.installment.findUniqueOrThrow({ where: { id: inst.id } });
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: p.id } });
     expect(row.status).toBe("approved");
     const client = await prisma.client.findUniqueOrThrow({ where: { id: c.id } });
     expect(client.status).toBe("converted");
     expect(client.conversionDate).not.toBeNull();
   });
 
-  it("second approval of the same installment throws (concurrent double-approve)", async () => {
+  it("second approval of the same payment throws (concurrent double-approve)", async () => {
     const { cp } = await seedPaidClient();
-    const inst = await seedInstallment(cp.id, 1);
+    const p = await seedPayment(cp.id, { status: "pending_review", amount: 30000 });
     // Simulate the race: both callers pass the pre-check, then the guarded
     // update lets exactly one through.
     const [r1, r2] = await Promise.allSettled([
-      approveInstallment({ installmentId: inst.id, paymentMethod: "upi", actorId: "cro1" }),
-      approveInstallment({ installmentId: inst.id, paymentMethod: "upi", actorId: "cro1" }),
+      approvePayment({ paymentId: p.id, paymentMethod: "upi", actorId: "cro1" }),
+      approvePayment({ paymentId: p.id, paymentMethod: "upi", actorId: "cro1" }),
     ]);
     const fulfilled = [r1, r2].filter((r) => r.status === "fulfilled");
     const rejected = [r1, r2].filter(
@@ -162,13 +165,13 @@ describe("Phase 2 — STATE-1: atomic payment approval", () => {
     expect(client.conversionDate).not.toBeNull();
   });
 
-  it("two concurrent approvals of DIFFERENT installments convert exactly once", async () => {
+  it("two concurrent approvals of DIFFERENT payments convert exactly once", async () => {
     const { c, cp } = await seedPaidClient();
-    const i1 = await seedInstallment(cp.id, 1);
-    const i2 = await seedInstallment(cp.id, 2);
+    const p1 = await seedPayment(cp.id, { status: "pending_review", amount: 30000 });
+    const p2 = await seedPayment(cp.id, { status: "pending_review", amount: 30000 });
     await Promise.allSettled([
-      approveInstallment({ installmentId: i1.id, paymentMethod: "upi", actorId: "cro1" }),
-      approveInstallment({ installmentId: i2.id, paymentMethod: "upi", actorId: "cro1" }),
+      approvePayment({ paymentId: p1.id, paymentMethod: "upi", actorId: "cro1" }),
+      approvePayment({ paymentId: p2.id, paymentMethod: "upi", actorId: "cro1" }),
     ]);
     const client = await prisma.client.findUniqueOrThrow({ where: { id: c.id } });
     expect(client.status).toBe("converted");
@@ -176,19 +179,62 @@ describe("Phase 2 — STATE-1: atomic payment approval", () => {
     // approval saw priorApproved > 0 and skipped the conversion.
     const converted = await prisma.client.count({ where: { id: c.id, status: "converted" } });
     expect(converted).toBe(1);
-    const approved = await prisma.installment.count({ where: { clientPlanId: cp.id, status: "approved" } });
+    const approved = await prisma.payment.count({ where: { clientPlanId: cp.id, status: "approved" } });
     expect(approved).toBe(2); // both payments are real money; only one conversion
   });
 
-  it("later installments approve without re-converting", async () => {
+  it("later payments approve without re-converting", async () => {
     const { c, cp } = await seedPaidClient();
-    const i1 = await seedInstallment(cp.id, 1);
-    const i2 = await seedInstallment(cp.id, 2);
-    await approveInstallment({ installmentId: i1.id, paymentMethod: "upi", actorId: "cro1" });
-    const res = await approveInstallment({ installmentId: i2.id, paymentMethod: "upi", actorId: "cro1" });
+    const p1 = await seedPayment(cp.id, { status: "pending_review", amount: 30000 });
+    const p2 = await seedPayment(cp.id, { status: "pending_review", amount: 30000 });
+    await approvePayment({ paymentId: p1.id, paymentMethod: "upi", actorId: "cro1" });
+    const res = await approvePayment({ paymentId: p2.id, paymentMethod: "upi", actorId: "cro1" });
     expect(res.converted).toBe(false);
     const client = await prisma.client.findUniqueOrThrow({ where: { id: c.id } });
     expect(client.status).toBe("converted");
+  });
+
+  it("an approval that would overpay the plan rolls back", async () => {
+    const { cp } = await seedPaidClient();
+    await seedPayment(cp.id, { status: "approved", amount: 80000 });
+    const p = await seedPayment(cp.id, { status: "pending_review", amount: 20000 }); // 100k > 90k price
+    await expect(
+      approvePayment({ paymentId: p.id, paymentMethod: "upi", actorId: "cro1" }),
+    ).rejects.toBeInstanceOf(PaymentAmountError);
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: p.id } });
+    expect(row.status).toBe("pending_review"); // rolled back, still reviewable
+  });
+
+  it("recordPayment creates an approved payment, converts once, and guards the balance", async () => {
+    const { c } = await seedPaidClient();
+    const res = await recordPayment({
+      clientId: c.id,
+      amount: 40000,
+      paymentMethod: "cash",
+      actorId: "cro1",
+    });
+    expect(res.converted).toBe(true);
+    await expect(
+      recordPayment({ clientId: c.id, amount: 60000, paymentMethod: "cash", actorId: "cro1" }),
+    ).rejects.toBeInstanceOf(PaymentAmountError); // 40k + 60k > 90k price
+    const rows = await prisma.payment.findMany({ where: { clientPlan: { clientId: c.id } } });
+    expect(rows).toHaveLength(1); // the overpay attempt rolled back entirely
+  });
+
+  it("a waiver settles balance but never converts a lead", async () => {
+    const { c, cp } = await seedPaidClient();
+    const res = await recordPayment({
+      clientId: c.id,
+      amount: 90000,
+      kind: "waiver",
+      actorId: "cro1",
+    });
+    expect(res.converted).toBe(false);
+    const client = await prisma.client.findUniqueOrThrow({ where: { id: c.id } });
+    expect(client.status).toBe("lead");
+    const row = await prisma.payment.findFirstOrThrow({ where: { clientPlanId: cp.id } });
+    expect(row.kind).toBe("waiver");
+    expect(row.status).toBe("approved");
   });
 });
 
@@ -269,7 +315,7 @@ describe("Phase 2 — STATE-3: one payout per completed session", () => {
   });
 });
 
-describe("Phase 2 — STATE-6: atomic proof submission", () => {
+describe("Phase 2 — STATE-6: atomic payment submission", () => {
   async function seedProofScene() {
     await seedUser({ id: "client1", role: "client" });
     await seedUser({ id: "client2", role: "client" });
@@ -277,36 +323,53 @@ describe("Phase 2 — STATE-6: atomic proof submission", () => {
     await seedClient({ id: "c2", userId: "client2" });
     const plan = await seedPlan();
     const cp = await seedClientPlan(c.id, plan.id);
-    const inst = await seedInstallment(cp.id, 1);
+    await seedMilestone(cp.id, 1);
     const ownDoc = await seedDocument({ clientId: c.id, type: "payment_proof", uploadedById: "client1" });
     const foreignDoc = await seedDocument({ clientId: "c2", type: "payment_proof", uploadedById: "client2" });
-    return { c, inst, ownDoc, foreignDoc };
+    return { c, cp, ownDoc, foreignDoc };
   }
 
-  it("submits the proof and advances leadPhase atomically", async () => {
-    const { c, inst, ownDoc } = await seedProofScene();
-    await submitPaymentProof({ installmentId: inst.id, proofDocumentId: ownDoc.id, actorId: "client1" });
-    const row = await prisma.installment.findUniqueOrThrow({ where: { id: inst.id } });
-    expect(row.status).toBe("proof_submitted");
+  it("submits a payment and advances leadPhase atomically", async () => {
+    const { c, cp, ownDoc } = await seedProofScene();
+    const { paymentId } = await submitPayment({ actorId: "client1", amount: 30000, proofDocumentId: ownDoc.id });
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(row.status).toBe("pending_review");
+    expect(row.amount).toBe(30000);
+    expect(row.clientPlanId).toBe(cp.id);
     const client = await prisma.client.findUniqueOrThrow({ where: { id: c.id } });
     expect(client.leadPhase).toBe("payment_submitted");
   });
 
   it("rejects a proof document belonging to another client", async () => {
-    const { inst, foreignDoc } = await seedProofScene();
+    const { cp, foreignDoc } = await seedProofScene();
     await expect(
-      submitPaymentProof({ installmentId: inst.id, proofDocumentId: foreignDoc.id, actorId: "client1" }),
+      submitPayment({ actorId: "client1", amount: 30000, proofDocumentId: foreignDoc.id }),
     ).rejects.toThrow("Invalid proof document");
-    const row = await prisma.installment.findUniqueOrThrow({ where: { id: inst.id } });
-    expect(row.status).toBe("pending");
+    const count = await prisma.payment.count({ where: { clientPlanId: cp.id } });
+    expect(count).toBe(0);
   });
 
-  it("rejects a second submit on an already-submitted installment", async () => {
-    const { inst, ownDoc } = await seedProofScene();
-    await submitPaymentProof({ installmentId: inst.id, proofDocumentId: ownDoc.id, actorId: "client1" });
+  it("rejects re-submitting a proof document that's already attached", async () => {
+    const { ownDoc } = await seedProofScene();
+    await submitPayment({ actorId: "client1", amount: 10000, proofDocumentId: ownDoc.id });
     await expect(
-      submitPaymentProof({ installmentId: inst.id, proofDocumentId: ownDoc.id, actorId: "client1" }),
+      submitPayment({ actorId: "client1", amount: 10000, proofDocumentId: ownDoc.id }),
     ).rejects.toBeInstanceOf(ProofConflictError);
+  });
+
+  it("caps the amount at what's left once approved + under-review are counted", async () => {
+    const { c, cp, ownDoc } = await seedProofScene();
+    await seedPayment(cp.id, { status: "approved", amount: 50000 });
+    await seedPayment(cp.id, { status: "pending_review", amount: 20000 });
+    // 90k price − 50k approved − 20k under review = 20k submittable
+    await expect(
+      submitPayment({ actorId: "client1", amount: 30000, proofDocumentId: ownDoc.id }),
+    ).rejects.toThrow("AMOUNT_TOO_HIGH");
+    await submitPayment({ actorId: "client1", amount: 20000, proofDocumentId: ownDoc.id });
+    const doc2 = await seedDocument({ clientId: c.id, type: "payment_proof", uploadedById: "client1" });
+    await expect(
+      submitPayment({ actorId: "client1", amount: 1, proofDocumentId: doc2.id }),
+    ).rejects.toBeInstanceOf(ProofConflictError); // nothing left to pay
   });
 });
 
@@ -335,7 +398,45 @@ describe("Phase 2 — STATE-7: enrollment conflicts are 409s", () => {
     ).rejects.toThrow("NO_ASSESSMENT"); // MISC-4: §5.3 state machine
     const client = await prisma.client.findUniqueOrThrow({ where: { id: c.id } });
     expect(client.leadPhase).toBe("plan_selected");
-    const installments = await prisma.installment.count({ where: { clientPlan: { clientId: c.id } } });
-    expect(installments).toBe(3); // seedPlan has installmentCount 3
+    const milestones = await prisma.paymentMilestone.findMany({
+      where: { clientPlan: { clientId: c.id } },
+      orderBy: { milestoneNumber: "asc" },
+    });
+    expect(milestones).toHaveLength(3); // seedPlan has installmentCount 3 (the template)
+    expect(milestones.reduce((t, m) => t + m.amount, 0)).toBe(90000); // sums to price
+  });
+
+  it("accepts a custom milestone schedule that sums to the price", async () => {
+    await seedUser({ id: "client9", role: "client" });
+    const c = await seedClient({ id: "c9", userId: "client9" });
+    await seedAssessment(c.id, { completedAt: new Date() });
+    const plan = await seedPlan();
+    await enrollClientInPlan({
+      clientId: c.id,
+      planId: plan.id,
+      milestones: [
+        { amount: 50000, dueDate: new Date("2026-10-01T00:00:00.000Z") },
+        { amount: 40000, dueDate: new Date("2026-12-01T00:00:00.000Z") },
+      ],
+    });
+    const milestones = await prisma.paymentMilestone.findMany({
+      where: { clientPlan: { clientId: c.id } },
+      orderBy: { milestoneNumber: "asc" },
+    });
+    expect(milestones.map((m) => m.amount)).toEqual([50000, 40000]);
+  });
+
+  it("rejects a custom schedule that doesn't sum to the price", async () => {
+    await seedUser({ id: "client8", role: "client" });
+    const c = await seedClient({ id: "c8", userId: "client8" });
+    await seedAssessment(c.id, { completedAt: new Date() });
+    const plan = await seedPlan();
+    await expect(
+      enrollClientInPlan({
+        clientId: c.id,
+        planId: plan.id,
+        milestones: [{ amount: 10000, dueDate: new Date("2026-10-01T00:00:00.000Z") }],
+      }),
+    ).rejects.toThrow("BAD_SCHEDULE");
   });
 });

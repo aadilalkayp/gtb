@@ -3,7 +3,16 @@
  * render time — no background job — and shared by the dashboard and the /alerts
  * center. Each alert rolls up a category with a count and drill-down items.
  */
-import { asDate, startOfDay, isSameDay, isInstallmentOverdue, deriveAtRisk } from "./insights";
+import { formatINR } from "@gtb/shared";
+import {
+  asDate,
+  startOfDay,
+  isSameDay,
+  deriveAtRisk,
+  milestonePaces,
+  planPace,
+  type PlanPaymentLite,
+} from "./insights";
 
 export type AlertSeverity = "danger" | "warning" | "info";
 
@@ -33,7 +42,8 @@ interface ClientNode {
     actualDate?: string | Date | null;
     rating?: number | null;
   }[];
-  installments: { dueDate: string | Date; status: string }[];
+  /** Plan payment state (milestones + ledger); null when no plan enrolled. */
+  plan: PlanPaymentLite | null;
   /** Lifetime completed-session count from the server (the session list is a
    *  recent window — see AtRiskInput.totalCompletedSessions). */
   totalCompletedSessions?: number;
@@ -74,16 +84,18 @@ export function deriveAlerts(input: AlertInput): AlertItem[] {
   const sevenDaysAgo = startOfDay(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
   const out: AlertItem[] = [];
 
-  // Payment due today — pending installment with due_date = today.
-  const dueToday = input.clients.flatMap((c) =>
-    c.installments
-      .filter((i) => i.status === "pending" && isSameDay(i.dueDate, today))
-      .map(() => ({
-        label: c.name,
-        sublabel: "Installment due today",
-        linkPath: `/clients/${c.id}`,
-      })),
-  );
+  // Payment due today — a milestone checkpoint dated today that the client's
+  // approved total doesn't cover yet. A client who already paid ahead (in any
+  // chunk sizes) never fires this.
+  const dueToday = input.clients.flatMap((c) => {
+    if (!c.plan) return [];
+    const n = milestonePaces(c.plan).filter(
+      (p) => p.status !== "paid" && isSameDay(p.milestone.dueDate, today),
+    ).length;
+    return n
+      ? [{ label: c.name, sublabel: "Payment milestone due today", linkPath: `/clients/${c.id}` }]
+      : [];
+  });
   if (dueToday.length)
     out.push({
       kind: "payment_due_today",
@@ -93,14 +105,15 @@ export function deriveAlerts(input: AlertInput): AlertItem[] {
       items: dueToday,
     });
 
-  // Overdue payments — past due, not approved/waived.
+  // Behind on payments — cumulative paid short of the passed checkpoints.
   const overdue = input.clients.flatMap((c) => {
-    const n = c.installments.filter(isInstallmentOverdue).length;
-    return n
+    if (!c.plan) return [];
+    const pace = planPace(c.plan);
+    return pace.behindAmount > 0
       ? [
           {
             label: c.name,
-            sublabel: `${n} installment${n > 1 ? "s" : ""} overdue`,
+            sublabel: `${formatINR(pace.behindAmount)} behind schedule`,
             linkPath: `/clients/${c.id}`,
           },
         ]
@@ -110,7 +123,7 @@ export function deriveAlerts(input: AlertInput): AlertItem[] {
     out.push({
       kind: "overdue_payments",
       severity: "danger",
-      title: "Overdue payments",
+      title: "Behind on payments",
       count: overdue.length,
       items: overdue,
     });

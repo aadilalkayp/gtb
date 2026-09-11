@@ -32,7 +32,13 @@ import {
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { cancelClient, completeClient, updateWeddingDate } from "@/lib/api";
-import { deriveAtRisk, installmentDisplayStatus, averageRating } from "@/lib/insights";
+import {
+  deriveAtRisk,
+  averageRating,
+  planPace,
+  milestonePaces,
+  milestoneDisplayStatus,
+} from "@/lib/insights";
 import { Avatar } from "@/components/ui/Avatar";
 import {
   Badge,
@@ -75,7 +81,12 @@ export function ClientProfilePage() {
       include: {
         leadSource: true,
         convertedBy: { select: { name: true } },
-        clientPlan: { include: { installments: { orderBy: { installmentNumber: "asc" } } } },
+        clientPlan: {
+          include: {
+            milestones: { orderBy: { milestoneNumber: "asc" } },
+            payments: { orderBy: { createdAt: "desc" } },
+          },
+        },
         sessions: {
           orderBy: { scheduledDate: "asc" },
           include: { consultant: { select: { name: true } } },
@@ -99,7 +110,7 @@ export function ClientProfilePage() {
         ? deriveAtRisk({
             status: client.status,
             sessions: client.sessions,
-            installments: client.clientPlan?.installments ?? [],
+            plan: client.clientPlan ?? null,
           })
         : { atRisk: false, reasons: [] },
     [client],
@@ -114,18 +125,19 @@ export function ClientProfilePage() {
     );
   }
 
-  const installments = client.clientPlan?.installments ?? [];
-  const total = client.clientPlan?.priceAtEnrollment ?? 0;
-  const paid = installments
-    .filter((i) => i.status === "approved")
-    .reduce((s, i) => s + i.amount, 0);
+  const plan = client.clientPlan ?? null;
+  const pace = plan ? planPace(plan) : null;
+  const paces = plan ? milestonePaces(plan) : [];
+  const payments = plan?.payments ?? [];
+  const total = plan?.priceAtEnrollment ?? 0;
+  const paid = pace?.paidTotal ?? 0;
   const avg = averageRating(client.sessions);
   const days = daysUntil(client.weddingDate);
 
   const tabs: TabDef<TabId>[] = [
     { id: "overview", label: "Overview" },
     { id: "sessions", label: "Sessions", count: client.sessions.length },
-    { id: "payments", label: "Payments", count: installments.length },
+    { id: "payments", label: "Payments", count: payments.length },
     { id: "documents", label: "Documents", count: client.documents.length },
     { id: "assessment", label: "Assessment" },
     { id: "scans", label: "Scans" },
@@ -396,31 +408,95 @@ export function ClientProfilePage() {
           ))}
 
         {tab === "payments" &&
-          (installments.length ? (
-            <div className="card divide-y divide-border">
-              {installments.map((i) => (
-                <div key={i.id} className="flex items-center justify-between px-5 py-3.5">
-                  <div>
-                    <p className="text-sm font-medium">
-                      Installment {i.installmentNumber} of {installments.length}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Due {formatDate(i.dueDate)}</p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-num text-sm font-semibold">{formatINR(i.amount)}</span>
-                    <StatusBadge status={installmentDisplayStatus(i)} />
-                  </div>
+          (plan ? (
+            <div className="space-y-4">
+              {/* Expected schedule — pace checkpoints, not invoices. */}
+              <div className="card divide-y divide-border">
+                <div className="flex items-center justify-between px-5 py-3.5">
+                  <h3 className="text-sm font-semibold">Expected schedule</h3>
+                  {pace && (
+                    <span className="text-xs text-muted-foreground">
+                      {formatINR(pace.balance)} outstanding
+                      {pace.behindAmount > 0 && (
+                        <span className="font-medium text-danger">
+                          {" "}
+                          · {formatINR(pace.behindAmount)} behind
+                        </span>
+                      )}
+                    </span>
+                  )}
                 </div>
-              ))}
-              <div className="px-5 py-3.5 text-right">
-                <Link to="/payments" className="text-xs font-medium text-primary hover:underline">
-                  Review & approve on the Payments page →
-                </Link>
+                {paces.length ? (
+                  paces.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between px-5 py-3.5">
+                      <div>
+                        <p className="text-sm font-medium">Milestone {i + 1} of {paces.length}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Expected by {formatDate(p.milestone.dueDate)}
+                          {p.status !== "paid" && p.remaining < p.milestone.amount && (
+                            <> · {formatINR(p.remaining)} remaining</>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-num text-sm font-semibold">
+                          {formatINR(p.milestone.amount)}
+                        </span>
+                        <StatusBadge status={milestoneDisplayStatus(p)} />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="px-5 py-3.5 text-sm text-muted-foreground">
+                    No schedule set — the client can pay in any amounts.
+                  </p>
+                )}
+              </div>
+
+              {/* The ledger — what actually arrived. */}
+              <div className="card divide-y divide-border">
+                <div className="px-5 py-3.5">
+                  <h3 className="text-sm font-semibold">Payments</h3>
+                </div>
+                {payments.length ? (
+                  payments.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between px-5 py-3.5">
+                      <div>
+                        <p className="text-sm font-medium">
+                          {p.kind === "waiver" ? "Waiver" : "Payment"}
+                          {p.paymentMethod && (
+                            <span className="font-normal text-muted-foreground">
+                              {" "}
+                              · {humanize(p.paymentMethod)}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {formatDate(p.approvedAt ?? p.createdAt)}
+                          {p.status === "rejected" && p.rejectionReason && (
+                            <span className="text-danger"> · {p.rejectionReason}</span>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-num text-sm font-semibold">{formatINR(p.amount)}</span>
+                        <StatusBadge status={p.status} />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="px-5 py-3.5 text-sm text-muted-foreground">No payments yet.</p>
+                )}
+                <div className="px-5 py-3.5 text-right">
+                  <Link to="/payments" className="text-xs font-medium text-primary hover:underline">
+                    Review, record & edit schedules on the Payments page →
+                  </Link>
+                </div>
               </div>
             </div>
           ) : (
             <p className="card p-10 text-center text-sm text-muted-foreground">
-              No installments yet. They're generated when the client selects a plan.
+              No plan yet. The payment schedule appears when the client selects a plan.
             </p>
           ))}
 
@@ -469,7 +545,7 @@ export function ClientProfilePage() {
           onClose={() => setStatusAction(null)}
           onConfirm={async (reason) => {
             if (statusAction === "cancel") {
-              // SYS-3: the server cascade (future sessions cancelled, installments
+              // SYS-3: the server cascade (future sessions cancelled, balance
               // waived, portal login blocked) — one transaction.
               await cancelClient(client.id, reason);
             } else if (statusAction === "complete") {

@@ -7,6 +7,12 @@
       "runtimeArgs": ["--filter", "@gtb/web", "dev"],
       "autoPort": true,
       "port": 5175
+    },
+    {
+      "name": "api",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gtb/api", "dev"],
+      "port": 3005
     }
   ]
 }

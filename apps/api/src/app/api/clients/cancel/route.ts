@@ -15,9 +15,9 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 
 /**
  * Cancel a client (SRS §24.3) — SYS-3. One transaction (cancelClientPlan):
- * status → cancelled, future sessions cancelled, outstanding installments
- * waived (staff decision), portal login blocked, ActivityLog written. Client
- * data is retained.
+ * status → cancelled, future sessions cancelled, the outstanding balance
+ * written off as a waiver payment (staff decision), portal login blocked,
+ * ActivityLog written. Client data is retained.
  */
 async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);

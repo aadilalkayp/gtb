@@ -2,7 +2,6 @@ import { formatDate, istAddDays, istStartOfDay } from "@gtb/shared";
 import { prisma } from "../index.js";
 
 export interface DailyJobReport {
-  installmentsMarkedOverdue: number;
   followUpsMarkedOverdue: number;
   sessionRemindersSent: number;
   paymentReminderFollowUpsCreated: number;
@@ -22,8 +21,9 @@ interface NotificationInput {
  * SYS-2: the daily automation pass (SRS §8.6 overdue flips, §9.3 session
  * reminders, §12.1/§12.3 follow-up auto-generation, §18.2 notifications).
  *
- * Source-of-truth decision (DATA-6): `overdue` IS a stored status, set here —
- * the UI predicates (CALC-6) are aligned to it in Phase 5.
+ * Flexible payments: "overdue" is no longer a stored status — being behind is
+ * DERIVED from milestones vs approved payments (see @gtb/shared milestonePace),
+ * so there is nothing for the daily job to flip. It only creates reminders.
  *
  * All day boundaries are IST (SRS §22.6): the API commonly runs on a UTC host,
  * where local-time `setHours(0,…)` math shifts every "tomorrow"/"due today"
@@ -34,7 +34,6 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
   const now = new Date();
   const todayStart = istStartOfDay(now);
   const report: DailyJobReport = {
-    installmentsMarkedOverdue: 0,
     followUpsMarkedOverdue: 0,
     sessionRemindersSent: 0,
     paymentReminderFollowUpsCreated: 0,
@@ -43,24 +42,14 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
     taskOverdueNotifications: 0,
   };
 
-  // 1. Overdue installments: a due date passed without payment → `overdue`
-  //    (SRS §8.6 "due date passed"). Strictly earlier IST days only — an
-  //    installment due today is not yet overdue. proof_submitted is under
-  //    review — not overdue.
-  const overdueRes = await prisma.installment.updateMany({
-    where: { dueDate: { lt: todayStart }, status: "pending" },
-    data: { status: "overdue" },
-  });
-  report.installmentsMarkedOverdue = overdueRes.count;
-
-  // 2. Overdue follow-ups (SRS §12.4) — same strictly-past-day rule.
+  // 1. Overdue follow-ups (SRS §12.4) — strictly-past IST days only.
   const fupRes = await prisma.followUp.updateMany({
     where: { dueDate: { lt: todayStart }, status: "pending" },
     data: { status: "overdue" },
   });
   report.followUpsMarkedOverdue = fupRes.count;
 
-  // 3. Session reminders — one day before (SRS §9.3).
+  // 2. Session reminders — one day before (SRS §9.3).
   const tomorrowStart = istAddDays(todayStart, 1);
   const sessions = await prisma.session.findMany({
     where: {
@@ -85,33 +74,43 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
     report.sessionRemindersSent += sent;
   }
 
-  // 4. Payment-reminder follow-ups: 3 days before the due date and on the due
-  //    date (SRS §12.1). The dedupe key is the human-readable auto-note (client
-  //    + installment due day + which reminder), so each installment produces at
-  //    most one advance reminder and one due-day reminder — regardless of how
-  //    often the job runs or whether the CRO already completed the earlier one.
-  //    (Keying on "no open reminder" regenerated a fresh follow-up every day
-  //    once the CRO completed the previous one.)
+  // 3. Payment-reminder follow-ups: 3 days before a milestone's date and on
+  //    the date itself (SRS §12.1). Milestones are pace CHECKPOINTS, not
+  //    invoices: a reminder only fires when the client's approved total does
+  //    not yet cover the cumulative amount expected through that milestone —
+  //    someone paying ahead in odd-sized chunks gets no nag. The dedupe key is
+  //    the human-readable auto-note (client + milestone due day + which
+  //    reminder), so each milestone produces at most one advance reminder and
+  //    one due-day reminder regardless of how often the job runs.
   const dueWindows = [
     { range: { gte: istAddDays(todayStart, 2), lt: istAddDays(todayStart, 4) }, kind: "upcoming" },
     { range: { gte: todayStart, lt: istAddDays(todayStart, 1) }, kind: "due today" },
   ] as const;
   for (const { range, kind } of dueWindows) {
-    const installments = await prisma.installment.findMany({
-      where: {
-        dueDate: range,
-        status: { in: ["pending", "overdue"] },
-      },
+    const milestones = await prisma.paymentMilestone.findMany({
+      where: { dueDate: range },
       include: {
-        clientPlan: { select: { client: { select: { id: true, status: true } } } },
+        clientPlan: {
+          select: {
+            client: { select: { id: true, status: true } },
+            milestones: { select: { amount: true, dueDate: true } },
+            payments: { select: { amount: true, status: true }, where: { status: "approved" } },
+          },
+        },
       },
     });
-    for (const i of installments) {
+    for (const i of milestones) {
       const client = i.clientPlan.client;
       if (client.status !== "active" && client.status !== "converted" && client.status !== "on_hold") {
         continue; // no payment reminders for leads
       }
-      const marker = `Auto: installment due ${formatDate(i.dueDate)} (${kind})`;
+      // Cumulative expected through THIS milestone vs cumulative approved.
+      const cumulativeDue = i.clientPlan.milestones
+        .filter((m) => m.dueDate.getTime() <= i.dueDate.getTime())
+        .reduce((t, m) => t + m.amount, 0);
+      const approvedTotal = i.clientPlan.payments.reduce((t, p) => t + p.amount, 0);
+      if (approvedTotal >= cumulativeDue) continue; // on pace — no reminder
+      const marker = `Auto: payment milestone due ${formatDate(i.dueDate)} (${kind})`;
       const dup = await prisma.followUp.findFirst({
         where: { clientId: client.id, type: "payment_reminder", notes: marker },
         select: { id: true },
@@ -135,7 +134,7 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
     }
   }
 
-  // 5. Satisfaction-check follow-ups after every 3rd completed session (§12.1).
+  // 4. Satisfaction-check follow-ups after every 3rd completed session (§12.1).
   const clients = await prisma.client.findMany({
     where: { status: { in: ["active", "converted", "on_hold"] } },
     include: {
@@ -169,7 +168,7 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
     report.satisfactionCheckFollowUpsCreated += 1;
   }
 
-  // 6. Styling operations within 7 days (SRS §18.2).
+  // 5. Styling operations within 7 days (SRS §18.2).
   const stylings = await prisma.stylingOperation.findMany({
     where: {
       stylingDate: { gte: todayStart, lt: istAddDays(todayStart, 7) },
@@ -192,7 +191,7 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
     report.stylingRemindersSent += sent;
   }
 
-  // 7. Overdue tasks (SRS §18.2).
+  // 6. Overdue tasks (SRS §18.2).
   const tasks = await prisma.task.findMany({
     where: { dueDate: { lt: todayStart }, status: { in: ["pending", "in_progress"] } },
     select: { id: true, title: true, assignedToId: true, assignedById: true },
