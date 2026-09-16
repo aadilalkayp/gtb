@@ -24,6 +24,7 @@ import { Button, Modal, Spinner, Tabs, type TabDef } from "@/components/ui";
 import { OutfitCheckPanel } from "@/components/OutfitCheckPanel";
 import { LookPreviewPanel } from "@/components/LookPreviewPanel";
 import { CoachChat } from "@/components/CoachChat";
+import { useFeatureFlags } from "@/lib/featureFlags";
 import { EmptyState } from "@/components/EmptyState";
 import {
   AttributeList,
@@ -51,14 +52,17 @@ export function PortalScan() {
   const labels = scanCategoryLabels(type);
 
   const [params, setParams] = useSearchParams();
+  const flags = useFeatureFlags();
   type HubTab = "score" | "outfits" | "looks" | "coach";
-  const hubTab = (params.get("tab") as HubTab | null) ?? "score";
+  const rawTab = (params.get("tab") as HubTab | null) ?? "score";
+  // A bookmarked ?tab=coach falls back to Score while the coach is off.
+  const hubTab = rawTab === "coach" && !flags.coach ? "score" : rawTab;
   const setHubTab = (t: HubTab) => setParams(t === "score" ? {} : { tab: t }, { replace: true });
   const hubTabs: TabDef<HubTab>[] = [
     { id: "score", label: "Score" },
     { id: "outfits", label: "Outfits" },
     { id: "looks", label: "Looks" },
-    { id: "coach", label: "Coach" },
+    ...(flags.coach ? [{ id: "coach", label: "Coach" } as TabDef<HubTab>] : []),
   ];
   const [rescanOpen, setRescanOpen] = useState(false);
   const [selfReportOpen, setSelfReportOpen] = useState(false);
@@ -208,7 +212,7 @@ export function PortalScan() {
           <LookPreviewPanel scanId={latest.id} type={type} />
         </section>
       )}
-      {hubTab === "coach" && (
+      {hubTab === "coach" && flags.coach && (
         <section className="card p-6">
           <CoachChat scanId={latest.id} />
         </section>
