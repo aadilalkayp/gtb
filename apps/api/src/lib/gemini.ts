@@ -141,6 +141,10 @@ function responseSchema(type: ScanClientType) {
   } as const;
 }
 
+export function scanRubric(type: ScanClientType, angles: ScanPhotoAngle[]): string {
+  return rubric(type, angles);
+}
+
 function rubric(type: ScanClientType, angles: ScanPhotoAngle[]): string {
   const who = type === "bride" ? "woman" : "man";
   const thirdCategory =
@@ -350,7 +354,8 @@ function stubAnalysis(
 
 const GEMINI_IMAGE_MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-3.6-flash-image";
 
-async function callGemini(model: string, body: unknown): Promise<GeminiResponse> {
+/** Exported for the eval harness (LLM-as-judge grading) — server-side only. */
+export async function callGemini(model: string, body: unknown): Promise<GeminiResponse> {
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
   const res = await fetch(url, {
     method: "POST",
@@ -364,9 +369,15 @@ async function callGemini(model: string, body: unknown): Promise<GeminiResponse>
   return (await res.json()) as GeminiResponse;
 }
 
-interface GeminiResponse {
+interface GeminiPart {
+  text?: string;
+  inlineData?: { mimeType: string; data: string };
+  functionCall?: { name: string; args?: Record<string, unknown> };
+}
+
+export interface GeminiResponse {
   candidates?: {
-    content?: { parts?: { text?: string; inlineData?: { mimeType: string; data: string } }[] };
+    content?: { parts?: GeminiPart[] };
   }[];
   modelVersion?: string;
 }
@@ -579,27 +590,88 @@ export interface CoachTurn {
   content: string;
 }
 
+/** A live-data tool the coach may call. `parameters` is a Gemini/OpenAPI
+ *  object schema; executors run server-side against data the request is
+ *  already authorized for (never wider), so a model mistake can't widen access. */
+export interface CoachTool {
+  name: string;
+  description: string;
+  parameters?: Record<string, unknown>;
+  execute: (args: Record<string, unknown>) => Promise<unknown>;
+}
+
+const MAX_TOOL_ROUNDS = 4;
+
 export async function coachAnswer(args: {
   system: string;
   history: CoachTurn[];
   question: string;
-}): Promise<{ text: string; modelVersion: string }> {
+  tools?: CoachTool[];
+}): Promise<{ text: string; modelVersion: string; toolCalls: string[] }> {
   if (!geminiConfigured) {
     return {
       text: "[stub coach — set GEMINI_API_KEY] Based on your scan, keep the daily routine consistent this week: cleanser and moisturizer morning and night, sunscreen every morning, and tick off this week's roadmap item. For anything medical, please see a professional.",
       modelVersion: "stub",
+      toolCalls: [],
     };
   }
-  const json = await callGemini(GEMINI_MODEL, {
+  const tools = args.tools ?? [];
+  const byName = new Map(tools.map((t) => [t.name, t]));
+  const contents: unknown[] = [
+    ...args.history.slice(-10).map((t) => ({
+      role: t.role === "assistant" ? "model" : "user",
+      parts: [{ text: t.content }],
+    })),
+    { role: "user", parts: [{ text: args.question }] },
+  ];
+  const request = {
     systemInstruction: { parts: [{ text: args.system }] },
-    contents: [
-      ...args.history.slice(-10).map((t) => ({
-        role: t.role === "assistant" ? "model" : "user",
-        parts: [{ text: t.content }],
-      })),
-      { role: "user", parts: [{ text: args.question }] },
-    ],
     generationConfig: { temperature: 0.4, maxOutputTokens: 600 },
-  });
-  return { text: firstText(json).trim(), modelVersion: json.modelVersion ?? GEMINI_MODEL };
+    ...(tools.length
+      ? {
+          tools: [
+            {
+              functionDeclarations: tools.map((t) => ({
+                name: t.name,
+                description: t.description,
+                ...(t.parameters ? { parameters: t.parameters } : {}),
+              })),
+            },
+          ],
+        }
+      : {}),
+  };
+
+  const toolCalls: string[] = [];
+  let json: GeminiResponse = {};
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    json = await callGemini(GEMINI_MODEL, { ...request, contents });
+    const parts = json.candidates?.[0]?.content?.parts ?? [];
+    const calls = parts.filter((p) => p.functionCall?.name);
+    if (calls.length === 0) break;
+
+    contents.push({ role: "model", parts });
+    const responses = await Promise.all(
+      calls.map(async (p) => {
+        const name = p.functionCall!.name;
+        toolCalls.push(name);
+        const tool = byName.get(name);
+        let response: unknown;
+        try {
+          response = tool
+            ? await tool.execute(p.functionCall!.args ?? {})
+            : { error: `unknown tool: ${name}` };
+        } catch {
+          response = { error: "tool failed; answer without it" };
+        }
+        return { functionResponse: { name, response: { result: response } } };
+      }),
+    );
+    contents.push({ role: "user", parts: responses });
+  }
+  return {
+    text: firstText(json).trim(),
+    modelVersion: json.modelVersion ?? GEMINI_MODEL,
+    toolCalls,
+  };
 }
