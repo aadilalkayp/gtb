@@ -17,6 +17,7 @@ import { SelfReportForm } from "@/components/SelfReportForm";
 import { OutfitCheckPanel } from "@/components/OutfitCheckPanel";
 import { LookPreviewPanel } from "@/components/LookPreviewPanel";
 import { CoachChat } from "@/components/CoachChat";
+import { useFeatureFlags } from "@/lib/featureFlags";
 
 export const PRODUCT_NAME = "Transformation Readiness Scan";
 
@@ -106,6 +107,7 @@ export function ScanReportView({
   onReportChange?: (next: ScanReport) => void;
 }) {
   const [showSelfReport, setShowSelfReport] = useState(false);
+  const flags = useFeatureFlags();
 
   if (!report.scores || !report.groomScore) {
     return (
@@ -184,9 +186,11 @@ export function ScanReportView({
           <div className="card p-6">
             <OutfitCheckPanel scanId={report.scanId} />
           </div>
-          <div className="card p-6">
-            <CoachChat scanId={report.scanId} compact />
-          </div>
+          {flags.coach && (
+            <div className="card p-6">
+              <CoachChat scanId={report.scanId} compact />
+            </div>
+          )}
         </>
       )}
 

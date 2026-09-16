@@ -5,6 +5,7 @@ import { coachAnswer, type CoachTool, type CoachTurn } from "@/lib/gemini";
 import { buildCoachSystem, coachPromptFingerprint, rankArticles } from "@/lib/coachPrompt";
 import { searchArticlesByVector, syncArticleEmbeddings } from "@/lib/embeddings";
 import { authorizeScanAccess, clientIp, rateLimit } from "@/lib/scan";
+import { featureFlags } from "@/lib/flags";
 import { getAdminUserIds, notifyUsers } from "@/lib/notify";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 import { withRequestLog } from "@/lib/handler";
@@ -170,6 +171,13 @@ function buildTools(args: {
  * the model can call read-tools over the person's live roadmap and score.
  */
 async function handlePost(req: NextRequest): Promise<Response> {
+  if (!featureFlags.coach) {
+    return json(
+      req,
+      { error: "The coach isn't available yet. Reply to any GTB email instead." },
+      503,
+    );
+  }
   let body: { scanId?: string; conversationId?: string; message?: string };
   try {
     body = (await req.json()) as typeof body;
@@ -299,6 +307,9 @@ async function handlePost(req: NextRequest): Promise<Response> {
 
 /** Thread history for a scan (latest thread). */
 async function handleGet(req: NextRequest): Promise<Response> {
+  if (!featureFlags.coach) {
+    return json(req, { error: "The coach isn't available yet." }, 503);
+  }
   const access = await authorizeScanAccess(req, req.nextUrl.searchParams.get("scanId"), {
     requireScored: false,
   });
