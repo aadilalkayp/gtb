@@ -207,6 +207,13 @@ export function rateSession(
   return postJson("/api/sessions/rate", { sessionId, rating, ratingFeedback });
 }
 
+/** Nudge a client about today's workout (staff; one per client per day). */
+export function sendFitnessReminder(
+  planId: string,
+): Promise<{ ok: boolean; sent: boolean; reason?: string }> {
+  return postJson("/api/fitness/remind", { planId });
+}
+
 /** Mint a short-lived signed URL to view a stored document. */
 export async function getDocumentUrl(documentId: string): Promise<string> {
   const { url } = await postJson<{ url: string }>("/api/documents/signed-url", { documentId });

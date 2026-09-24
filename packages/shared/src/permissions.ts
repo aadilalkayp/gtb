@@ -21,6 +21,7 @@ export const CAPABILITIES = [
   "session.mark_complete",
   "session.upload_docs",
   "styling.manage",
+  "fitness.manage",
   "followup.conduct",
   "plan.manage",
   "user.manage",
@@ -56,6 +57,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, Capability[]> = {
     "expense.view_reports",
     "leadsource.manage",
     "styling.manage",
+    "fitness.manage",
     "calendar.view_all",
     "task.assign",
   ],
@@ -88,6 +90,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, Capability[]> = {
   ],
   fitness_trainer: [
     "client.view_assigned",
+    "fitness.manage",
     "session.mark_complete",
     "session.upload_docs",
     "report.view_own",

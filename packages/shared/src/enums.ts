@@ -200,6 +200,7 @@ export const DOCUMENT_TYPES = [
   "payment_receipt",
   "expense_receipt",
   "client_photo",
+  "progress_photo",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 

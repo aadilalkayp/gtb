@@ -155,6 +155,13 @@ enum DocumentType {
   payment_receipt
   expense_receipt
   client_photo
+  progress_photo
+}
+
+enum FitnessPlanStatus {
+  active
+  completed
+  cancelled
 }
 
 enum TaskPriority {
@@ -310,6 +317,10 @@ model User {
   contentItems      ContentItem[]      @relation("ContentOwner")
   notifications     Notification[]     @relation("UserNotifications")
   activityLogs      ActivityLog[]      @relation("ActivityActor")
+  fitnessPlansAsTrainer FitnessPlan[]     @relation("PlanTrainer")
+  weightLogsRecorded    WeightLog[]       @relation("WeightRecorder")
+  measurementsRecorded  BodyMeasurement[] @relation("MeasurementRecorder")
+  trainerNotesAuthored  TrainerNote[]     @relation("TrainerNoteAuthor")
 
   @@auth
 
@@ -386,6 +397,10 @@ model Client {
   tasks       Task[]
   scans        Scan[]
   roadmapItems RoadmapItem[]
+  fitnessPlans     FitnessPlan[]
+  weightLogs       WeightLog[]
+  bodyMeasurements BodyMeasurement[]
+  trainerNotes     TrainerNote[]
   outboundMessages OutboundMessage[]
   outfitChecks  OutfitCheck[]
   lookPreviews  LookPreview[]
@@ -1287,6 +1302,253 @@ model CoachMessage {
   @@allow('read', auth().role == founder || auth().role == ops_head)
   @@allow('read', conversation.client.assignments?[staffId == auth().id && isActive && (role == coach || role == cro)])
   @@allow('read', conversation.client.userId == auth().id)
+}
+
+// ============================================================================
+// Fitness module (client sketches, Sep 2026)
+// ============================================================================
+
+/// A client's fitness program: a fixed-length day-by-day journey (default 30
+/// days) owned by the assigned fitness trainer. Health status ("on track",
+/// "needs follow-up") is DERIVED from the days — never stored (see
+/// @gtb/shared fitness.ts), the same principle as payment pace.
+model FitnessPlan {
+  id       String @id @default(uuid()) @deny('update', true)
+  clientId String @deny('update', true)
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  trainerId String?
+  trainer   User?   @relation("PlanTrainer", fields: [trainerId], references: [id])
+
+  title        String
+  /// Free-text goal shown on both portals, e.g. "Fat loss & better stamina".
+  goal         String
+  /// FITNESS_TEMPLATES key the days were seeded from (null for custom plans).
+  templateKey  String?
+  startDate    DateTime
+  durationDays Int      @default(30)
+  status       FitnessPlanStatus @default(active)
+
+  startWeightKg  Float?
+  targetWeightKg Float?
+  /// Shown as the portal "Nutrition note"; the full diet plan is a
+  /// fitness_plan Document.
+  dietNotes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  days     FitnessWorkoutDay[]
+  checkIns FitnessCheckIn[]
+
+  @@index([clientId, status])
+  @@index([status, startDate])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+  // The assigned trainer (or admin) authors and manages the plan. Clients
+  // never write plans.
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update', client.assignments?[staffId == auth().id && isActive && role == fitness_trainer])
+  // trainerId is nullable, so reassignment protection is model-level: the
+  // trainer works the plan but only admins hand it to someone else. startDate
+  // is pinned too — day rows carry concrete dates, so moving the start would
+  // silently desync the journey (admin correction path only).
+  @@deny('update', auth().role != founder && auth().role != ops_head && (future().trainerId != trainerId || future().startDate != startDate))
+}
+
+/// One day of a fitness plan. dayIndex is the 1-based journey day; date is the
+/// concrete IST day it falls on (denormalized for querying and the cron nudge).
+model FitnessWorkoutDay {
+  id     String      @id @default(uuid()) @deny('update', true)
+  planId String      @deny('update', true)
+  plan   FitnessPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  dayIndex  Int
+  date      DateTime
+  title     String
+  isRestDay Boolean @default(false)
+
+  completedAt DateTime?
+
+  exercises FitnessExercise[]
+
+  @@unique([planId, dayIndex])
+  @@index([date])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', plan.client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', plan.client.userId == auth().id)
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update,delete', plan.client.assignments?[staffId == auth().id && isActive && role == fitness_trainer])
+  // The owning client only marks the day done/undone — the program content is
+  // the trainer's (mirrors RoadmapItem: tick, never rewrite).
+  @@allow('update', plan.client.userId == auth().id)
+  @@deny('update',
+    plan.client.userId == auth().id && auth().role != founder && auth().role != ops_head &&
+    (future().title != title || future().dayIndex != dayIndex || future().date != date ||
+     future().isRestDay != isRestDay))
+}
+
+/// An exercise prescription within a workout day. Clients tick exercises off
+/// (completedAt); the prescription itself is trainer-owned.
+model FitnessExercise {
+  id    String            @id @default(uuid()) @deny('update', true)
+  dayId String            @deny('update', true)
+  day   FitnessWorkoutDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  order       Int     @default(0)
+  name        String
+  sets        Int?
+  reps        Int?
+  durationSec Int?
+  /// e.g. "Bodyweight", "Dumbbell", "Machine", "Cardio".
+  equipment String?
+  notes     String?
+
+  completedAt DateTime?
+
+  @@index([dayId])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', day.plan.client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', day.plan.client.userId == auth().id)
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update,delete', day.plan.client.assignments?[staffId == auth().id && isActive && role == fitness_trainer])
+  // Client tick-off only, never the prescription.
+  @@allow('update', day.plan.client.userId == auth().id)
+  @@deny('update',
+    day.plan.client.userId == auth().id && auth().role != founder && auth().role != ops_head &&
+    (future().name != name || future().order != order || future().sets != sets ||
+     future().reps != reps || future().durationSec != durationSec ||
+     future().equipment != equipment || future().notes != notes))
+}
+
+/// Weight time series (the Assessment's weightKg stays the one-time onboarding
+/// snapshot; this is the tracked log behind the progress chart).
+model WeightLog {
+  id       String @id @default(uuid()) @deny('update', true)
+  clientId String @deny('update', true)
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  date     DateTime
+  weightKg Float
+  note     String?
+
+  recordedById String @deny('update', true)
+  recordedBy   User   @relation("WeightRecorder", fields: [recordedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId, date])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+  // Owner-client or assigned trainer log entries — always attributed to
+  // themselves (SEC-6 class: no spoofed recorder).
+  @@allow('create', auth().role == founder || auth().role == ops_head)
+  @@allow('create', recordedById == auth().id && client.userId == auth().id)
+  @@allow('create', recordedById == auth().id && client.assignments?[staffId == auth().id && isActive && role == fitness_trainer])
+  // Corrections: admins anywhere, otherwise only one's own entries.
+  @@allow('update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('update,delete', recordedById == auth().id)
+}
+
+/// Body measurements time series (all cm; every field optional so partial
+/// check-ins are fine).
+model BodyMeasurement {
+  id       String @id @default(uuid()) @deny('update', true)
+  clientId String @deny('update', true)
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  date    DateTime
+  chestCm Float?
+  waistCm Float?
+  hipsCm  Float?
+  bicepCm Float?
+  thighCm Float?
+  note    String?
+
+  recordedById String @deny('update', true)
+  recordedBy   User   @relation("MeasurementRecorder", fields: [recordedById], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId, date])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id)
+  @@allow('create', auth().role == founder || auth().role == ops_head)
+  @@allow('create', recordedById == auth().id && client.userId == auth().id)
+  @@allow('create', recordedById == auth().id && client.assignments?[staffId == auth().id && isActive && role == fitness_trainer])
+  @@allow('update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('update,delete', recordedById == auth().id)
+}
+
+/// Client-submitted weekly pulse on a plan (distinct from FollowUp's
+/// weekly_checkin, which is a staff CRO call). One per plan-week.
+model FitnessCheckIn {
+  id     String      @id @default(uuid()) @deny('update', true)
+  planId String      @deny('update', true)
+  plan   FitnessPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  /// 1-based week of the plan (ceil(dayNumber / 7)).
+  weekNumber  Int
+  /// 1–5 self-rated energy/effort.
+  energyLevel Int?
+  weightKg    Float?
+  note        String?
+  /// The trainer's reply — trainer/admin-writable only.
+  trainerComment String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([planId, weekNumber])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', plan.client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', plan.client.userId == auth().id)
+  @@allow('create,update', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update', plan.client.assignments?[staffId == auth().id && isActive && role == fitness_trainer])
+  @@allow('create,update', plan.client.userId == auth().id)
+  // The trainer reply is never client-written (nullable field, so the guard is
+  // model-level on both create and update).
+  @@deny('create', auth().role != founder && auth().role != ops_head && plan.client.userId == auth().id && trainerComment != null)
+  @@deny('update', auth().role != founder && auth().role != ops_head && plan.client.userId == auth().id && future().trainerComment != trainerComment)
+}
+
+/// A trainer's dated note on a client. visibleToClient notes render in the
+/// portal ("Trainer Notes"); internal ones stay staff-side (like
+/// consultation_notes documents).
+model TrainerNote {
+  id       String @id @default(uuid()) @deny('update', true)
+  clientId String @deny('update', true)
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  authorId String @deny('update', true)
+  author   User   @relation("TrainerNoteAuthor", fields: [authorId], references: [id])
+
+  content         String
+  visibleToClient Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  @@index([clientId, createdAt])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.userId == auth().id && visibleToClient)
+  @@allow('create', auth().role == founder || auth().role == ops_head)
+  @@allow('create', client.assignments?[staffId == auth().id && isActive && role == fitness_trainer])
+  // Always authored as oneself (SEC-6 class: a spoofed author forges "the
+  // founder said").
+  @@deny('create', auth().role != founder && auth().role != ops_head && authorId != auth().id)
+  @@allow('update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('update,delete', authorId == auth().id)
 }
 
 // ============================================================================
