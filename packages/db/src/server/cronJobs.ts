@@ -8,6 +8,7 @@ export interface DailyJobReport {
   satisfactionCheckFollowUpsCreated: number;
   stylingRemindersSent: number;
   taskOverdueNotifications: number;
+  missedWorkoutNudges: number;
 }
 
 interface NotificationInput {
@@ -40,6 +41,7 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
     satisfactionCheckFollowUpsCreated: 0,
     stylingRemindersSent: 0,
     taskOverdueNotifications: 0,
+    missedWorkoutNudges: 0,
   };
 
   // 1. Overdue follow-ups (SRS §12.4) — strictly-past IST days only.
@@ -204,6 +206,48 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
       linkPath: `/tasks?task=${t.id}`,
     });
     report.taskOverdueNotifications += sent;
+  }
+
+  // 7. Missed-workout nudges: yesterday's non-rest workout day left
+  //    uncompleted on an active plan → nudge the client, copy the trainer.
+  //    The dedupe key (type + linkPath with the day id) makes this idempotent.
+  const yesterdayStart = istAddDays(todayStart, -1);
+  const missedDays = await prisma.fitnessWorkoutDay.findMany({
+    where: {
+      date: { gte: yesterdayStart, lt: todayStart },
+      isRestDay: false,
+      completedAt: null,
+      plan: { status: "active", client: { status: "active" } },
+    },
+    select: {
+      id: true,
+      title: true,
+      plan: {
+        select: {
+          trainerId: true,
+          client: { select: { userId: true, name: true } },
+        },
+      },
+    },
+  });
+  for (const d of missedDays) {
+    const clientUser = d.plan.client.userId;
+    if (clientUser) {
+      report.missedWorkoutNudges += await notifyOncePerDay([clientUser], {
+        type: "fitness_missed_workout",
+        title: "Yesterday's workout is still open",
+        body: `"${d.title}" wasn't marked complete. A short session today keeps the momentum.`,
+        linkPath: `/portal/fitness?missed=${d.id}`,
+      });
+    }
+    if (d.plan.trainerId) {
+      report.missedWorkoutNudges += await notifyOncePerDay([d.plan.trainerId], {
+        type: "fitness_client_missed",
+        title: "Client missed a workout",
+        body: `${d.plan.client.name} didn't complete yesterday's "${d.title}".`,
+        linkPath: `/fitness?missed=${d.id}`,
+      });
+    }
   }
 
   return report;

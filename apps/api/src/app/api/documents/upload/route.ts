@@ -52,6 +52,7 @@ const UPLOADER_BY_TYPE: Record<DocumentType, "client" | "client_or_staff" | "sta
   payment_receipt: "system",
   expense_receipt: "staff",
   client_photo: "client_or_staff", // §16.1: client or staff
+  progress_photo: "client_or_staff", // fitness progress photos: client or trainer
 };
 
 function json(req: NextRequest, body: unknown, status = 200): Response {

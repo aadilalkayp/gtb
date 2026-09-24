@@ -3,6 +3,7 @@ import {
   Users,
   UserCog,
   CalendarCheck,
+  Dumbbell,
   Scissors,
   Wallet,
   PhoneCall,
@@ -43,6 +44,14 @@ export const STAFF_NAV: NavItem[] = [
     to: "/consultations",
     icon: CalendarCheck,
     visible: (r) => canAny(r, ["client.view_all", "session.mark_complete"]),
+  },
+  {
+    label: "Fitness",
+    to: "/fitness",
+    icon: Dumbbell,
+    // Fitness-only, mirroring Styling Operations: the fitness team's section is
+    // hidden from skincare/styling consultants who share session.mark_complete.
+    visible: (r) => canAny(r, ["fitness.manage"]),
   },
   {
     label: "Styling Operations",

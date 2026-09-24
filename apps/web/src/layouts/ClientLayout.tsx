@@ -1,6 +1,6 @@
 import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Home, CalendarCheck, ScanFace, Wallet, FileText, User, LogOut } from "lucide-react";
+import { Home, CalendarCheck, ScanFace, Dumbbell, Wallet, FileText, User, LogOut } from "lucide-react";
 import { CLIENT_TYPE_LABELS } from "@gtb/shared";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
@@ -11,6 +11,7 @@ const CLIENT_NAV = [
   { label: "Home", to: "/portal", icon: Home, end: true },
   { label: "Sessions", to: "/portal/sessions", icon: CalendarCheck, end: false },
   { label: "Scan", to: "/portal/scan", icon: ScanFace, end: false },
+  { label: "Fitness", to: "/portal/fitness", icon: Dumbbell, end: false },
   { label: "Payments", to: "/portal/payments", icon: Wallet, end: false },
   { label: "Documents", to: "/portal/documents", icon: FileText, end: false },
   { label: "Profile", to: "/portal/profile", icon: User, end: false },
