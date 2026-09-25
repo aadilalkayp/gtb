@@ -3,12 +3,11 @@
 @theme {
   /* Lustre palette */
   --color-ink: #16110d;
-  --color-ink-soft: #241c16;
-  --color-cream: #faf5ec;
-  --color-cream-deep: #f1e8d8;
+  --color-ink-soft: #211a14;
+  --color-cream: #faf6ee;
+  --color-cream-deep: #f2ebdd;
   --color-champagne: #d4a853;
   --color-champagne-deep: #a97e2c;
-  --color-blush: #e8b09b;
   --color-sand: #8d7a5e;
 
   --font-display: "Instrument Serif", Georgia, serif;
@@ -16,9 +15,8 @@
 
   --ease-lux: cubic-bezier(0.22, 1, 0.36, 1);
 
-  --animate-marquee: marquee 32s linear infinite;
-  --animate-drift: drift 14s ease-in-out infinite alternate;
-  --animate-shimmer: shimmer 3.2s ease-in-out infinite;
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-drift: drift 16s ease-in-out infinite alternate;
 
   @keyframes marquee {
     from {
@@ -30,19 +28,10 @@
   }
   @keyframes drift {
     from {
-      transform: translate(-6%, -4%) scale(1);
+      transform: translate(-4%, -3%) scale(1);
     }
     to {
-      transform: translate(6%, 5%) scale(1.15);
-    }
-  }
-  @keyframes shimmer {
-    0%,
-    100% {
-      opacity: 0.55;
-    }
-    50% {
-      opacity: 1;
+      transform: translate(4%, 4%) scale(1.12);
     }
   }
 }
@@ -63,6 +52,55 @@ body {
   color: var(--color-ink);
 }
 
+/* Editorial micro-label: the only place uppercase tracking is allowed. */
+.micro {
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* Understated text link with a drawing underline. */
+.wire-link {
+  position: relative;
+  display: inline-block;
+  padding-bottom: 2px;
+}
+.wire-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 1px;
+  width: 100%;
+  background: currentColor;
+  transform-origin: right;
+  transform: scaleX(1);
+  transition: transform 0.5s var(--ease-lux);
+}
+.wire-link:hover::after {
+  transform-origin: left;
+  animation: wire 0.7s var(--ease-lux);
+}
+@keyframes wire {
+  0% {
+    transform-origin: right;
+    transform: scaleX(1);
+  }
+  49% {
+    transform-origin: right;
+    transform: scaleX(0);
+  }
+  50% {
+    transform-origin: left;
+    transform: scaleX(0);
+  }
+  100% {
+    transform-origin: left;
+    transform: scaleX(1);
+  }
+}
+
 /* Film grain overlay */
 .grain::after {
   content: "";
@@ -76,23 +114,23 @@ body {
 /* Scroll reveal */
 .reveal {
   opacity: 0;
-  transform: translateY(28px);
+  transform: translateY(24px);
   transition:
-    opacity 0.9s var(--ease-lux),
-    transform 0.9s var(--ease-lux);
+    opacity 1s var(--ease-lux),
+    transform 1s var(--ease-lux);
 }
 .reveal.is-visible {
   opacity: 1;
   transform: none;
 }
 .reveal-delay-1 {
-  transition-delay: 0.1s;
+  transition-delay: 0.12s;
 }
 .reveal-delay-2 {
-  transition-delay: 0.2s;
+  transition-delay: 0.24s;
 }
 .reveal-delay-3 {
-  transition-delay: 0.3s;
+  transition-delay: 0.36s;
 }
 
 @media (prefers-reduced-motion: reduce) {

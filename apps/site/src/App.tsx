@@ -29,34 +29,32 @@ function Nav() {
 
   return (
     <header
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
+      className={`fixed inset-x-0 top-0 z-50 border-b transition-all duration-500 ${
         scrolled
-          ? "bg-ink/80 py-3 shadow-[0_1px_0_rgba(212,168,83,0.18)] backdrop-blur-xl"
-          : "bg-transparent py-6"
+          ? "border-cream/10 bg-ink/90 backdrop-blur-md"
+          : "border-transparent bg-transparent"
       }`}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-6">
-        <a href="#top" className="flex items-baseline gap-1.5">
-          <span className="font-display text-2xl tracking-tight text-cream">
-            Glow<span className="text-champagne italic"> to </span>Be
-          </span>
+      <div className="flex items-center justify-between px-6 py-5 lg:px-10">
+        <a href="#top" className="font-display text-[1.35rem] leading-none text-cream">
+          Glow <span className="text-champagne italic">to</span> Be
         </a>
-        <nav className="hidden items-center gap-8 md:flex">
+        <nav className="micro hidden items-center gap-9 text-cream/60 md:flex">
           {NAV_LINKS.map((l) => (
             <a
               key={l.href}
               href={l.href}
-              className="text-sm font-light tracking-wide text-cream/70 transition-colors hover:text-champagne"
+              className="transition-colors duration-300 hover:text-champagne"
             >
               {l.label}
             </a>
           ))}
         </nav>
         <a
-          href="#programmes"
-          className="rounded-full border border-champagne/60 px-5 py-2 text-sm text-champagne transition-all duration-300 hover:bg-champagne hover:text-ink"
+          href="#contact"
+          className="micro wire-link text-champagne"
         >
-          Start your glow
+          Enquire
         </a>
       </div>
     </header>
