@@ -9,6 +9,13 @@
       "port": 5175
     },
     {
+      "name": "site",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@gtb/site", "dev"],
+      "autoPort": true,
+      "port": 5180
+    },
+    {
       "name": "api",
       "runtimeExecutable": "pnpm",
       "runtimeArgs": ["--filter", "@gtb/api", "dev"],

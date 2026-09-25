@@ -1,0 +1,19 @@
+// Cloudflare Workers deployment for the Glow To Be marketing site: static
+// assets only, no edge code. Served on the apex domain; the OS lives on
+// app.glowtobe.com (apps/web/wrangler.jsonc). Deployed by CI via `wrangler deploy`.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "gtb-site",
+  "compatibility_date": "2026-08-01",
+  // custom_domain: wrangler provisions the DNS record + certificate on deploy.
+  // The first deploy fails if a conflicting DNS record already exists on the
+  // apex — delete the old record in the Cloudflare dashboard, then rerun.
+  "routes": [
+    { "pattern": "glowtobe.com", "custom_domain": true },
+    { "pattern": "www.glowtobe.com", "custom_domain": true },
+  ],
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application",
+  },
+}
