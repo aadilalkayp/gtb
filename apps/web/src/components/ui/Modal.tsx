@@ -38,6 +38,7 @@ export function Modal({
       <div
         role="dialog"
         aria-modal="true"
+        aria-label={title}
         className={cn("card relative z-10 my-4 w-full shadow-xl animate-scale-in", widths[size])}
       >
         <div className="flex items-center justify-between border-b border-border px-5 py-4">

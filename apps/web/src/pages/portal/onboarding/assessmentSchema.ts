@@ -14,6 +14,13 @@ const weightKg = z.preprocess(
   z.coerce.number().min(30).max(300).optional(),
 );
 
+// An untouched optional <Select> submits "" (its "—" option), which z.enum()
+// rejects — silently, since these fields render no error. Map "" → undefined
+// so optional selects are genuinely optional.
+function optionalEnum<T extends [string, ...string[]]>(values: T) {
+  return z.preprocess((v) => (v === "" || v === null ? undefined : v), z.enum(values).optional());
+}
+
 export const assessmentSchema = z.object({
   // General
   age,
@@ -29,12 +36,12 @@ export const assessmentSchema = z.object({
   heightCm,
   weightKg,
   healthConditions: z.string().optional(),
-  dietaryPreference: z.enum(["vegetarian", "vegan", "non_veg", "other"]).optional(),
+  dietaryPreference: optionalEnum(["vegetarian", "vegan", "non_veg", "other"]),
   fitnessGoals: z.array(z.string()).default([]),
   // Styling
   bodyType: z.string().optional(),
   stylePreferences: z.array(z.string()).default([]),
-  outfitBudgetRange: z.enum(["under_25k", "25k_50k", "50k_1l", "1l_2l", "above_2l"]).optional(),
+  outfitBudgetRange: optionalEnum(["under_25k", "25k_50k", "50k_1l", "1l_2l", "above_2l"]),
   colorPreferences: z.string().optional(),
   stylingNotes: z.string().optional(),
 });
