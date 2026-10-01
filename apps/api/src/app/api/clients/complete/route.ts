@@ -15,8 +15,9 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 
 /**
  * Complete a client (SRS §5.2 — SYS-3). Server-side preconditions (SRS §5.2):
- * all sessions must be completed or cancelled, the plan balance must be zero
- * (paid or waived), and nothing may still be under review.
+ * all sessions must be completed or cancelled, the agreed price must be on
+ * file with a zero balance (paid or waived), and nothing may still be under
+ * review.
  * Only founder/ops may complete.
  */
 async function handlePost(req: NextRequest): Promise<Response> {
@@ -52,7 +53,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
         tx.clientPlan.findUnique({
           where: { clientId: client.id },
           select: {
-            priceAtEnrollment: true,
+            agreedPrice: true,
             payments: { where: { status: "approved" }, select: { amount: true } },
           },
         }),
@@ -62,7 +63,8 @@ async function handlePost(req: NextRequest): Promise<Response> {
       ]);
       if (openSessions > 0) throw new PreconditionError(`All sessions must be completed or cancelled first (${openSessions} still open)`);
       const approved = plan?.payments.reduce((t, p) => t + p.amount, 0) ?? 0;
-      const balance = plan ? Math.max(plan.priceAtEnrollment - approved, 0) : 0;
+      if (plan && plan.agreedPrice == null) throw new PreconditionError("Record the client's agreed price first");
+      const balance = plan?.agreedPrice != null ? Math.max(plan.agreedPrice - approved, 0) : 0;
       if (balance > 0) throw new PreconditionError(`The outstanding balance must be settled or waived first (${balance} remaining)`);
       if (underReview > 0) throw new PreconditionError(`Submitted payments must be reviewed first (${underReview} awaiting review)`);
 

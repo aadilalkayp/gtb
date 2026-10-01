@@ -57,13 +57,14 @@ export function isSameDay(a: DateLike, b: Date = new Date()): boolean {
  * The IST day anchor is supplied here so the shared math stays pure.
  */
 export interface PlanPaymentLite {
-  priceAtEnrollment: number;
+  /** Negotiated per client; null until staff record it. */
+  agreedPrice: number | null;
   milestones: { amount: number; dueDate: DateLike }[];
   payments: { amount: number; status: string; kind?: string | null }[];
 }
 
 export function planPace(plan: PlanPaymentLite): PlanPaymentPace {
-  return planPaymentPace(plan.priceAtEnrollment, plan.milestones, plan.payments, startOfDay());
+  return planPaymentPace(plan.agreedPrice, plan.milestones, plan.payments, startOfDay());
 }
 
 export function milestonePaces<M extends { amount: number; dueDate: DateLike }>(

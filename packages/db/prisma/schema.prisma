@@ -374,18 +374,16 @@ model LeadSource {
 }
 
 model Plan {
-  id               String        @id() @default(uuid())
-  name             String
-  clientType       ClientType
-  durationMonths   Int
-  price            Int
-  description      String?
-  installmentCount Int           @default(1)
-  isActive         Boolean       @default(true)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt()
-  services         PlanService[]
-  clientPlans      ClientPlan[]
+  id             String        @id() @default(uuid())
+  name           String
+  clientType     ClientType
+  durationMonths Int
+  description    String?
+  isActive       Boolean       @default(true)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt()
+  services       PlanService[]
+  clientPlans    ClientPlan[]
 }
 
 model PlanService {
@@ -401,18 +399,18 @@ model PlanService {
 
 /// A client's enrollment in a plan (1:1 — one active plan per client, SRS A9).
 model ClientPlan {
-  id                String             @id() @default(uuid())
-  clientId          String             @unique()
-  client            Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  planId            String
-  plan              Plan               @relation(fields: [planId], references: [id])
-  planNameSnapshot  String
-  priceAtEnrollment Int
-  durationMonths    Int
-  servicesSnapshot  Json?
-  enrolledAt        DateTime           @default(now())
-  milestones        PaymentMilestone[]
-  payments          Payment[]
+  id               String             @id() @default(uuid())
+  clientId         String             @unique()
+  client           Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  planId           String
+  plan             Plan               @relation(fields: [planId], references: [id])
+  planNameSnapshot String
+  agreedPrice      Int?
+  durationMonths   Int
+  servicesSnapshot Json?
+  enrolledAt       DateTime           @default(now())
+  milestones       PaymentMilestone[]
+  payments         Payment[]
 }
 
 /// An expected payment checkpoint — a plan for the money, not the money itself

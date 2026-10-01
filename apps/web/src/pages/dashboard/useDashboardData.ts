@@ -34,7 +34,7 @@ interface PaymentLiteRow {
   approvedAt: string | Date | null;
 }
 interface ClientPlanLite {
-  priceAtEnrollment: number;
+  agreedPrice: number | null;
   milestones: MilestoneLiteRow[];
   payments: PaymentLiteRow[];
 }
@@ -155,7 +155,7 @@ export function useDashboardData() {
       createdAt: true,
       clientPlan: {
         select: {
-          priceAtEnrollment: true,
+          agreedPrice: true,
           milestones: { select: { amount: true, dueDate: true } },
           payments: {
             select: { id: true, amount: true, status: true, kind: true, approvedAt: true },
@@ -327,7 +327,7 @@ export function useDashboardData() {
     const paces = clients
       .filter((c) => c.clientPlan)
       .map((c) => planPace(c.clientPlan as ClientPlanLite));
-    const outstanding = paces.reduce((t, p) => t + p.balance, 0);
+    const outstanding = paces.reduce((t, p) => t + (p.balance ?? 0), 0);
     const overdueAmount = paces.reduce((t, p) => t + p.behindAmount, 0);
 
     const openSessions = sessions.filter((s) => s.status === "scheduled" || s.status === "delayed");
@@ -356,7 +356,7 @@ export function useDashboardData() {
     // Sales = conversions this month; conversion rate = converted / leads created this month.
     const salesThisMonthClients = clients.filter((c) => inThisMonth(c.conversionDate));
     const salesValue = salesThisMonthClients.reduce(
-      (t, c) => t + (c.clientPlan?.priceAtEnrollment ?? 0),
+      (t, c) => t + (c.clientPlan?.agreedPrice ?? 0),
       0,
     );
     const leadsThisMonth = clients.filter((c) => inThisMonth(c.createdAt));
@@ -375,7 +375,7 @@ export function useDashboardData() {
       label: m.label,
       sales: clients
         .filter((c) => inMonth(c.conversionDate, m.year, m.month))
-        .reduce((t, c) => t + (c.clientPlan?.priceAtEnrollment ?? 0), 0),
+        .reduce((t, c) => t + (c.clientPlan?.agreedPrice ?? 0), 0),
       collections: allCashPayments
         .filter((p) => inMonth(p.approvedAt, m.year, m.month))
         .reduce((t, p) => t + p.amount, 0),

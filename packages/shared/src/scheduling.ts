@@ -107,11 +107,11 @@ export function generateSchedule(
 }
 
 /**
- * Build the default evenly-spaced milestone schedule for a plan (SRS §8.2).
- * First milestone (the expected down payment) is due on the enrollment date;
- * the rest are spread across the plan duration. This is only a TEMPLATE —
- * staff can replace the amounts/dates per client at (or after) enrollment,
- * as long as the schedule still sums to the plan price.
+ * Build an evenly-spaced milestone schedule for a client's agreed price
+ * (SRS §8.2). First milestone (the expected down payment) is due on the
+ * enrollment date; the rest are spread across the plan duration. This is only
+ * a TEMPLATE: staff can replace the amounts/dates per client at any time, as
+ * long as the schedule still sums to the agreed price.
  */
 export interface GeneratedMilestone {
   milestoneNumber: number;

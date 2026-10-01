@@ -96,7 +96,7 @@ describe("Verification — Payment write scoping (V-1/V-5)", () => {
 });
 
 describe("Verification — ClientPlan writes are admin-only (V-4)", () => {
-  it("denies a CRO rewriting priceAtEnrollment / servicesSnapshot", async () => {
+  it("denies a CRO rewriting agreedPrice / servicesSnapshot", async () => {
     await seedUser({ id: "cro1", role: "cro" });
     const c = await seedClient({ id: "c1" });
     const plan = await seedPlan();
@@ -105,11 +105,11 @@ describe("Verification — ClientPlan writes are admin-only (V-4)", () => {
     await expectDenied(
       as("cro1", "cro").clientPlan.update({
         where: { id: cp.id },
-        data: { priceAtEnrollment: 1 },
+        data: { agreedPrice: 1 },
       }),
     );
     const row = await prisma.clientPlan.findUniqueOrThrow({ where: { id: cp.id } });
-    expect(row.priceAtEnrollment).toBe(90000);
+    expect(row.agreedPrice).toBe(90000);
   });
 });
 
@@ -246,7 +246,7 @@ describe("Verification — read scoping for clients (V-12/V-13)", () => {
     await seedClient({ id: "c1", userId: "client1" });
     await prisma.leadSource.create({ data: { name: "Instagram Ads" } });
     const inactive = await prisma.plan.create({
-      data: { name: "Internal", clientType: "bride", durationMonths: 1, price: 1, isActive: false },
+      data: { name: "Internal", clientType: "bride", durationMonths: 1, isActive: false },
     });
     await prisma.planService.create({
       data: { planId: inactive.id, serviceType: "styling", totalSessions: 1, startOffsetDays: 10 },
@@ -356,7 +356,7 @@ describe("Verification — activation actor + seed guard (MISC-6)", () => {
         clientId: c.id,
         planId: plan.id,
         planNameSnapshot: "Test Plan",
-        priceAtEnrollment: 90000,
+        agreedPrice: 90000,
         durationMonths: 3,
         servicesSnapshot: [
           { serviceType: "skincare", totalSessions: 2, startOffsetDays: 60, frequencyDays: 14 },

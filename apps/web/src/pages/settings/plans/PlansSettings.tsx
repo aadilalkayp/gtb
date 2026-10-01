@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useFindManyPlan, useCreatePlan, useUpdatePlan, useDeletePlan } from "@gtb/db/hooks";
-import { formatINR, SERVICE_TYPE_LABELS, CLIENT_TYPE_LABELS } from "@gtb/shared";
+import { SERVICE_TYPE_LABELS, CLIENT_TYPE_LABELS } from "@gtb/shared";
 import { Button, Badge, Spinner } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { PlanFormModal } from "./PlanFormModal";
@@ -38,8 +38,6 @@ export function PlansSettings() {
       name: values.name,
       clientType: values.clientType,
       durationMonths: values.durationMonths,
-      price: values.price,
-      installmentCount: values.installmentCount,
       description: values.description || null,
       isActive: values.isActive,
     };
@@ -79,7 +77,8 @@ export function PlansSettings() {
         <div>
           <h2 className="text-base font-semibold">Plans</h2>
           <p className="text-sm text-muted-foreground">
-            Configure packages, pricing, and the services each one includes.
+            Configure packages and the services each one includes. Pricing is agreed with
+            each client and recorded on their payment schedule.
           </p>
         </div>
         <Button onClick={() => setTarget({ mode: "new" })}>
@@ -108,8 +107,8 @@ export function PlansSettings() {
                     {!plan.isActive && <Badge tone="neutral">Inactive</Badge>}
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {CLIENT_TYPE_LABELS[plan.clientType]} · {plan.durationMonths} months ·{" "}
-                    {plan.installmentCount} installment{plan.installmentCount > 1 ? "s" : ""}
+                    {CLIENT_TYPE_LABELS[plan.clientType]} · {plan.durationMonths}{" "}
+                    {plan.durationMonths === 1 ? "month" : "months"}
                   </p>
                 </div>
                 <div className="flex gap-1">
@@ -122,8 +121,6 @@ export function PlansSettings() {
                           name: plan.name,
                           clientType: plan.clientType,
                           durationMonths: plan.durationMonths,
-                          price: plan.price,
-                          installmentCount: plan.installmentCount,
                           description: plan.description ?? "",
                           isActive: plan.isActive,
                           services: plan.services.map((s) => ({
@@ -150,8 +147,6 @@ export function PlansSettings() {
                   </button>
                 </div>
               </div>
-
-              <p className="mt-3 font-num text-lg font-semibold">{formatINR(plan.price)}</p>
 
               <div className="mt-3 flex flex-wrap gap-1.5">
                 {plan.services.map((s) => (

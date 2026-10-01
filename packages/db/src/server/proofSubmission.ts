@@ -20,8 +20,10 @@ export interface SubmitPaymentInput {
  * Client submits a payment of any amount with a proof (SRS §8.3 step 7) —
  * STATE-6 core. Creates a pending_review Payment and advances the client to
  * leadPhase: payment_submitted in ONE transaction. The proof document must
- * belong to the submitting client, and the amount may not exceed what's left
- * of the balance once other still-under-review submissions are counted.
+ * belong to the submitting client. Once the agreed price is on file, the
+ * amount may not exceed what's left of the balance after other still-under-
+ * review submissions; before that, the client states what they paid and
+ * staff verify it against the proof.
  */
 export async function submitPayment(input: SubmitPaymentInput): Promise<{ paymentId: string }> {
   if (!Number.isInteger(input.amount) || input.amount <= 0) {
@@ -36,7 +38,7 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<{ paymen
       clientPlan: {
         select: {
           id: true,
-          priceAtEnrollment: true,
+          agreedPrice: true,
           payments: { select: { amount: true, status: true } },
         },
       },
@@ -51,9 +53,11 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<{ paymen
   const underReview = plan.payments
     .filter((p) => p.status === "pending_review")
     .reduce((t, p) => t + p.amount, 0);
-  const submittable = Math.max(plan.priceAtEnrollment - approved - underReview, 0);
-  if (submittable === 0) throw new ProofConflictError("There is nothing left to pay");
-  if (input.amount > submittable) throw new Error("AMOUNT_TOO_HIGH");
+  if (plan.agreedPrice != null) {
+    const submittable = Math.max(plan.agreedPrice - approved - underReview, 0);
+    if (submittable === 0) throw new ProofConflictError("There is nothing left to pay");
+    if (input.amount > submittable) throw new Error("AMOUNT_TOO_HIGH");
+  }
 
   const proof = await prisma.document.findUnique({
     where: { id: input.proofDocumentId },

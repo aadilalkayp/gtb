@@ -50,14 +50,12 @@ async function main() {
 
   // --- Plans ---
   // Three duration-based packages shown to every client (the portal no longer
-  // filters by bride/groom). Pricing is agreed off-platform per client; the
-  // price here is only the template default staff can adjust at enrollment.
+  // filters by bride/groom). Plans carry no price: each client's fee is
+  // negotiated personally and recorded per client as ClientPlan.agreedPrice.
   await seedPlan({
     name: "GTB (1 Month)",
     clientType: "groom",
     durationMonths: 1,
-    price: 5000,
-    installmentCount: 1,
     description: "One month of skincare, fitness, and styling leading up to your big day.",
     services: [
       { serviceType: "skincare", totalSessions: 2, startOffsetDays: 30, frequencyDays: 14 },
@@ -70,8 +68,6 @@ async function main() {
     name: "GTB (2 Months)",
     clientType: "groom",
     durationMonths: 2,
-    price: 9000,
-    installmentCount: 1,
     description: "Two months of skincare, fitness, and styling leading up to your big day.",
     services: [
       { serviceType: "skincare", totalSessions: 4, startOffsetDays: 60, frequencyDays: 14 },
@@ -84,8 +80,6 @@ async function main() {
     name: "GTB (3 Months)",
     clientType: "groom",
     durationMonths: 3,
-    price: 13000,
-    installmentCount: 1,
     description: "Three months of skincare, fitness, and styling leading up to your big day.",
     services: [
       { serviceType: "skincare", totalSessions: 6, startOffsetDays: 90, frequencyDays: 14 },
@@ -102,8 +96,6 @@ interface SeedPlanInput {
   name: string;
   clientType: "groom" | "bride";
   durationMonths: number;
-  price: number;
-  installmentCount: number;
   description: string;
   services: {
     serviceType: "skincare" | "fitness" | "styling";
@@ -121,8 +113,6 @@ async function seedPlan(input: SeedPlanInput) {
       name: input.name,
       clientType: input.clientType,
       durationMonths: input.durationMonths,
-      price: input.price,
-      installmentCount: input.installmentCount,
       description: input.description,
       services: { create: input.services },
     },

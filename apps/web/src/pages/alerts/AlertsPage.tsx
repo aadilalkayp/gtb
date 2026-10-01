@@ -23,6 +23,7 @@ import type { AlertItem, AlertSeverity } from "@/lib/alerts";
 const ALERT_ICON: Record<AlertItem["kind"], LucideIcon> = {
   payment_due_today: Wallet,
   overdue_payments: AlertTriangle,
+  price_not_set: Wallet,
   consultation_due_today: CalendarClock,
   styling_tomorrow: Scissors,
   pending_followup: PhoneCall,

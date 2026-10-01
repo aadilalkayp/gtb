@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { PartyPopper, LogOut } from "lucide-react";
 import { useFindUniqueClient } from "@gtb/db/hooks";
@@ -10,17 +11,29 @@ import { AssessmentStep } from "./AssessmentStep";
 import { PlanStep } from "./PlanStep";
 import { PaymentStep } from "./PaymentStep";
 
-const STEPS: Step[] = [
+type StepKey = "assessment" | "plan" | "payment";
+
+const STEPS: (Step & { key: StepKey })[] = [
   { key: "assessment", label: "Assessment" },
   { key: "plan", label: "Choose plan" },
-  { key: "payment", label: "Payment" },
+  { key: "payment", label: "Review & pay" },
 ];
+const STEP_INDEX: Record<StepKey | "done", number> = {
+  assessment: 0,
+  plan: 1,
+  payment: 2,
+  done: 3,
+};
 
 export function OnboardingWizard() {
   const navigate = useNavigate();
   const { user, signOut, refetchUser } = useAuth();
   const clientId = user?.client?.id;
   const type = user?.client?.type ?? "groom";
+  // The step the client navigated back to, if any. Progress itself is derived
+  // from the server below; this only lets them revisit (and edit) a finished
+  // step before the payment goes in.
+  const [viewing, setViewing] = useState<StepKey | null>(null);
 
   const {
     data: client,
@@ -43,9 +56,18 @@ export function OnboardingWizard() {
     { enabled: Boolean(clientId) },
   );
 
-  async function handleStepDone() {
+  /** A step saved: refresh, then move to the step after it (a revisit walks
+   *  forward one step at a time rather than jumping to the end). */
+  async function handleStepDone(next: StepKey) {
     await refetch();
     refetchUser();
+    setViewing(next);
+    window.scrollTo({ top: 0 });
+  }
+
+  function goTo(step: StepKey) {
+    setViewing(step);
+    window.scrollTo({ top: 0 });
   }
 
   if (isLoading || !client) return <FullPageSpinner />;
@@ -56,7 +78,9 @@ export function OnboardingWizard() {
     (p) => p.status !== "rejected",
   );
 
-  const stepKey: "assessment" | "plan" | "payment" | "done" =
+  // How far the client has got (server truth). Once a payment is in, the
+  // wizard is done and earlier steps lock: changes go through the team.
+  const progressKey: StepKey | "done" =
     client.status !== "lead"
       ? "done"
       : !client.assessment?.completedAt
@@ -67,8 +91,13 @@ export function OnboardingWizard() {
             ? "done"
             : "payment";
 
-  const currentIndex =
-    stepKey === "assessment" ? 0 : stepKey === "plan" ? 1 : stepKey === "payment" ? 2 : 3;
+  const progressIndex = STEP_INDEX[progressKey];
+  // A revisited step is only honoured while it's at or behind the progress.
+  const stepKey: StepKey | "done" =
+    progressKey !== "done" && viewing && STEP_INDEX[viewing] <= progressIndex
+      ? viewing
+      : progressKey;
+  const currentIndex = STEP_INDEX[stepKey];
 
   return (
     <div data-theme={type === "bride" ? "bride" : undefined} className="min-h-screen bg-background">
@@ -105,24 +134,39 @@ export function OnboardingWizard() {
             </div>
 
             <div className="mb-8">
-              <Stepper steps={STEPS} currentIndex={currentIndex} />
+              <Stepper
+                steps={STEPS}
+                currentIndex={currentIndex}
+                completedThrough={progressIndex}
+                onSelect={(i) => {
+                  const step = STEPS[i];
+                  if (step) goTo(step.key);
+                }}
+              />
             </div>
 
             {stepKey === "assessment" && (
               <AssessmentStep
                 client={{ id: client.id, type: client.type, leadPhase: client.leadPhase }}
                 assessment={client.assessment ?? null}
-                onDone={handleStepDone}
+                onDone={() => handleStepDone("plan")}
               />
             )}
             {stepKey === "plan" && (
-              <PlanStep client={{ id: client.id }} onDone={handleStepDone} />
+              <PlanStep
+                client={{ id: client.id }}
+                currentPlanId={client.clientPlan?.planId ?? null}
+                onBack={() => goTo("assessment")}
+                onDone={() => handleStepDone("payment")}
+              />
             )}
             {stepKey === "payment" && client.clientPlan && (
               <PaymentStep
                 client={{ id: client.id, leadPhase: client.leadPhase }}
+                assessment={client.assessment ?? null}
                 clientPlan={client.clientPlan}
-                onDone={handleStepDone}
+                onEdit={goTo}
+                onDone={() => handleStepDone("payment")}
               />
             )}
           </>

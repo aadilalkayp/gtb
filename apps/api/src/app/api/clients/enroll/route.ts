@@ -15,11 +15,11 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
 
 /**
  * Enroll a client in a plan (SRS §6.1 step 5 + §8.2). Creates the ClientPlan
- * (with a price/name snapshot) and the milestone schedule — the plan's
- * evenly-split template by default, or a custom schedule when staff pass
- * `milestones` (amounts must sum to the plan price). STATE-7: creation +
- * leadPhase advance are one transaction, and the double-enroll race returns
- * 409 (EnrollmentConflictError) instead of a 500.
+ * (with a name/services snapshot). Plans carry no price: staff may pass the
+ * negotiated `agreedPrice` (and optionally a custom `milestones` schedule that
+ * sums to it); a client self-enrolling leaves the price for staff to record.
+ * STATE-7: creation + leadPhase advance are one transaction, and the
+ * double-enroll race returns 409 (EnrollmentConflictError) instead of a 500.
  */
 async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
@@ -28,6 +28,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
   let body: {
     clientId?: string;
     planId?: string;
+    agreedPrice?: number;
     milestones?: { amount?: number; dueDate?: string }[];
   };
   try {
@@ -44,8 +45,8 @@ async function handlePost(req: NextRequest): Promise<Response> {
   // path; staff (founder/ops/cro) may enroll anyone.
   const isStaff = STAFF_ENROLLERS.has(authUser.role);
   if (!isStaff) {
-    if (body.milestones) {
-      return json(req, { error: "Only staff can customise the payment schedule" }, 403);
+    if (body.milestones || body.agreedPrice != null) {
+      return json(req, { error: "Only staff can set the price or payment schedule" }, 403);
     }
     const client = await prisma.client.findUnique({
       where: { id: clientId },
@@ -68,6 +69,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
       clientId,
       planId,
       actorId: authUser.id,
+      agreedPrice: body.agreedPrice == null ? undefined : Number(body.agreedPrice),
       milestones,
     });
     return json(req, { clientPlan });
@@ -83,8 +85,11 @@ async function handlePost(req: NextRequest): Promise<Response> {
     if (msg === "PLAN_MISMATCH") {
       return json(req, { error: "Plan does not match the client's program" }, 409);
     }
+    if (msg === "BAD_PRICE") {
+      return json(req, { error: "The agreed price must be a positive whole amount" }, 400);
+    }
     if (msg === "BAD_SCHEDULE") {
-      return json(req, { error: "The milestone schedule must sum exactly to the plan price" }, 400);
+      return json(req, { error: "A schedule needs an agreed price and must sum exactly to it" }, 400);
     }
     throw e;
   }

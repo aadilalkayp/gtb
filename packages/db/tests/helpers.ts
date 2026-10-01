@@ -61,19 +61,21 @@ export async function seedPlan() {
       name: "Test Plan",
       clientType: "groom",
       durationMonths: 3,
-      price: 90000,
-      installmentCount: 3,
     },
   });
 }
 
-export async function seedClientPlan(clientId: string, planId: string) {
+export async function seedClientPlan(
+  clientId: string,
+  planId: string,
+  overrides: { agreedPrice?: number | null } = {},
+) {
   return prisma.clientPlan.create({
     data: {
       clientId,
       planId,
       planNameSnapshot: "Test Plan",
-      priceAtEnrollment: 90000,
+      agreedPrice: overrides.agreedPrice === undefined ? 90000 : overrides.agreedPrice,
       durationMonths: 3,
     },
   });

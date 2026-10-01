@@ -2,8 +2,9 @@
  * The spine of the suite: one client's full journey across every role lane.
  *
  *   CRO creates a lead → sends the invite → the client registers, completes
- *   the onboarding assessment, picks a plan, submits a payment proof → the
- *   CRO approves it (lead → converted) → the Ops Head assigns the team and
+ *   the onboarding assessment, picks a plan, steps back through the wizard to
+ *   review, submits a payment proof → the CRO approves it (lead → converted)
+ *   and records the negotiated price → the Ops Head assigns the team and
  *   activates (sessions scheduled) → consultant and client both see sessions.
  *
  * Runs serially in one file. On success it persists the created client (and a
@@ -70,8 +71,20 @@ test("client registers, completes onboarding, and submits first payment", async 
   await page.getByRole("button", { name: "GTB (1 Month)" }).click();
   await page.getByRole("button", { name: "Continue to payment" }).click();
 
-  // Step 3: pay PARTIALLY (₹2,000 of ₹5,000) — payments.spec.ts needs the
-  // shared client to keep an outstanding balance — then upload proof + submit.
+  // Step 3 opens with a review of the choices; walk back through the wizard
+  // (plan → assessment) and forward again, answers intact.
+  await expect(page.getByRole("heading", { name: "Review your details" })).toBeVisible();
+  await page.getByRole("button", { name: "Change plan" }).click();
+  await expect(page.getByRole("button", { name: "Continue to payment" })).toBeEnabled();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(field(page, "Skin type")).toHaveValue("combination");
+  await page.getByRole("button", { name: "Save & continue" }).click();
+  await page.getByRole("button", { name: "Continue to payment" }).click();
+  await expect(page.getByRole("heading", { name: "Review your details" })).toBeVisible();
+
+  // Pay PARTIALLY (₹2,000; the agreed ₹5,000 is recorded by the CRO later) —
+  // payments.spec.ts needs the shared client to keep an outstanding balance —
+  // then state the amount, upload proof + submit.
   await page.locator('input[type="number"]').fill("2000");
   await page.locator('input[type="file"]').setInputFiles(pngFile("payment-proof.png"));
   const submit = page.getByRole("button", { name: "Submit payment" });
@@ -104,6 +117,32 @@ test("CRO approves the first payment (lead → converted)", async ({ browser }) 
   await page.goto("/clients");
   const clientRow = page.locator("a, div, tr").filter({ hasText: clientName }).first();
   await expect(clientRow).toContainText(/converted/i);
+  await page.context().close();
+});
+
+test("CRO records the client's negotiated price", async ({ browser }) => {
+  // CROs negotiate fees, so they record the agreed price for their clients.
+  const page = await pageAs(browser, "cro");
+  await page.goto("/payments");
+  await page.getByRole("button", { name: /^Collections/ }).click();
+
+  const row = page
+    .locator(".card > div")
+    .filter({ has: page.getByRole("link", { name: clientName }) })
+    .first();
+  await expect(row).toContainText("Price not set");
+  await row.getByRole("button", { name: "Set price" }).click();
+
+  const dialog = page.getByRole("dialog", { name: `${clientName}'s payment schedule` });
+  await field(dialog, "Agreed price (₹)").fill("5000");
+  // A single milestone follows the price; it just needs a date.
+  await expect(dialog.locator('input[type="number"]').nth(1)).toHaveValue("5000");
+  await dialog.locator('input[type="date"]').first().fill("2027-01-31");
+  await expect(dialog.getByText("Adds up ✓")).toBeVisible();
+  await dialog.getByRole("button", { name: "Save schedule" }).click();
+  await expect(dialog).not.toBeVisible();
+
+  await expect(row).toContainText("of ₹5,000 paid");
   await page.context().close();
 });
 

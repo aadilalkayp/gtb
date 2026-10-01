@@ -486,8 +486,8 @@ describe("Phase 1 — SEC-14: clients see active plans only", () => {
   it("excludes inactive plans from client reads, not staff reads", async () => {
     await seedUser({ id: "client1", role: "client" });
     await seedUser({ id: "founder1", role: "founder" });
-    await prisma.plan.create({ data: { name: "Old", clientType: "groom", durationMonths: 3, price: 1, isActive: false } });
-    await prisma.plan.create({ data: { name: "Live", clientType: "groom", durationMonths: 3, price: 2, isActive: true } });
+    await prisma.plan.create({ data: { name: "Old", clientType: "groom", durationMonths: 3, isActive: false } });
+    await prisma.plan.create({ data: { name: "Live", clientType: "groom", durationMonths: 3, isActive: true } });
     const clientPlans = await as("client1", "client").plan.findMany({});
     expect(clientPlans.map((p) => p.name)).toEqual(["Live"]);
     const staffPlans = await as("founder1", "founder").plan.findMany({});

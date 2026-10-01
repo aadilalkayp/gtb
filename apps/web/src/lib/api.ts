@@ -67,14 +67,20 @@ export function inviteClient(clientId: string): Promise<InviteResult> {
   return postJson<InviteResult>("/api/clients/invite", { clientId });
 }
 
-/** Enroll a client in a plan (creates the ClientPlan + milestone schedule).
- *  Staff may pass a custom schedule; it must sum to the plan price. */
+/** Enroll a client in a plan. Plans carry no price: staff may pass the
+ *  negotiated `agreedPrice` (plus a schedule summing to it); a client
+ *  self-enrolling leaves the price for staff to record. */
 export function enrollClient(
   clientId: string,
   planId: string,
-  milestones?: { amount: number; dueDate: string }[],
+  terms?: { agreedPrice: number; milestones?: { amount: number; dueDate: string }[] },
 ): Promise<{ clientPlan: { id: string } }> {
-  return postJson("/api/clients/enroll", { clientId, planId, milestones });
+  return postJson("/api/clients/enroll", { clientId, planId, ...terms });
+}
+
+/** Switch a lead's plan before any payment is live (onboarding "go back"). */
+export function changePlan(clientId: string, planId: string): Promise<{ clientPlan: { id: string } }> {
+  return postJson("/api/clients/change-plan", { clientId, planId });
 }
 
 export interface UploadedDocument {
@@ -118,13 +124,14 @@ export function submitPayment(
   return postJson("/api/payments/submit", { amount, proofDocumentId });
 }
 
-/** Replace a client's expected payment schedule (founder/ops). Must sum to the
- *  enrolled price; audit-logged server-side. */
+/** Record a client's agreed price and replace their payment schedule
+ *  (founder/ops, or the assigned CRO). The schedule must sum to the price; audit-logged server-side. */
 export function updateMilestones(
   clientId: string,
+  agreedPrice: number,
   milestones: { amount: number; dueDate: string }[],
 ): Promise<{ ok: boolean; count: number }> {
-  return postJson("/api/payments/milestones", { clientId, milestones });
+  return postJson("/api/payments/milestones", { clientId, agreedPrice, milestones });
 }
 
 /** Create + invite a staff member (founder only). Also resends for pending staff. */

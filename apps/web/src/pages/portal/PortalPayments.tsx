@@ -56,24 +56,31 @@ export function PortalPayments() {
   }
 
   const payments = plan.payments;
-  const total = plan.priceAtEnrollment;
+  // Null until the coordinator records the fee agreed with this client.
+  const total = plan.agreedPrice;
   const underReview = payments
     .filter((p) => p.status === "pending_review")
     .reduce((t, p) => t + p.amount, 0);
-  const submittable = Math.max(pace.balance - underReview, 0);
-  const progress = total ? pace.paidTotal / total : 0;
-  const suggested = Math.min(
-    pace.behindAmount > 0 ? pace.behindAmount : (pace.nextDue?.remaining ?? submittable),
-    submittable,
-  );
+  // Null = no ceiling yet (price not agreed): the client states what they paid.
+  const submittable = pace.balance == null ? null : Math.max(pace.balance - underReview, 0);
+  const canPay = submittable == null || submittable > 0;
+  const hasLivePayment = payments.some((p) => p.status !== "rejected");
+  const progress = total ? Math.min(pace.paidTotal / total, 1) : 0;
+  const suggested =
+    submittable == null
+      ? null
+      : Math.min(
+          pace.behindAmount > 0 ? pace.behindAmount : (pace.nextDue?.remaining ?? submittable),
+          submittable,
+        );
 
   async function submit() {
     const value = Number(amount || suggested);
     if (!Number.isInteger(value) || value <= 0) {
-      setError("Enter a positive whole amount.");
+      setError("Enter the amount you paid, as a whole number.");
       return;
     }
-    if (value > submittable) {
+    if (submittable != null && value > submittable) {
       setError(`You can submit at most ${formatINR(submittable)} right now.`);
       return;
     }
@@ -100,12 +107,18 @@ export function PortalPayments() {
       {/* Summary */}
       <section className="card flex items-center gap-5 p-5">
         <ProgressRing value={progress} size={84} strokeWidth={8} className="text-primary">
-          <span className="text-sm font-bold">{Math.round(progress * 100)}%</span>
+          <span className="text-sm font-bold">
+            {total != null ? `${Math.round(progress * 100)}%` : "–"}
+          </span>
         </ProgressRing>
         <div className="grid flex-1 grid-cols-3 gap-3 text-sm">
           <div>
             <p className="text-xs text-muted-foreground">Package</p>
-            <p className="font-num mt-0.5 font-semibold">{formatINR(total)}</p>
+            {total != null ? (
+              <p className="font-num mt-0.5 font-semibold">{formatINR(total)}</p>
+            ) : (
+              <p className="mt-0.5 text-muted-foreground">To be confirmed</p>
+            )}
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Paid</p>
@@ -115,18 +128,27 @@ export function PortalPayments() {
           </div>
           <div>
             <p className="text-xs text-muted-foreground">Balance</p>
-            <p className="font-num mt-0.5 font-semibold">{formatINR(pace.balance)}</p>
+            <p className="font-num mt-0.5 font-semibold">
+              {pace.balance != null ? formatINR(pace.balance) : "–"}
+            </p>
           </div>
         </div>
       </section>
 
+      {total == null && (
+        <p className="text-sm text-muted-foreground">
+          Your package price is agreed personally with your GTB coordinator. They'll add it
+          here, along with any payment dates you agree on.
+        </p>
+      )}
+
       {/* Expected schedule — pay any amount, any time; these are the checkpoints. */}
-      {paces.length > 0 && pace.balance > 0 && (
+      {paces.length > 0 && (pace.balance ?? 0) > 0 && (
         <section className="card divide-y divide-border">
           <div className="px-4 py-3">
             <h2 className="text-sm font-semibold">Payment schedule</h2>
             <p className="mt-0.5 text-xs text-muted-foreground">
-              Pay any amount at any time — these dates are when each part is expected.
+              Pay any amount at any time. These dates are when each part is expected.
             </p>
           </div>
           {paces.map((p, i) => (
@@ -152,23 +174,23 @@ export function PortalPayments() {
       )}
 
       {/* Make a payment */}
-      {submittable > 0 && client.status !== "lead" && (
+      {canPay && client.status !== "lead" && (
         <section className="card space-y-3 p-5">
           <div>
             <h2 className="text-sm font-semibold">Make a payment</h2>
             <p className="mt-0.5 text-sm text-muted-foreground">
-              Pay via UPI, bank transfer, or cash, then submit the amount with a screenshot or
-              receipt. Your CRO will verify it.
+              Pay via UPI, bank transfer, or cash, then tell us how much you paid and add a
+              screenshot or receipt. Your CRO will verify it.
             </p>
           </div>
           <div>
-            <p className="mb-1 text-xs font-medium text-muted-foreground">Amount (₹)</p>
+            <p className="mb-1 text-xs font-medium text-muted-foreground">Amount paid (₹)</p>
             <Input
               type="number"
               min={1}
-              max={submittable}
+              max={submittable ?? undefined}
               value={amount}
-              placeholder={String(suggested || submittable)}
+              placeholder={suggested ? String(suggested) : "e.g. 25000"}
               onChange={(e) => setAmount(e.target.value)}
             />
           </div>
@@ -186,7 +208,7 @@ export function PortalPayments() {
           </div>
         </section>
       )}
-      {submittable > 0 && client.status === "lead" && (
+      {canPay && client.status === "lead" && !hasLivePayment && (
         <Link
           to="/portal/onboarding"
           className="block rounded-lg border border-border bg-muted/40 p-4 text-center text-sm text-primary transition-colors duration-150 hover:border-border-strong hover:bg-muted active:scale-[0.99]"
@@ -196,7 +218,7 @@ export function PortalPayments() {
       )}
       {pace.balance === 0 && (
         <p className="card p-6 text-center text-sm text-muted-foreground">
-          All settled — thank you! 🎉
+          All settled. Thank you! 🎉
         </p>
       )}
 

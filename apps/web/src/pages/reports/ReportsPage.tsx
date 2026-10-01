@@ -109,7 +109,7 @@ interface ClientLite {
   convertedBy: { id: string; name: string } | null;
   clientPlan: {
     planNameSnapshot: string;
-    priceAtEnrollment: number;
+    agreedPrice: number | null;
     milestones: MilestoneLite[];
     payments: PaymentLite[];
   } | null;
@@ -144,7 +144,7 @@ export function ReportsPage() {
       clientPlan: {
         select: {
           planNameSnapshot: true,
-          priceAtEnrollment: true,
+          agreedPrice: true,
           milestones: { select: { amount: true, dueDate: true } },
           payments: { select: { amount: true, status: true, kind: true, approvedAt: true } },
         },
@@ -364,7 +364,7 @@ function RevenueReport({
     );
     const sales = clients
       .filter((c) => c.conversionDate && sameMonth(c.conversionDate, m.year, m.month))
-      .reduce((t, c) => t + (c.clientPlan?.priceAtEnrollment ?? 0), 0);
+      .reduce((t, c) => t + (c.clientPlan?.agreedPrice ?? 0), 0);
     return { label: m.label, sales, collections };
   });
 
@@ -506,7 +506,7 @@ function CollectionsReport({
     .map((c) => {
       if (!c.clientPlan) return { id: c.id, name: c.name, amount: 0, overdue: 0 };
       const pace = planPace(c.clientPlan);
-      return { id: c.id, name: c.name, amount: pace.balance, overdue: pace.behindAmount };
+      return { id: c.id, name: c.name, amount: pace.balance ?? 0, overdue: pace.behindAmount };
     })
     .filter((r) => r.amount > 0)
     .sort((a, b) => b.amount - a.amount);
@@ -579,8 +579,10 @@ function SalesReport({
   const convertedInPeriod = leads.filter((c) => c.conversionDate && inRange(c.conversionDate));
   const convRate = leads.length ? Math.round((convertedInPeriod.length / leads.length) * 100) : 0;
   const conversions = clients.filter((c) => inRange(c.conversionDate));
-  const dealValue = conversions.reduce((t, c) => t + (c.clientPlan?.priceAtEnrollment ?? 0), 0);
-  const avgDeal = conversions.length ? Math.round(dealValue / conversions.length) : 0;
+  const dealValue = conversions.reduce((t, c) => t + (c.clientPlan?.agreedPrice ?? 0), 0);
+  // Average only over deals whose price has been recorded.
+  const priced = conversions.filter((c) => c.clientPlan?.agreedPrice != null).length;
+  const avgDeal = priced ? Math.round(dealValue / priced) : 0;
 
   // Lead source analysis.
   const bySource = new Map<string, { leads: number; conversions: number }>();
@@ -605,7 +607,7 @@ function SalesReport({
       value: 0,
     };
     cur.conversions += 1;
-    cur.value += c.clientPlan?.priceAtEnrollment ?? 0;
+    cur.value += c.clientPlan?.agreedPrice ?? 0;
     byCro.set(c.convertedBy.id, cur);
   }
   const croRows = [...byCro.values()].sort((a, b) => b.conversions - a.conversions);

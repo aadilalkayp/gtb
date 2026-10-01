@@ -59,6 +59,7 @@ import { DocumentRow } from "@/components/DocumentRow";
 import { FileUploadField } from "@/components/FileUploadField";
 import { InviteClientPanel } from "./InviteClientPanel";
 import { ClientScansTab } from "./ClientScansTab";
+import { MilestoneScheduleModal } from "../payments/MilestoneScheduleModal";
 
 type TabId = "overview" | "sessions" | "payments" | "documents" | "assessment" | "scans";
 
@@ -66,8 +67,10 @@ export function ClientProfilePage() {
   const { id } = useParams<{ id: string }>();
   const { role } = useAuth();
   const isAdmin = role === "founder" || role === "ops_head";
+  const canEditTerms = isAdmin || role === "cro";
   const [tab, setTab] = useState<TabId>("overview");
   const [statusAction, setStatusAction] = useState<"hold" | "cancel" | "complete" | null>(null);
+  const [editingTerms, setEditingTerms] = useState(false);
   const [showUpload, setShowUpload] = useState(false);
   const [showWeddingEdit, setShowWeddingEdit] = useState(false);
 
@@ -129,8 +132,10 @@ export function ClientProfilePage() {
   const pace = plan ? planPace(plan) : null;
   const paces = plan ? milestonePaces(plan) : [];
   const payments = plan?.payments ?? [];
-  const total = plan?.priceAtEnrollment ?? 0;
+  // Null until staff record the negotiated fee.
+  const total = plan?.agreedPrice ?? null;
   const paid = pace?.paidTotal ?? 0;
+  const outstanding = pace?.balance ?? 0;
   const avg = averageRating(client.sessions);
   const days = daysUntil(client.weddingDate);
 
@@ -263,13 +268,13 @@ export function ClientProfilePage() {
               {client.clientPlan ? (
                 <div className="mt-4 flex flex-wrap items-center gap-6">
                   <ProgressRing
-                    value={total ? paid / total : 0}
+                    value={total ? Math.min(paid / total, 1) : 0}
                     size={84}
                     strokeWidth={8}
                     className="text-primary"
                   >
                     <span className="font-num text-sm font-bold">
-                      {total ? Math.round((paid / total) * 100) : 0}%
+                      {total ? `${Math.min(Math.round((paid / total) * 100), 100)}%` : "–"}
                     </span>
                   </ProgressRing>
                   <div className="grid flex-1 grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
@@ -278,8 +283,12 @@ export function ClientProfilePage() {
                       <p className="mt-0.5 font-medium">{client.clientPlan.planNameSnapshot}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Value</p>
-                      <p className="font-num mt-0.5 font-medium">{formatINR(total)}</p>
+                      <p className="text-xs text-muted-foreground">Agreed price</p>
+                      {total != null ? (
+                        <p className="font-num mt-0.5 font-medium">{formatINR(total)}</p>
+                      ) : (
+                        <p className="mt-0.5 font-medium text-warning">Not set yet</p>
+                      )}
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Paid</p>
@@ -288,7 +297,7 @@ export function ClientProfilePage() {
                     <div>
                       <p className="text-xs text-muted-foreground">Outstanding</p>
                       <p className="font-num mt-0.5 font-medium">
-                        {formatINR(Math.max(total - paid, 0))}
+                        {total != null ? formatINR(outstanding) : "–"}
                       </p>
                     </div>
                   </div>
@@ -414,17 +423,31 @@ export function ClientProfilePage() {
               <div className="card divide-y divide-border">
                 <div className="flex items-center justify-between px-5 py-3.5">
                   <h3 className="text-sm font-semibold">Expected schedule</h3>
-                  {pace && (
-                    <span className="text-xs text-muted-foreground">
-                      {formatINR(pace.balance)} outstanding
-                      {pace.behindAmount > 0 && (
-                        <span className="font-medium text-danger">
-                          {" "}
-                          · {formatINR(pace.behindAmount)} behind
-                        </span>
-                      )}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-3">
+                    {pace && (
+                      <span className="text-xs text-muted-foreground">
+                        {pace.balance == null ? (
+                          <span className="font-medium text-warning">Agreed price not set</span>
+                        ) : (
+                          <>{formatINR(pace.balance)} outstanding</>
+                        )}
+                        {pace.behindAmount > 0 && (
+                          <span className="font-medium text-danger">
+                            {" "}
+                            · {formatINR(pace.behindAmount)} behind
+                          </span>
+                        )}
+                      </span>
+                    )}
+                    {canEditTerms &&
+                      client.status !== "cancelled" &&
+                      client.status !== "completed" && (
+                      <Button size="sm" variant="outline" onClick={() => setEditingTerms(true)}>
+                        <Pencil className="h-4 w-4" />{" "}
+                        {plan.agreedPrice == null ? "Set price" : "Edit"}
+                      </Button>
+                    )}
+                  </div>
                 </div>
                 {paces.length ? (
                   paces.map((p, i) => (
@@ -448,7 +471,9 @@ export function ClientProfilePage() {
                   ))
                 ) : (
                   <p className="px-5 py-3.5 text-sm text-muted-foreground">
-                    No schedule set — the client can pay in any amounts.
+                    {plan.agreedPrice == null
+                      ? "The client's fee hasn't been recorded yet. Payments they submit are still logged below."
+                      : "No schedule set. The client can pay in any amounts."}
                   </p>
                 )}
               </div>
@@ -533,6 +558,21 @@ export function ClientProfilePage() {
         {tab === "scans" && <ClientScansTab clientId={client.id} />}
       </div>
 
+      {editingTerms && plan && pace && (
+        <MilestoneScheduleModal
+          clientId={client.id}
+          clientName={client.name}
+          agreedPrice={plan.agreedPrice}
+          paidTotal={pace.paidTotal}
+          milestones={plan.milestones}
+          onClose={() => setEditingTerms(false)}
+          onDone={() => {
+            setEditingTerms(false);
+            void refetch();
+          }}
+        />
+      )}
+
       {/* Status modals */}
       {statusAction && (
         <StatusChangeModal
@@ -541,7 +581,7 @@ export function ClientProfilePage() {
           pendingSessions={
             client.sessions.filter((s) => s.status === "scheduled" || s.status === "delayed").length
           }
-          outstanding={Math.max(total - paid, 0)}
+          outstanding={outstanding}
           onClose={() => setStatusAction(null)}
           onConfirm={async (reason) => {
             if (statusAction === "cancel") {
