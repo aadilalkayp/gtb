@@ -47,3 +47,10 @@ export const TINY_PNG = Buffer.from(
 export function pngFile(name = "proof.png"): { name: string; mimeType: string; buffer: Buffer } {
   return { name, mimeType: "image/png", buffer: TINY_PNG };
 }
+
+/** Minimal PDF (passes the upload route's %PDF magic-byte check). */
+const TINY_PDF = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n");
+
+export function pdfFile(name = "plan.pdf"): { name: string; mimeType: string; buffer: Buffer } {
+  return { name, mimeType: "application/pdf", buffer: TINY_PDF };
+}

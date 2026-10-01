@@ -2,7 +2,7 @@ import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
 import { DOCUMENT_TYPES, type DocumentType } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
-import { uploadObject } from "@/lib/storage";
+import { deleteObjects, uploadObject } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 import { withRequestLog } from "@/lib/handler";
 import { requestLog } from "@/lib/logger";
@@ -53,6 +53,9 @@ const UPLOADER_BY_TYPE: Record<DocumentType, "client" | "client_or_staff" | "sta
   expense_receipt: "staff",
   client_photo: "client_or_staff", // §16.1: client or staff
   progress_photo: "client_or_staff", // fitness progress photos: client or trainer
+  // Diet plan PDF, uploaded as part of creating a fitness plan: same people who
+  // may create the plan (admins + the client's assigned fitness trainer).
+  nutrition_plan: new Set(["fitness_trainer"]),
 };
 
 function json(req: NextRequest, body: unknown, status = 200): Response {
@@ -101,6 +104,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
   const clientId = form.get("clientId");
   const type = form.get("type");
   const sessionId = form.get("sessionId");
+  const fitnessPlanId = form.get("fitnessPlanId");
 
   if (typeof clientId !== "string" || typeof type !== "string") {
     return json(req, { error: "clientId and type are required" }, 400);
@@ -165,6 +169,22 @@ async function handlePost(req: NextRequest): Promise<Response> {
     }
   }
 
+  // A nutrition plan always belongs to a fitness plan of the same client; no
+  // other type may carry a plan link.
+  const planId = typeof fitnessPlanId === "string" && fitnessPlanId ? fitnessPlanId : undefined;
+  if (type === "nutrition_plan") {
+    if (!planId) return json(req, { error: "fitnessPlanId is required for a nutrition plan" }, 400);
+    const plan = await prisma.fitnessPlan.findUnique({
+      where: { id: planId },
+      select: { clientId: true },
+    });
+    if (!plan || plan.clientId !== client.id) {
+      return json(req, { error: "fitnessPlanId does not belong to this client" }, 400);
+    }
+  } else if (planId) {
+    return json(req, { error: "fitnessPlanId is only valid for a nutrition plan" }, 400);
+  }
+
   // SEC-12: verify declared MIME against the content's magic bytes.
   const declaredType = file.type || "application/octet-stream";
   if (!ALLOWED_MIME.has(declaredType)) {
@@ -194,8 +214,22 @@ async function handlePost(req: NextRequest): Promise<Response> {
       fileSize: file.size,
       uploadedById: authUser.id,
       sessionId: typeof sessionId === "string" && sessionId ? sessionId : undefined,
+      fitnessPlanId: planId,
     },
   });
+
+  // A plan has one diet plan: uploading a new one replaces the previous file,
+  // so the client's document room never shows stale or mistaken versions.
+  if (type === "nutrition_plan" && planId) {
+    const previous = await prisma.document.findMany({
+      where: { fitnessPlanId: planId, type: "nutrition_plan", id: { not: document.id } },
+      select: { id: true, fileUrl: true },
+    });
+    if (previous.length) {
+      await prisma.document.deleteMany({ where: { id: { in: previous.map((d) => d.id) } } });
+      await deleteObjects(previous.map((d) => d.fileUrl));
+    }
+  }
 
   return json(req, { document });
 }

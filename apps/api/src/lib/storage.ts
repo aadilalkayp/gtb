@@ -29,6 +29,13 @@ export async function createSignedUrl(path: string, expiresInSeconds = 3600): Pr
   return data.signedUrl;
 }
 
+/** Best-effort delete of documents-bucket objects (e.g. a replaced diet plan). */
+export async function deleteObjects(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  const { error } = await supabaseAdmin.storage.from(DOCUMENTS_BUCKET).remove(paths);
+  if (error) log.warn("document object delete failed", { paths, reason: error.message });
+}
+
 /** Private Storage bucket for Readiness Scan selfies. Separate from
  *  client-documents: scan photos have their own retention policy (anonymous
  *  scans are purged after 24h by the daily job). */

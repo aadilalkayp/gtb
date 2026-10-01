@@ -10,9 +10,10 @@ export function PortalDocuments() {
   const clientId = user?.client?.id;
 
   // Access policy already hides internal consultation notes from clients.
+  // Progress photos live in Fitness > Progress, not among plans and receipts.
   const { data: docs, isLoading } = useFindManyDocument(
     {
-      where: { clientId: clientId ?? "" },
+      where: { clientId: clientId ?? "", type: { not: "progress_photo" } },
       orderBy: { createdAt: "desc" },
     },
     { enabled: Boolean(clientId) },

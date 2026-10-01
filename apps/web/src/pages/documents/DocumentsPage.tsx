@@ -179,7 +179,8 @@ function UploadDocumentModal({ onClose, onDone }: { onClose: () => void; onDone:
         </Field>
         <Field label="Type" required>
           <Select value={type} onChange={(e) => setType(e.target.value as DocumentType)}>
-            {DOCUMENT_TYPES.map((t) => (
+            {/* Diet plans are uploaded from their fitness plan, which they link to. */}
+            {DOCUMENT_TYPES.filter((t) => t !== "nutrition_plan").map((t) => (
               <option key={t} value={t}>
                 {humanize(t)}
               </option>

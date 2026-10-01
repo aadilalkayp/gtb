@@ -483,18 +483,21 @@ export async function getScanPhotoUrl(scanId: string): Promise<string> {
   return url;
 }
 
-/** Upload a client document (payment proof, photo) via the server storage route. */
+/** Upload a client document (payment proof, photo, diet plan) via the server storage route. */
 export async function uploadClientDocument(args: {
   clientId: string;
   type: string;
   file: File;
   sessionId?: string;
+  /** Required for nutrition_plan: the fitness plan the diet PDF belongs to. */
+  fitnessPlanId?: string;
 }): Promise<UploadedDocument> {
   const form = new FormData();
   form.append("file", args.file);
   form.append("clientId", args.clientId);
   form.append("type", args.type);
   if (args.sessionId) form.append("sessionId", args.sessionId);
+  if (args.fitnessPlanId) form.append("fitnessPlanId", args.fitnessPlanId);
   const res = await authedFetch(`${env.apiUrl}/api/documents/upload`, {
     method: "POST",
     body: form,

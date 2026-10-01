@@ -21,6 +21,7 @@ import {
   type WorkoutDayLite,
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
+import { uploadClientDocument } from "@/lib/api";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
 import {
@@ -36,6 +37,7 @@ import {
   Textarea,
 } from "@/components/ui";
 import { WeekStrip } from "@/components/fitness/WeekStrip";
+import { DietPlanPicker } from "@/components/fitness/DietPlanPicker";
 
 type Filter = "all" | "needs_follow_up" | "active" | "completed";
 
@@ -354,7 +356,42 @@ function NewPlanModal({
   const [startWeight, setStartWeight] = useState("");
   const [targetWeight, setTargetWeight] = useState("");
   const [dietNotes, setDietNotes] = useState("");
+  const [dietPlanFile, setDietPlanFile] = useState<File | null>(null);
   const [error, setError] = useState<string>();
+  // Set once the plan exists but its diet plan PDF failed to upload, so the
+  // footer retries just the upload instead of creating a second plan.
+  const [createdPlanId, setCreatedPlanId] = useState<string>();
+  const [uploading, setUploading] = useState(false);
+
+  const uploadDietPlan = async (planId: string) => {
+    if (!dietPlanFile) return true;
+    setUploading(true);
+    try {
+      await uploadClientDocument({
+        clientId,
+        type: "nutrition_plan",
+        file: dietPlanFile,
+        fitnessPlanId: planId,
+      });
+      return true;
+    } catch (e) {
+      setCreatedPlanId(planId);
+      setError(
+        `The plan was created, but the diet plan PDF didn't upload (${
+          e instanceof Error ? e.message : "upload failed"
+        }). Retry, or add it later from the plan page.`,
+      );
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const retryUpload = async () => {
+    if (!createdPlanId) return;
+    setError(undefined);
+    if (await uploadDietPlan(createdPlanId)) onDone();
+  };
 
   const pickTemplate = (key: string) => {
     setTemplateKey(key);
@@ -377,8 +414,9 @@ function NewPlanModal({
     setError(undefined);
     const tpl = fitnessTemplate(templateKey);
     const days = buildPlanDays(templateKey, new Date(startDate), duration);
+    let planId: string;
     try {
-      await createPlan.mutateAsync({
+      const plan = await createPlan.mutateAsync({
         data: {
           clientId,
           trainerId: trainerId || undefined,
@@ -409,11 +447,15 @@ function NewPlanModal({
             })),
           },
         },
+        select: { id: true },
       });
-      onDone();
+      if (!plan) throw new Error("Could not create the plan");
+      planId = plan.id;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not create the plan");
+      return;
     }
+    if (await uploadDietPlan(planId)) onDone();
   };
 
   return (
@@ -424,19 +466,36 @@ function NewPlanModal({
       size="md"
       footer={
         <>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button onClick={() => void create()} loading={createPlan.isPending}>
-            Create plan
-          </Button>
+          {createdPlanId ? (
+            <>
+              <Button variant="outline" onClick={onDone}>
+                Skip for now
+              </Button>
+              <Button onClick={() => void retryUpload()} loading={uploading}>
+                Retry upload
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button onClick={() => void create()} loading={createPlan.isPending || uploading}>
+                Create plan
+              </Button>
+            </>
+          )}
         </>
       }
     >
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <Field label="Client" required>
-            <Select value={clientId} onChange={(e) => setClientId(e.target.value)}>
+            <Select
+              value={clientId}
+              onChange={(e) => setClientId(e.target.value)}
+              disabled={Boolean(createdPlanId)}
+            >
               <option value="">— Select —</option>
               {clients?.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -513,12 +572,16 @@ function NewPlanModal({
           </Field>
         </div>
 
-        <Field label="Nutrition note (shown to the client)">
+        <Field label="Diet plan (PDF, added to the client's documents)">
+          <DietPlanPicker file={dietPlanFile} onChange={setDietPlanFile} />
+        </Field>
+
+        <Field label="Nutrition note (optional, shown on the client's fitness tab)">
           <Textarea
             rows={2}
             value={dietNotes}
             onChange={(e) => setDietNotes(e.target.value)}
-            placeholder="Meal guidance, hydration, what to avoid…"
+            placeholder="A one-line summary, e.g. hydration or what to avoid"
           />
         </Field>
 

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -10,6 +10,8 @@ import {
   Scale,
   StickyNote,
   Trash2,
+  Upload,
+  UtensilsCrossed,
 } from "lucide-react";
 import {
   useCreateFitnessExercise,
@@ -38,7 +40,8 @@ import {
   workoutDayState,
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
-import { sendFitnessReminder } from "@/lib/api";
+import { sendFitnessReminder, uploadClientDocument } from "@/lib/api";
+import { DocumentRow } from "@/components/DocumentRow";
 import {
   Badge,
   Button,
@@ -83,6 +86,8 @@ export function FitnessClientPage() {
         checkIns: { orderBy: { weekNumber: "desc" } },
         trainer: { select: { id: true, name: true } },
         client: { select: { id: true, name: true, clientCode: true, city: true } },
+        // The plan's diet plan PDF (one per plan; re-uploads replace it).
+        dietPlans: { where: { type: "nutrition_plan" }, orderBy: { createdAt: "desc" }, take: 1 },
       },
     },
     { enabled: Boolean(id) },
@@ -287,6 +292,15 @@ export function FitnessClientPage() {
               )}
             </div>
           </div>
+          <DietPlanCard
+            className="lg:col-span-2"
+            planId={plan.id}
+            clientId={plan.client.id}
+            dietNotes={plan.dietNotes}
+            dietPlan={plan.dietPlans[0]}
+            canEdit={canEdit}
+            onChanged={() => void refetch()}
+          />
         </div>
       )}
 
@@ -298,6 +312,151 @@ export function FitnessClientPage() {
         <CheckInsTab checkIns={plan.checkIns} canEdit={canEdit} onChanged={() => void refetch()} />
       )}
       {tab === "notes" && <NotesTab clientId={plan.client.id} authorId={user?.id ?? ""} canEdit={canEdit} />}
+    </div>
+  );
+}
+
+/** The plan's diet plan PDF (in the client's documents) plus the optional note. */
+function DietPlanCard({
+  planId,
+  clientId,
+  dietNotes,
+  dietPlan,
+  canEdit,
+  onChanged,
+  className,
+}: {
+  planId: string;
+  clientId: string;
+  dietNotes: string | null;
+  dietPlan?: { id: string; type: string; fileName: string; fileSize: number; createdAt: Date | string };
+  canEdit: boolean;
+  onChanged: () => void;
+  className?: string;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string>();
+  const updatePlan = useUpdateFitnessPlan();
+  const [editingNote, setEditingNote] = useState(false);
+  const [noteDraft, setNoteDraft] = useState(dietNotes ?? "");
+
+  function saveNote() {
+    updatePlan.mutate(
+      { where: { id: planId }, data: { dietNotes: noteDraft.trim() || null } },
+      {
+        onSuccess: () => {
+          setEditingNote(false);
+          onChanged();
+        },
+        onError: (e) => setError(e instanceof Error ? e.message : "Could not save the note"),
+      },
+    );
+  }
+
+  async function upload(file: File) {
+    setError(undefined);
+    if (file.type !== "application/pdf") {
+      setError("Please choose a PDF file.");
+      return;
+    }
+    setUploading(true);
+    try {
+      await uploadClientDocument({ clientId, type: "nutrition_plan", file, fitnessPlanId: planId });
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className={cn("card p-5", className)}>
+      <div className="flex items-center gap-2">
+        <UtensilsCrossed className="h-4 w-4 text-primary" />
+        <h2 className="font-semibold">Diet Plan</h2>
+        {canEdit && (
+          <>
+            <input
+              ref={inputRef}
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void upload(f);
+              }}
+            />
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              loading={uploading}
+              onClick={() => inputRef.current?.click()}
+            >
+              <Upload className="mr-1.5 h-4 w-4" />
+              {dietPlan ? "Replace PDF" : "Upload PDF"}
+            </Button>
+          </>
+        )}
+      </div>
+      {editingNote ? (
+        <div className="mt-3 space-y-2">
+          <Textarea
+            rows={2}
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            placeholder="A one-line summary, e.g. hydration or what to avoid"
+            aria-label="Nutrition note"
+          />
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setNoteDraft(dietNotes ?? "");
+                setEditingNote(false);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" loading={updatePlan.isPending} onClick={saveNote}>
+              Save note
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 flex items-start gap-2">
+          <p className="flex-1 text-sm text-muted-foreground">
+            {dietNotes || "No nutrition note for the client."}
+          </p>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={() => {
+                setNoteDraft(dietNotes ?? "");
+                setEditingNote(true);
+              }}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="Edit nutrition note"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+      <div className="mt-3">
+        {dietPlan ? (
+          <div className="overflow-hidden rounded-xl border border-border">
+            <DocumentRow doc={dietPlan} />
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No diet plan PDF uploaded yet.</p>
+        )}
+      </div>
+      {error && <p className="mt-2 text-xs text-danger">{error}</p>}
     </div>
   );
 }
