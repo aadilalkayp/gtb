@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Check } from "lucide-react";
 import { useFindManyPlan } from "@gtb/db/hooks";
-import { formatINR, SERVICE_TYPE_LABELS } from "@gtb/shared";
+import { SERVICE_TYPE_LABELS } from "@gtb/shared";
 import { enrollClient } from "@/lib/api";
 import { Badge, Button, Spinner } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -10,13 +10,13 @@ export function PlanStep({
   client,
   onDone,
 }: {
-  client: { id: string; type: "groom" | "bride" };
+  client: { id: string };
   onDone: () => void | Promise<void>;
 }) {
   const { data: plans, isLoading } = useFindManyPlan({
-    where: { clientType: client.type, isActive: true },
+    where: { isActive: true },
     include: { services: true },
-    orderBy: { price: "asc" },
+    orderBy: { durationMonths: "asc" },
   });
 
   const [selected, setSelected] = useState<string>();
@@ -79,12 +79,8 @@ export function PlanStep({
               )}
               <h3 className="font-semibold">{plan.name}</h3>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {plan.durationMonths} months ·{" "}
-                {plan.installmentCount > 1
-                  ? `${plan.installmentCount} installments`
-                  : "Full payment"}
+                {plan.durationMonths} {plan.durationMonths === 1 ? "month" : "months"}
               </p>
-              <p className="mt-2 font-num text-xl font-semibold">{formatINR(plan.price)}</p>
               {plan.description && (
                 <p className="mt-2 text-sm text-muted-foreground">{plan.description}</p>
               )}

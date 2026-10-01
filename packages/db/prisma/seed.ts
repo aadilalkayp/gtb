@@ -4,7 +4,7 @@
  * Creates:
  *   - one Founder user (email from SEED_FOUNDER_EMAIL) so you can log in
  *   - default lead sources + expense categories
- *   - two example plans (GTB + Glow, 3-month) with their service rules
+ *   - the three live packages (GTB 1/2/3 months) with their service rules
  *
  * The Founder's authId is left null; it links to a Supabase auth account on
  * first login (see apps/api/src/lib/auth.ts). Create a Supabase auth user with
@@ -48,32 +48,49 @@ async function main() {
   }
   console.log(`✓ Expense categories: ${categories.length}`);
 
-  // --- Example plans ---
+  // --- Plans ---
+  // Three duration-based packages shown to every client (the portal no longer
+  // filters by bride/groom). Pricing is agreed off-platform per client; the
+  // price here is only the template default staff can adjust at enrollment.
   await seedPlan({
-    name: "GTB 3 Month Premium",
+    name: "GTB (1 Month)",
     clientType: "groom",
-    durationMonths: 3,
-    price: 13000,
-    installmentCount: 3,
-    description: "Complete 3-month groom transformation: skincare, fitness, and styling.",
+    durationMonths: 1,
+    price: 5000,
+    installmentCount: 1,
+    description: "One month of skincare, fitness, and styling leading up to your big day.",
     services: [
-      { serviceType: "skincare", totalSessions: 6, startOffsetDays: 90, frequencyDays: 14 },
-      { serviceType: "fitness", totalSessions: 12, startOffsetDays: 90, frequencyDays: 7 },
-      { serviceType: "styling", totalSessions: 2, startOffsetDays: 14, frequencyDays: null },
+      { serviceType: "skincare", totalSessions: 2, startOffsetDays: 30, frequencyDays: 14 },
+      { serviceType: "fitness", totalSessions: 4, startOffsetDays: 30, frequencyDays: 7 },
+      { serviceType: "styling", totalSessions: 1, startOffsetDays: 14, frequencyDays: null },
     ],
   });
 
   await seedPlan({
-    name: "Glow 3 Month Premium",
-    clientType: "bride",
-    durationMonths: 3,
-    price: 15000,
-    installmentCount: 3,
-    description: "Complete 3-month bridal glow-up: skincare, fitness, and styling.",
+    name: "GTB (2 Months)",
+    clientType: "groom",
+    durationMonths: 2,
+    price: 9000,
+    installmentCount: 1,
+    description: "Two months of skincare, fitness, and styling leading up to your big day.",
     services: [
-      { serviceType: "skincare", totalSessions: 8, startOffsetDays: 90, frequencyDays: 10 },
+      { serviceType: "skincare", totalSessions: 4, startOffsetDays: 60, frequencyDays: 14 },
+      { serviceType: "fitness", totalSessions: 8, startOffsetDays: 60, frequencyDays: 7 },
+      { serviceType: "styling", totalSessions: 1, startOffsetDays: 14, frequencyDays: null },
+    ],
+  });
+
+  await seedPlan({
+    name: "GTB (3 Months)",
+    clientType: "groom",
+    durationMonths: 3,
+    price: 13000,
+    installmentCount: 1,
+    description: "Three months of skincare, fitness, and styling leading up to your big day.",
+    services: [
+      { serviceType: "skincare", totalSessions: 6, startOffsetDays: 90, frequencyDays: 14 },
       { serviceType: "fitness", totalSessions: 12, startOffsetDays: 90, frequencyDays: 7 },
-      { serviceType: "styling", totalSessions: 3, startOffsetDays: 21, frequencyDays: null },
+      { serviceType: "styling", totalSessions: 2, startOffsetDays: 14, frequencyDays: null },
     ],
   });
   console.log("✓ Plans seeded");

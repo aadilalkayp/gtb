@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -28,7 +29,10 @@ export function Modal({
 
   const widths = { sm: "max-w-md", md: "max-w-xl", lg: "max-w-3xl" };
 
-  return (
+  // Portal to <body>: page containers animate with a retained transform
+  // (.page fade-up), which would otherwise become the containing block for
+  // this fixed overlay and clip it to the page content's height.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-foreground/30 p-4 backdrop-blur-[2px] animate-fade-in sm:p-8">
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
       <div
@@ -51,6 +55,7 @@ export function Modal({
           <div className="flex justify-end gap-2 border-t border-border px-5 py-4">{footer}</div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

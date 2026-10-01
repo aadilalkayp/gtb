@@ -116,7 +116,7 @@ export function OnboardingWizard() {
               />
             )}
             {stepKey === "plan" && (
-              <PlanStep client={{ id: client.id, type: client.type }} onDone={handleStepDone} />
+              <PlanStep client={{ id: client.id }} onDone={handleStepDone} />
             )}
             {stepKey === "payment" && client.clientPlan && (
               <PaymentStep
