@@ -111,6 +111,29 @@ export function recordPayment(args: {
   return postJson("/api/payments/record", args);
 }
 
+/** Correct a payment record's details (staff). A reason is required. */
+export function editPayment(args: {
+  paymentId: string;
+  reason: string;
+  amount?: number;
+  paymentMethod?: string | null;
+  /** yyyy-mm-dd; approved payments only. */
+  paidAt?: string;
+  notes?: string | null;
+  kind?: "payment" | "waiver";
+}): Promise<{ ok: boolean }> {
+  return postJson("/api/payments/edit", args);
+}
+
+/** Move a payment to another status after the fact (staff). */
+export function changePaymentStatus(
+  paymentId: string,
+  to: "pending_review" | "rejected" | "voided",
+  reason: string,
+): Promise<{ ok: boolean }> {
+  return postJson("/api/payments/status", { paymentId, to, reason });
+}
+
 /** Reject a submitted payment with a reason. */
 export function rejectPayment(paymentId: string, reason: string): Promise<{ ok: boolean }> {
   return postJson("/api/payments/reject", { paymentId, reason });

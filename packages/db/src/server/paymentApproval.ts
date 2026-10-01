@@ -73,7 +73,7 @@ async function maybeConvert(
 /** Roll back if approved rows now exceed the agreed price — the balance
  *  guard against two concurrent approvals/records overpaying a plan. Before
  *  the price is agreed there is no ceiling to guard. */
-async function assertNotOverpaid(tx: Tx, clientPlanId: string): Promise<void> {
+export async function assertNotOverpaid(tx: Tx, clientPlanId: string): Promise<void> {
   const plan = await tx.clientPlan.findUniqueOrThrow({
     where: { id: clientPlanId },
     select: { agreedPrice: true },

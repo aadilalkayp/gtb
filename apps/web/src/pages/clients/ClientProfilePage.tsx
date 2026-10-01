@@ -57,9 +57,12 @@ import { FullPageSpinner } from "@/components/ui/Spinner";
 import { RatingStars } from "@/components/RatingStars";
 import { DocumentRow } from "@/components/DocumentRow";
 import { FileUploadField } from "@/components/FileUploadField";
+import { cn } from "@/lib/utils";
 import { InviteClientPanel } from "./InviteClientPanel";
 import { ClientScansTab } from "./ClientScansTab";
 import { MilestoneScheduleModal } from "../payments/MilestoneScheduleModal";
+import { EditPaymentModal, type EditablePayment } from "../payments/EditPaymentModal";
+import { PaymentMarkers } from "../payments/PaymentMarkers";
 
 type TabId = "overview" | "sessions" | "payments" | "documents" | "assessment" | "scans";
 
@@ -71,6 +74,7 @@ export function ClientProfilePage() {
   const [tab, setTab] = useState<TabId>("overview");
   const [statusAction, setStatusAction] = useState<"hold" | "cancel" | "complete" | null>(null);
   const [editingTerms, setEditingTerms] = useState(false);
+  const [editingPayment, setEditingPayment] = useState<EditablePayment | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showWeddingEdit, setShowWeddingEdit] = useState(false);
 
@@ -487,25 +491,46 @@ export function ClientProfilePage() {
                   payments.map((p) => (
                     <div key={p.id} className="flex items-center justify-between px-5 py-3.5">
                       <div>
-                        <p className="text-sm font-medium">
-                          {p.kind === "waiver" ? "Waiver" : "Payment"}
-                          {p.paymentMethod && (
-                            <span className="font-normal text-muted-foreground">
-                              {" "}
-                              · {humanize(p.paymentMethod)}
-                            </span>
-                          )}
+                        <p className="flex items-center gap-2 text-sm font-medium">
+                          <span>
+                            {p.kind === "waiver" ? "Waiver" : "Payment"}
+                            {p.paymentMethod && (
+                              <span className="font-normal text-muted-foreground">
+                                {" "}
+                                · {humanize(p.paymentMethod)}
+                              </span>
+                            )}
+                          </span>
+                          <PaymentMarkers editedAt={p.editedAt} legacyImported={p.legacyImported} />
                         </p>
                         <p className="text-xs text-muted-foreground">
                           {formatDate(p.approvedAt ?? p.createdAt)}
                           {p.status === "rejected" && p.rejectionReason && (
                             <span className="text-danger"> · {p.rejectionReason}</span>
                           )}
+                          {p.status === "voided" && p.voidReason && <> · Voided: {p.voidReason}</>}
                         </p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="font-num text-sm font-semibold">{formatINR(p.amount)}</span>
+                        <span
+                          className={cn(
+                            "font-num text-sm font-semibold",
+                            p.status === "voided" && "text-muted-foreground line-through",
+                          )}
+                        >
+                          {formatINR(p.amount)}
+                        </span>
                         <StatusBadge status={p.status} />
+                        {(isAdmin || (role === "cro" && p.kind === "payment")) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEditingPayment(p)}
+                            title="Edit payment"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))
@@ -514,7 +539,7 @@ export function ClientProfilePage() {
                 )}
                 <div className="px-5 py-3.5 text-right">
                   <Link to="/payments" className="text-xs font-medium text-primary hover:underline">
-                    Review, record & edit schedules on the Payments page →
+                    Review, record & edit payments on the Payments page →
                   </Link>
                 </div>
               </div>
@@ -558,6 +583,19 @@ export function ClientProfilePage() {
         {tab === "scans" && <ClientScansTab clientId={client.id} />}
       </div>
 
+      {editingPayment && (
+        <EditPaymentModal
+          payment={editingPayment}
+          clientName={client.name}
+          clientStatus={client.status}
+          canManageWaivers={isAdmin}
+          onClose={() => setEditingPayment(null)}
+          onDone={() => {
+            setEditingPayment(null);
+            void refetch();
+          }}
+        />
+      )}
       {editingTerms && plan && pace && (
         <MilestoneScheduleModal
           clientId={client.id}

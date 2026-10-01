@@ -96,7 +96,7 @@ export async function seedPayment(
   clientPlanId: string,
   overrides: Partial<{
     amount: number;
-    status: "pending_review" | "approved" | "rejected";
+    status: "pending_review" | "approved" | "rejected" | "voided";
     kind: "payment" | "waiver";
     proofDocumentId: string;
     submittedById: string;

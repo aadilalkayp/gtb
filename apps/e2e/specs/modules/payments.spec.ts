@@ -179,3 +179,120 @@ test("portal submission → reject → resubmit → approve", async ({ browser }
   await cro.context().close();
   await portal.context().close();
 });
+
+// ---- Corrections: no payment is final; staff fix clerical mistakes. --------
+
+const CORRECTED_AMOUNT = 700;
+
+/** The shared client's History row for a given amount. */
+async function historyRow(page: Page, clientName: string, amount: number): Promise<Locator> {
+  await page.goto("/payments");
+  await page.getByRole("button", { name: "History" }).click();
+  return page
+    .locator(".card > div")
+    .filter({ has: page.getByRole("link", { name: clientName }) })
+    .filter({ hasText: `₹${amount}` })
+    .first();
+}
+
+test("History can filter to payments imported from the old system", async ({ asRole }) => {
+  const page = await asRole("ops_head");
+  await page.goto("/payments");
+  await page.getByRole("button", { name: "History" }).click();
+  await page.getByLabel("Only payments imported from the old system").check();
+  // The e2e database starts on the new payment model, so nothing is imported.
+  await expect(page.getByText("No imported payments.")).toBeVisible();
+});
+
+test("ops head corrects an approved payment's amount; it's marked Edited everywhere", async ({
+  browser,
+}) => {
+  const client = sharedClient();
+  const page = await pageAs(browser, "ops_head");
+  const row = await historyRow(page, client.name, RECORD_AMOUNT);
+  await row.getByRole("button", { name: "Edit" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Edit payment" });
+  await expect(dialog).toBeVisible();
+  await field(dialog, "Amount (₹)").fill(String(CORRECTED_AMOUNT));
+  // A reason is mandatory.
+  await dialog.getByRole("button", { name: "Save changes" }).click();
+  await expect(dialog.getByText("Give a reason for the change.")).toBeVisible();
+  await field(dialog, "Reason for change").fill("Cash count was ₹700, not ₹750");
+  await dialog.getByRole("button", { name: "Save changes" }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText("Payment updated.")).toBeVisible();
+
+  const corrected = page
+    .locator(".card > div")
+    .filter({ has: page.getByRole("link", { name: client.name }) })
+    .filter({ hasText: `₹${CORRECTED_AMOUNT}` })
+    .first();
+  await expect(corrected).toContainText("Approved");
+  await expect(corrected).toContainText("Edited");
+
+  // The client sees the corrected amount, flagged as updated by GTB.
+  const portal = await portalPage(browser);
+  await portal.goto("/portal/payments");
+  await expect(
+    portal.locator(".card > div").filter({ hasText: `₹${CORRECTED_AMOUNT}` }).first(),
+  ).toContainText("Updated by GTB");
+
+  await portal.context().close();
+  await page.context().close();
+});
+
+test("CRO moves an approved payment back to review, then approves it again", async ({
+  browser,
+}) => {
+  const client = sharedClient();
+  const cro = await pageAs(browser, "cro");
+  const row = await historyRow(cro, client.name, RESUBMIT_AMOUNT);
+  await expect(row).toContainText("Approved");
+  await row.getByRole("button", { name: "Edit" }).click();
+
+  const dialog = cro.getByRole("dialog", { name: "Edit payment" });
+  await field(dialog, "Reason for change").fill("Approved before the bank credit cleared");
+  await dialog.getByRole("button", { name: "Move back to review" }).click();
+  await expect(dialog.getByText("goes back to the review queue")).toBeVisible();
+  await dialog.getByRole("button", { name: "Confirm move back to review" }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(cro.getByText("Payment moved back to review.")).toBeVisible();
+
+  // It's in the review queue again and goes through the normal approval.
+  await cro.getByRole("button", { name: /^To review/ }).click();
+  const reviewRow = cro
+    .locator(".card > div")
+    .filter({ has: cro.getByRole("link", { name: client.name }) })
+    .filter({ hasText: `₹${RESUBMIT_AMOUNT}` })
+    .first();
+  await reviewRow.getByRole("button", { name: "Approve" }).click();
+  const approveDialog = cro.getByRole("dialog", { name: "Approve payment" });
+  await field(approveDialog, "Payment method").selectOption("bank_transfer");
+  await approveDialog.getByRole("button", { name: /^Approve ·/ }).click();
+  await expect(cro.getByText("Payment approved.")).toBeVisible();
+  await cro.context().close();
+});
+
+test("ops head voids a payment entered by mistake; it stays on record, crossed out", async ({
+  asRole,
+}) => {
+  const client = sharedClient();
+  const page = await asRole("ops_head");
+  const row = await historyRow(page, client.name, CORRECTED_AMOUNT);
+  await row.getByRole("button", { name: "Edit" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Edit payment" });
+  await field(dialog, "Reason for change").fill("Duplicate of another entry");
+  await dialog.getByRole("button", { name: "Void" }).click();
+  await expect(dialog.getByText("Voiding can't be undone.")).toBeVisible();
+  await dialog.getByRole("button", { name: "Confirm void" }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByText("Payment voided.")).toBeVisible();
+
+  await expect(row).toContainText("Voided");
+  await expect(row).toContainText("Duplicate of another entry");
+  // A voided record can be opened but no longer changed.
+  await row.getByRole("button", { name: "Edit" }).click();
+  await expect(page.getByText("This payment was voided, so it can't be changed.")).toBeVisible();
+});

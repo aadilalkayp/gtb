@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { LoadMoreButton } from "@/components/LoadMoreButton";
 import { Link } from "react-router-dom";
 import { Check, X, FileText, IndianRupee, Pencil } from "lucide-react";
@@ -28,18 +29,27 @@ import {
   Textarea,
   type TabDef,
 } from "@/components/ui";
+import { cn } from "@/lib/utils";
 import { MilestoneScheduleModal } from "./MilestoneScheduleModal";
+import { EditPaymentModal } from "./EditPaymentModal";
+import { PaymentMarkers } from "./PaymentMarkers";
 
 type Tab = "review" | "collections" | "history";
 
 interface PaymentRow {
   id: string;
+  clientPlanId: string;
   amount: number;
   kind: string;
   status: string;
+  paymentMethod: string | null;
+  notes: string | null;
   createdAt: string | Date;
   approvedAt: string | Date | null;
   rejectionReason: string | null;
+  voidReason: string | null;
+  editedAt: string | Date | null;
+  legacyImported: boolean;
   proofDocument: { id: string; fileName: string } | null;
   clientPlan: {
     planNameSnapshot: string;
@@ -57,6 +67,7 @@ interface PlanRow extends PlanPaymentLite {
 type Action =
   | { kind: "approve"; row: PaymentRow }
   | { kind: "reject"; row: PaymentRow }
+  | { kind: "edit"; row: PaymentRow }
   | { kind: "record"; plan: PlanRow }
   | { kind: "schedule"; plan: PlanRow }
   | null;
@@ -73,6 +84,9 @@ export function PaymentsPage() {
   const [action, setAction] = useState<Action>(null);
   const [flash, setFlash] = useState<string>();
   const [page, setPage] = useState(0);
+  // History filter: payments carried over from the old installment system,
+  // which may have been approved in full when only part was paid.
+  const [importedOnly, setImportedOnly] = useState(false);
 
   function setTab(t: Tab) {
     setTabState(t);
@@ -92,7 +106,11 @@ export function PaymentsPage() {
           },
         },
       },
-      ...(tab === "review" ? { where: REVIEW_WHERE } : {}),
+      ...(tab === "review"
+        ? { where: REVIEW_WHERE }
+        : importedOnly
+          ? { where: { legacyImported: true } }
+          : {}),
       orderBy: { createdAt: "desc" as const },
       take: (page + 1) * PAGE_SIZE,
     },
@@ -141,10 +159,16 @@ export function PaymentsPage() {
   const isError = tab === "collections" ? plansQ.isError : paymentsQ.isError;
   const error = tab === "collections" ? plansQ.error : paymentsQ.error;
 
+  const queryClient = useQueryClient();
   function refresh() {
-    void paymentsQ.refetch();
-    void plansQ.refetch();
-    void reviewCountQ.refetch();
+    // Invalidate every cached payment/plan query, not just the visible tab:
+    // a correction can move a payment between tabs (e.g. back to review), and
+    // a tab's cached list would otherwise be served stale for 30s.
+    void queryClient.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey[0] === "zenstack" &&
+        ["payment", "clientplan"].includes(String(q.queryKey[1]).toLowerCase()),
+    });
   }
 
   return (
@@ -249,65 +273,110 @@ export function PaymentsPage() {
               ))}
             </div>
           )
-        ) : payments.length === 0 ? (
-          <div className="card p-12 text-center text-sm text-muted-foreground">
-            {tab === "review" ? "Nothing to review right now." : "No payments yet."}
-          </div>
         ) : (
-          <div className="card divide-y divide-border">
-            {payments.map((r) => (
-              <div
-                key={r.id}
-                className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/50"
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Link
-                      to={`/clients/${r.clientPlan.client.id}`}
-                      className="font-medium hover:underline"
-                    >
-                      {r.clientPlan.client.name}
-                    </Link>
-                    <span className="text-xs text-muted-foreground">
-                      {r.clientPlan.client.clientCode}
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {r.clientPlan.planNameSnapshot}
-                    {r.kind === "waiver" && " · Waiver"}
-                    {" · "}
-                    {r.status === "approved" && r.approvedAt
-                      ? `Approved ${formatDate(r.approvedAt)}`
-                      : `Submitted ${formatDate(r.createdAt)}`}
-                  </p>
-                  {r.status === "rejected" && r.rejectionReason && (
-                    <p className="mt-0.5 text-xs text-danger">{r.rejectionReason}</p>
-                  )}
-                </div>
-
-                <span className="font-num font-semibold">{formatINR(r.amount)}</span>
-                <StatusBadge status={r.status} />
-
-                <div className="flex items-center gap-1.5">
-                  {r.proofDocument && <ProofButton documentId={r.proofDocument.id} />}
-                  {r.status === "pending_review" && (
-                    <>
-                      <Button size="sm" onClick={() => setAction({ kind: "approve", row: r })}>
-                        <Check className="h-4 w-4" /> Approve
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setAction({ kind: "reject", row: r })}
-                      >
-                        <X className="h-4 w-4" /> Reject
-                      </Button>
-                    </>
-                  )}
-                </div>
+          <>
+            {tab === "history" && (
+              <label className="mb-3 flex w-fit items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={importedOnly}
+                  onChange={(e) => {
+                    setImportedOnly(e.target.checked);
+                    setPage(0);
+                  }}
+                  className="h-4 w-4 rounded border-border accent-primary"
+                />
+                Only payments imported from the old system
+              </label>
+            )}
+            {payments.length === 0 ? (
+              <div className="card p-12 text-center text-sm text-muted-foreground">
+                {tab === "review"
+                  ? "Nothing to review right now."
+                  : importedOnly
+                    ? "No imported payments."
+                    : "No payments yet."}
               </div>
-            ))}
-          </div>
+            ) : (
+              <div className="card divide-y divide-border">
+                {payments.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 transition-colors hover:bg-muted/50"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <Link
+                          to={`/clients/${r.clientPlan.client.id}`}
+                          className="font-medium hover:underline"
+                        >
+                          {r.clientPlan.client.name}
+                        </Link>
+                        <span className="text-xs text-muted-foreground">
+                          {r.clientPlan.client.clientCode}
+                        </span>
+                        <PaymentMarkers editedAt={r.editedAt} legacyImported={r.legacyImported} />
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {r.clientPlan.planNameSnapshot}
+                        {r.kind === "waiver" && " · Waiver"}
+                        {" · "}
+                        {r.status === "approved" && r.approvedAt
+                          ? `Approved ${formatDate(r.approvedAt)}`
+                          : `Submitted ${formatDate(r.createdAt)}`}
+                      </p>
+                      {r.status === "rejected" && r.rejectionReason && (
+                        <p className="mt-0.5 text-xs text-danger">{r.rejectionReason}</p>
+                      )}
+                      {r.status === "voided" && r.voidReason && (
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          Voided: {r.voidReason}
+                        </p>
+                      )}
+                    </div>
+
+                    <span
+                      className={cn(
+                        "font-num font-semibold",
+                        r.status === "voided" && "text-muted-foreground line-through",
+                      )}
+                    >
+                      {formatINR(r.amount)}
+                    </span>
+                    <StatusBadge status={r.status} />
+
+                    <div className="flex items-center gap-1.5">
+                      {r.proofDocument && <ProofButton documentId={r.proofDocument.id} />}
+                      {(isAdmin || (role === "cro" && r.kind === "payment")) && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setAction({ kind: "edit", row: r })}
+                          title="Edit payment"
+                        >
+                          <Pencil className="h-4 w-4" /> Edit
+                        </Button>
+                      )}
+                      {r.status === "pending_review" && (
+                        <>
+                          <Button size="sm" onClick={() => setAction({ kind: "approve", row: r })}>
+                            <Check className="h-4 w-4" /> Approve
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setAction({ kind: "reject", row: r })}
+                          >
+                            <X className="h-4 w-4" /> Reject
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
         )}
         {tab !== "collections" &&
           !isLoading &&
@@ -329,6 +398,20 @@ export function PaymentsPage() {
                 ? `${action.row.clientPlan.client.name} is now converted. Assign their team.`
                 : "Payment approved.",
             );
+          }}
+        />
+      )}
+      {action?.kind === "edit" && (
+        <EditPaymentModal
+          payment={action.row}
+          clientName={action.row.clientPlan.client.name}
+          clientStatus={action.row.clientPlan.client.status}
+          canManageWaivers={isAdmin}
+          onClose={() => setAction(null)}
+          onDone={(message) => {
+            setAction(null);
+            refresh();
+            setFlash(message);
           }}
         />
       )}

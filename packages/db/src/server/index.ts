@@ -6,6 +6,13 @@ export {
   PaymentAmountError,
 } from "./paymentApproval.js";
 export { updateMilestoneSchedule } from "./milestoneSchedule.js";
+export {
+  editPayment,
+  changePaymentStatus,
+  PaymentCorrectionError,
+  type ReceiptAction,
+  type PaymentStatusTarget,
+} from "./paymentCorrection.js";
 export { completeSession, SessionConflictError } from "./sessionCompletion.js";
 export { activateClientPlan } from "./clientActivation.js";
 export { submitPayment, ProofConflictError } from "./proofSubmission.js";

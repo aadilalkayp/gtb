@@ -56,6 +56,7 @@ const STATUS_TONES: Record<string, Tone> = {
   approved: "success",
   partially_paid: "warning",
   waived: "neutral",
+  voided: "neutral",
   pending_review: "warning",
   due_today: "warning",
   behind: "danger",

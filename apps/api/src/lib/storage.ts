@@ -11,10 +11,11 @@ export async function uploadObject(
   path: string,
   body: Buffer,
   contentType: string,
+  opts: { upsert?: boolean } = {},
 ): Promise<{ error: { message: string } | null }> {
   const { error } = await supabaseAdmin.storage
     .from(DOCUMENTS_BUCKET)
-    .upload(path, body, { contentType, upsert: false });
+    .upload(path, body, { contentType, upsert: opts.upsert ?? false });
   return { error: error ? { message: error.message } : null };
 }
 
