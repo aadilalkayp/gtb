@@ -10,6 +10,7 @@ import {
   submitPayment,
   ProofConflictError,
   enrollClientInPlan,
+  changeEnrolledPlan,
   EnrollmentConflictError,
   activateClientPlan,
 } from "../src/server/index.js";
@@ -253,8 +254,6 @@ describe("Phase 2 — STATE-2: idempotent activation", () => {
         name: "Plan",
         clientType: "groom",
         durationMonths: 3,
-        price: 90000,
-        installmentCount: 1,
         services: {
           create: [
             { serviceType: "skincare", totalSessions: 2, startOffsetDays: 60, frequencyDays: 14 },
@@ -361,7 +360,7 @@ describe("Phase 2 — STATE-6: atomic payment submission", () => {
     const { c, cp, ownDoc } = await seedProofScene();
     await seedPayment(cp.id, { status: "approved", amount: 50000 });
     await seedPayment(cp.id, { status: "pending_review", amount: 20000 });
-    // 90k price − 50k approved − 20k under review = 20k submittable
+    // 90k agreed − 50k approved − 20k under review = 20k submittable
     await expect(
       submitPayment({ actorId: "client1", amount: 30000, proofDocumentId: ownDoc.id }),
     ).rejects.toThrow("AMOUNT_TOO_HIGH");
@@ -370,6 +369,21 @@ describe("Phase 2 — STATE-6: atomic payment submission", () => {
     await expect(
       submitPayment({ actorId: "client1", amount: 1, proofDocumentId: doc2.id }),
     ).rejects.toBeInstanceOf(ProofConflictError); // nothing left to pay
+  });
+
+  it("accepts any stated amount while the agreed price isn't recorded", async () => {
+    await seedUser({ id: "client5", role: "client" });
+    const c = await seedClient({ id: "c5", userId: "client5", leadPhase: "plan_selected" });
+    const plan = await seedPlan();
+    const cp = await seedClientPlan(c.id, plan.id, { agreedPrice: null });
+    const doc = await seedDocument({ clientId: c.id, type: "payment_proof", uploadedById: "client5" });
+    const { paymentId } = await submitPayment({
+      actorId: "client5",
+      amount: 250000,
+      proofDocumentId: doc.id,
+    });
+    const row = await prisma.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    expect(row).toMatchObject({ clientPlanId: cp.id, amount: 250000, status: "pending_review" });
   });
 });
 
@@ -398,15 +412,30 @@ describe("Phase 2 — STATE-7: enrollment conflicts are 409s", () => {
     ).rejects.toThrow("NO_ASSESSMENT"); // MISC-4: §5.3 state machine
     const client = await prisma.client.findUniqueOrThrow({ where: { id: c.id } });
     expect(client.leadPhase).toBe("plan_selected");
-    const milestones = await prisma.paymentMilestone.findMany({
-      where: { clientPlan: { clientId: c.id } },
-      orderBy: { milestoneNumber: "asc" },
+    // Self-enrollment carries no price: it's negotiated and recorded by staff.
+    const cp = await prisma.clientPlan.findUniqueOrThrow({
+      where: { clientId: c.id },
+      include: { milestones: true },
     });
-    expect(milestones).toHaveLength(3); // seedPlan has installmentCount 3 (the template)
-    expect(milestones.reduce((t, m) => t + m.amount, 0)).toBe(90000); // sums to price
+    expect(cp.agreedPrice).toBeNull();
+    expect(cp.milestones).toHaveLength(0);
   });
 
-  it("accepts a custom milestone schedule that sums to the price", async () => {
+  it("staff can enroll with an agreed price → one milestone for the full amount", async () => {
+    await seedUser({ id: "client7", role: "client" });
+    const c = await seedClient({ id: "c7", userId: "client7" });
+    await seedAssessment(c.id, { completedAt: new Date() });
+    const plan = await seedPlan();
+    await enrollClientInPlan({ clientId: c.id, planId: plan.id, agreedPrice: 75000 });
+    const cp = await prisma.clientPlan.findUniqueOrThrow({
+      where: { clientId: c.id },
+      include: { milestones: true },
+    });
+    expect(cp.agreedPrice).toBe(75000);
+    expect(cp.milestones.map((m) => m.amount)).toEqual([75000]);
+  });
+
+  it("accepts a custom milestone schedule that sums to the agreed price", async () => {
     await seedUser({ id: "client9", role: "client" });
     const c = await seedClient({ id: "c9", userId: "client9" });
     await seedAssessment(c.id, { completedAt: new Date() });
@@ -414,6 +443,7 @@ describe("Phase 2 — STATE-7: enrollment conflicts are 409s", () => {
     await enrollClientInPlan({
       clientId: c.id,
       planId: plan.id,
+      agreedPrice: 90000,
       milestones: [
         { amount: 50000, dueDate: new Date("2026-10-01T00:00:00.000Z") },
         { amount: 40000, dueDate: new Date("2026-12-01T00:00:00.000Z") },
@@ -426,17 +456,68 @@ describe("Phase 2 — STATE-7: enrollment conflicts are 409s", () => {
     expect(milestones.map((m) => m.amount)).toEqual([50000, 40000]);
   });
 
-  it("rejects a custom schedule that doesn't sum to the price", async () => {
+  it("rejects a custom schedule that doesn't sum to the agreed price, or has no price", async () => {
     await seedUser({ id: "client8", role: "client" });
     const c = await seedClient({ id: "c8", userId: "client8" });
     await seedAssessment(c.id, { completedAt: new Date() });
     const plan = await seedPlan();
+    const milestones = [{ amount: 10000, dueDate: new Date("2026-10-01T00:00:00.000Z") }];
     await expect(
-      enrollClientInPlan({
-        clientId: c.id,
-        planId: plan.id,
-        milestones: [{ amount: 10000, dueDate: new Date("2026-10-01T00:00:00.000Z") }],
-      }),
+      enrollClientInPlan({ clientId: c.id, planId: plan.id, agreedPrice: 90000, milestones }),
     ).rejects.toThrow("BAD_SCHEDULE");
+    await expect(enrollClientInPlan({ clientId: c.id, planId: plan.id, milestones })).rejects.toThrow(
+      "BAD_SCHEDULE",
+    );
+  });
+});
+
+describe("changeEnrolledPlan — onboarding 'go back and pick another plan'", () => {
+  async function scene() {
+    await seedUser({ id: "client1", role: "client" });
+    const c = await seedClient({ id: "c1", userId: "client1", leadPhase: "plan_selected" });
+    await seedAssessment(c.id, { completedAt: new Date() });
+    const first = await seedPlan();
+    const second = await prisma.plan.create({
+      data: {
+        name: "Longer Plan",
+        clientType: "groom",
+        durationMonths: 6,
+        services: { create: [{ serviceType: "fitness", totalSessions: 12, startOffsetDays: 0, frequencyDays: 7 }] },
+      },
+    });
+    await enrollClientInPlan({ clientId: c.id, planId: first.id });
+    return { c, first, second };
+  }
+
+  it("switches the plan in place and snapshots the new services", async () => {
+    const { c, second } = await scene();
+    const before = await prisma.clientPlan.findUniqueOrThrow({ where: { clientId: c.id } });
+    await changeEnrolledPlan({ clientId: c.id, planId: second.id, actorId: "client1" });
+    const after = await prisma.clientPlan.findUniqueOrThrow({ where: { clientId: c.id } });
+    expect(after.id).toBe(before.id);
+    expect(after).toMatchObject({ planId: second.id, planNameSnapshot: "Longer Plan", durationMonths: 6 });
+    expect(after.servicesSnapshot).toEqual([
+      { serviceType: "fitness", totalSessions: 12, startOffsetDays: 0, frequencyDays: 7 },
+    ]);
+  });
+
+  it("is still allowed after a rejected payment", async () => {
+    const { c, second } = await scene();
+    const cp = await prisma.clientPlan.findUniqueOrThrow({ where: { clientId: c.id } });
+    await seedPayment(cp.id, { status: "rejected", amount: 1000 });
+    await changeEnrolledPlan({ clientId: c.id, planId: second.id });
+    const after = await prisma.clientPlan.findUniqueOrThrow({ where: { clientId: c.id } });
+    expect(after.planId).toBe(second.id);
+  });
+
+  it("is refused once a payment is under review", async () => {
+    const { c, first, second } = await scene();
+    const cp = await prisma.clientPlan.findUniqueOrThrow({ where: { clientId: c.id } });
+    await seedPayment(cp.id, { status: "pending_review", amount: 1000 });
+    await expect(changeEnrolledPlan({ clientId: c.id, planId: second.id })).rejects.toThrow(
+      "PAYMENT_EXISTS",
+    );
+    const after = await prisma.clientPlan.findUniqueOrThrow({ where: { clientId: c.id } });
+    expect(after.planId).toBe(first.id);
   });
 });

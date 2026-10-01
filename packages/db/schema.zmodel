@@ -511,11 +511,9 @@ model Plan {
   name            String
   clientType      ClientType
   durationMonths  Int
-  price           Int // whole INR
+  // No price: a plan is a SERVICE template only. Every client's fee is
+  // negotiated personally and recorded per client as ClientPlan.agreedPrice.
   description     String?
-  // TEMPLATE only: pre-fills the per-client milestone schedule at enrollment
-  // (evenly split); staff can edit the schedule per client.
-  installmentCount Int       @default(1)
   isActive        Boolean    @default(true)
 
   createdAt DateTime @default(now())
@@ -555,7 +553,10 @@ model ClientPlan {
   planId           String
   plan             Plan     @relation(fields: [planId], references: [id])
   planNameSnapshot String   // plan name captured at enrollment
-  priceAtEnrollment Int
+  // The personally negotiated package fee (whole INR). Null until staff record
+  // it — clients can still submit payments meanwhile; balance, pace and the
+  // completion check only apply once it is set.
+  agreedPrice      Int?
   durationMonths   Int
   // SYS-4: the service rules captured at enrollment, so editing a plan never
   // retroactively changes an enrolled client's schedule or assignable roles.
@@ -570,8 +571,8 @@ model ClientPlan {
   @@allow('read', client.assignments?[staffId == auth().id && isActive])
   @@allow('read', client.userId == auth().id)
   // Enrollment happens exclusively through the clients/enroll server route
-  // (price + services snapshotted server-side). Gateway writes are admin-only
-  // correction paths — a CRO could otherwise rewrite priceAtEnrollment or the
+  // (services snapshotted server-side). Gateway writes are admin-only
+  // correction paths — a CRO could otherwise rewrite agreedPrice or the
   // SYS-4 servicesSnapshot on any enrollment in the business.
   @@allow('create,update', auth().role == founder || auth().role == ops_head)
 }
@@ -599,7 +600,7 @@ model PaymentMilestone {
   @@allow('read', clientPlan.client.assignments?[staffId == auth().id && isActive && (role == cro || role == coach)])
   @@allow('read', clientPlan.client.userId == auth().id)
   // Schedule edits go exclusively through the payments/milestones server route
-  // (sum-equals-price invariant + audit log live there). Gateway writes are
+  // (sum-equals-agreed-price invariant + audit log live there). Gateway writes are
   // admin-only correction paths.
   @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
 }

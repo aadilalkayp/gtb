@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { formatINR } from "@gtb/shared";
 import { updateMilestones } from "@/lib/api";
-import { Button, Input, Modal } from "@/components/ui";
+import { Button, Field, Input, Modal } from "@/components/ui";
 
 interface EditRow {
   amount: string;
@@ -15,46 +15,67 @@ function toInputDate(d: string | Date): string {
 }
 
 /**
- * Founder/ops editor for a client's expected payment schedule (the
- * flexible-payments renegotiation path). Milestones are checkpoints, not
- * invoices — editing them never touches recorded money — but the schedule
- * must still sum exactly to the enrolled price (validated live here and
- * again server-side, where the change is audit-logged).
+ * Founder/ops/CRO editor for a client's negotiated price and expected payment
+ * schedule. Plans carry no price, so this is where each personal deal is
+ * recorded. Milestones are checkpoints, not invoices (editing them never
+ * touches recorded money), but they must sum exactly to the agreed price
+ * (validated live here and again server-side, where the change is
+ * audit-logged).
  */
 export function MilestoneScheduleModal({
   clientId,
   clientName,
-  priceAtEnrollment,
+  agreedPrice,
+  paidTotal,
   milestones,
   onClose,
   onDone,
 }: {
   clientId: string;
   clientName: string;
-  priceAtEnrollment: number;
+  agreedPrice: number | null;
+  /** Already settled (payments + waivers); the price can't go below it. */
+  paidTotal: number;
   milestones: { amount: number; dueDate: string | Date }[];
   onClose: () => void;
   onDone: () => void;
 }) {
+  const [price, setPrice] = useState(agreedPrice != null ? String(agreedPrice) : "");
   const [rows, setRows] = useState<EditRow[]>(
     milestones.length
       ? milestones.map((m) => ({ amount: String(m.amount), dueDate: toInputDate(m.dueDate) }))
-      : [{ amount: String(priceAtEnrollment), dueDate: "" }],
+      : [{ amount: agreedPrice != null ? String(agreedPrice) : "", dueDate: "" }],
   );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string>();
 
+  const priceValue = Number(price) || 0;
   const total = useMemo(
     () => rows.reduce((t, r) => t + (Number(r.amount) || 0), 0),
     [rows],
   );
-  const diff = priceAtEnrollment - total;
+  const diff = priceValue - total;
+
+  function changePrice(next: string) {
+    // While there's a single milestone, keep it in step with the price, which
+    // covers the common "one amount, one date" deal with no extra typing.
+    setRows((rs) => (rs.length === 1 && rs[0] ? [{ ...rs[0], amount: next }] : rs));
+    setPrice(next);
+  }
 
   function setRow(i: number, patch: Partial<EditRow>) {
     setRows((rs) => rs.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
 
   async function save() {
+    if (!Number.isInteger(priceValue) || priceValue <= 0) {
+      setError("Enter the agreed price as a positive whole amount.");
+      return;
+    }
+    if (priceValue < paidTotal) {
+      setError(`The agreed price can't be below the ${formatINR(paidTotal)} already paid.`);
+      return;
+    }
     for (const r of rows) {
       const amount = Number(r.amount);
       if (!Number.isInteger(amount) || amount <= 0) {
@@ -67,7 +88,7 @@ export function MilestoneScheduleModal({
       }
     }
     if (diff !== 0) {
-      setError(`The schedule must sum to ${formatINR(priceAtEnrollment)}.`);
+      setError(`The schedule must sum to ${formatINR(priceValue)}.`);
       return;
     }
     setSubmitting(true);
@@ -75,6 +96,7 @@ export function MilestoneScheduleModal({
     try {
       await updateMilestones(
         clientId,
+        priceValue,
         rows.map((r) => ({ amount: Number(r.amount), dueDate: r.dueDate })),
       );
       onDone();
@@ -95,17 +117,34 @@ export function MilestoneScheduleModal({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={save} loading={submitting} disabled={diff !== 0}>
+          <Button onClick={save} loading={submitting} disabled={priceValue <= 0 || diff !== 0}>
             Save schedule
           </Button>
         </>
       }
     >
       <div className="space-y-4">
+        <Field
+          label="Agreed price (₹)"
+          required
+          hint={
+            paidTotal > 0
+              ? `The fee negotiated with this client. ${formatINR(paidTotal)} has been paid so far.`
+              : "The fee negotiated with this client."
+          }
+        >
+          <Input
+            type="number"
+            min={Math.max(paidTotal, 1)}
+            value={price}
+            placeholder="e.g. 85000"
+            onChange={(e) => changePrice(e.target.value)}
+          />
+        </Field>
+
         <p className="text-sm text-muted-foreground">
-          Checkpoints for when money is expected — payments themselves stay flexible. The
-          amounts must add up to the plan price of{" "}
-          <span className="font-medium text-foreground">{formatINR(priceAtEnrollment)}</span>.
+          Below are checkpoints for when money is expected. Payments themselves stay flexible,
+          but the amounts must add up to the agreed price.
         </p>
 
         <div className="space-y-2">
@@ -162,7 +201,7 @@ export function MilestoneScheduleModal({
             ) : diff > 0 ? (
               <span className="text-warning">{formatINR(diff)} left to allocate</span>
             ) : (
-              <span className="text-danger">{formatINR(-diff)} over the plan price</span>
+              <span className="text-danger">{formatINR(-diff)} over the agreed price</span>
             )}
           </p>
         </div>

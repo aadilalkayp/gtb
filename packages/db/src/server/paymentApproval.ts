@@ -70,18 +70,20 @@ async function maybeConvert(
   return { converted, client: { id: c.id, name: c.name } };
 }
 
-/** Roll back if approved rows now exceed the enrolled price — the balance
- *  guard against two concurrent approvals/records overpaying a plan. */
+/** Roll back if approved rows now exceed the agreed price — the balance
+ *  guard against two concurrent approvals/records overpaying a plan. Before
+ *  the price is agreed there is no ceiling to guard. */
 async function assertNotOverpaid(tx: Tx, clientPlanId: string): Promise<void> {
   const plan = await tx.clientPlan.findUniqueOrThrow({
     where: { id: clientPlanId },
-    select: { priceAtEnrollment: true },
+    select: { agreedPrice: true },
   });
+  if (plan.agreedPrice == null) return;
   const sum = await tx.payment.aggregate({
     where: { clientPlanId, status: "approved" },
     _sum: { amount: true },
   });
-  if ((sum._sum.amount ?? 0) > plan.priceAtEnrollment) {
+  if ((sum._sum.amount ?? 0) > plan.agreedPrice) {
     throw new PaymentAmountError("This amount would exceed the remaining balance");
   }
 }
@@ -179,9 +181,13 @@ export async function recordPayment(input: {
 
   const plan = await prisma.clientPlan.findUnique({
     where: { clientId: input.clientId },
-    select: { id: true },
+    select: { id: true, agreedPrice: true },
   });
   if (!plan) throw new Error("NO_PLAN");
+  // A waiver writes off part of a balance, which only exists once agreed.
+  if (kind === "waiver" && plan.agreedPrice == null) {
+    throw new PaymentAmountError("Record the agreed price before waiving any amount");
+  }
 
   let converted = false;
   let client: { id: string; name: string } | undefined;

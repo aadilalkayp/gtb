@@ -24,6 +24,7 @@ export interface AlertItem {
     | "pending_followup"
     | "client_at_risk"
     | "overdue_payments"
+    | "price_not_set"
     | "no_activity";
   severity: AlertSeverity;
   title: string;
@@ -126,6 +127,22 @@ export function deriveAlerts(input: AlertInput): AlertItem[] {
       title: "Behind on payments",
       count: overdue.length,
       items: overdue,
+    });
+
+  // Agreed price not recorded — fees are negotiated per client, so an enrolled
+  // client has no balance or schedule until staff enter the figure.
+  const unpriced = input.clients.flatMap((c) =>
+    c.plan && c.plan.agreedPrice == null && c.status !== "cancelled"
+      ? [{ label: c.name, sublabel: "Agreed price not recorded", linkPath: `/clients/${c.id}` }]
+      : [],
+  );
+  if (unpriced.length)
+    out.push({
+      kind: "price_not_set",
+      severity: "warning",
+      title: "Agreed price not recorded",
+      count: unpriced.length,
+      items: unpriced,
     });
 
   // Consultation due today — scheduled session with scheduled_date = today.

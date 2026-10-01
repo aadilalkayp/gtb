@@ -93,6 +93,13 @@ describe("shared — pace derivations (the subtle part)", () => {
     expect(pace.behindAmount).toBe(0);
   });
 
+  it("price_pending while no agreed price is recorded: no balance, never behind", () => {
+    const payments = [{ amount: 20000, status: "approved" }];
+    const pace = planPaymentPace(null, [], payments, TODAY);
+    expect(pace).toMatchObject({ status: "price_pending", balance: null, paidTotal: 20000, behindAmount: 0 });
+    expect(planBalance(null, payments)).toBeNull();
+  });
+
   it("schedule validation", () => {
     expect(validateMilestoneSchedule(90000, [])).toBe("EMPTY");
     expect(validateMilestoneSchedule(90000, [{ amount: 0, dueDate: TODAY }])).toBe("BAD_AMOUNT");
@@ -134,7 +141,53 @@ describe("server — updateMilestoneSchedule", () => {
     expect(log).not.toBeNull();
   });
 
-  it("rejects a schedule that doesn't sum to the enrolled price, leaving the old one intact", async () => {
+  it("records an agreed price for an unpriced plan together with its schedule", async () => {
+    await seedUser({ id: "ops1", role: "ops_head" });
+    const c = await seedClient({ id: "c2" });
+    const plan = await seedPlan();
+    const cp = await seedClientPlan(c.id, plan.id, { agreedPrice: null });
+    await expect(
+      updateMilestoneSchedule({
+        clientId: c.id,
+        actorId: "ops1",
+        milestones: [{ amount: 1000, dueDate: d("2026-12-01") }],
+      }),
+    ).rejects.toThrow("NO_PRICE");
+    await updateMilestoneSchedule({
+      clientId: c.id,
+      actorId: "ops1",
+      agreedPrice: 120000,
+      milestones: [
+        { amount: 40000, dueDate: d("2026-10-01") },
+        { amount: 80000, dueDate: d("2026-11-01") },
+      ],
+    });
+    const row = await prisma.clientPlan.findUniqueOrThrow({
+      where: { id: cp.id },
+      include: { milestones: true },
+    });
+    expect(row.agreedPrice).toBe(120000);
+    expect(row.milestones).toHaveLength(2);
+    const log = await prisma.activityLog.findFirst({
+      where: { entityType: "client", entityId: c.id, summary: "Agreed price recorded" },
+    });
+    expect(log).not.toBeNull();
+  });
+
+  it("won't set the agreed price below what's already been settled", async () => {
+    const { c, cp } = await scene();
+    await prisma.payment.create({ data: { clientPlanId: cp.id, amount: 50000, status: "approved" } });
+    await expect(
+      updateMilestoneSchedule({
+        clientId: c.id,
+        actorId: "ops1",
+        agreedPrice: 40000,
+        milestones: [{ amount: 40000, dueDate: d("2026-12-01") }],
+      }),
+    ).rejects.toThrow("PRICE_BELOW_PAID");
+  });
+
+  it("rejects a schedule that doesn't sum to the agreed price, leaving the old one intact", async () => {
     const { c, cp } = await scene();
     await expect(
       updateMilestoneSchedule({

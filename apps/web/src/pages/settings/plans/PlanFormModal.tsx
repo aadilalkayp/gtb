@@ -70,16 +70,6 @@ export function PlanFormModal({
           <Field label="Duration (months)" required>
             <Input type="number" min={1} {...register("durationMonths")} />
           </Field>
-          <Field label="Price (₹)" error={errors.price?.message} required>
-            <Input type="number" min={0} {...register("price")} />
-          </Field>
-          <Field
-            label="Suggested milestones"
-            hint="Pre-fills the payment schedule at enrollment; editable per client"
-            required
-          >
-            <Input type="number" min={1} {...register("installmentCount")} />
-          </Field>
           <div className="col-span-2">
             <Field label="Description">
               <Textarea {...register("description")} rows={2} />

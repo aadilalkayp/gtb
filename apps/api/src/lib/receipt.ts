@@ -13,7 +13,8 @@ export interface ReceiptData {
   paymentNumber: number;
   amount: number;
   /** Plan balance remaining after this payment. */
-  balanceAfter: number;
+  /** Null while the client's agreed price hasn't been recorded. */
+  balanceAfter: number | null;
   paymentMethod: string;
   paidAt: Date;
   receiptId: string;
@@ -64,7 +65,7 @@ export async function createPaymentReceipt(
   row("Plan", data.planName);
   row("Payment", `#${data.paymentNumber}`);
   row("Payment method", methodLabel(data.paymentMethod));
-  row("Balance remaining", formatINR(data.balanceAfter));
+  if (data.balanceAfter != null) row("Balance remaining", formatINR(data.balanceAfter));
 
   doc.moveDown(0.8);
 

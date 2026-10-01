@@ -19,8 +19,6 @@ async function seedWeddingScene() {
       name: "Plan",
       clientType: "groom",
       durationMonths: 3,
-      price: 90000,
-      installmentCount: 1,
       services: {
         create: [
           { serviceType: "skincare", totalSessions: 3, startOffsetDays: 60, frequencyDays: 14 },
@@ -33,7 +31,7 @@ async function seedWeddingScene() {
       clientId: c.id,
       planId: plan.id,
       planNameSnapshot: "Plan",
-      priceAtEnrollment: 90000,
+      agreedPrice: 90000,
       durationMonths: 3,
       servicesSnapshot: [
         { serviceType: "skincare", totalSessions: 3, startOffsetDays: 60, frequencyDays: 14 },

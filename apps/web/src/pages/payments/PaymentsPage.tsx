@@ -66,6 +66,9 @@ const REVIEW_WHERE = { status: "pending_review" } as const;
 export function PaymentsPage() {
   const { role } = useAuth();
   const isAdmin = role === "founder" || role === "ops_head";
+  // CROs negotiate fees, so they can record the agreed price + schedule too
+  // (server scopes them to their assigned clients).
+  const canEditTerms = isAdmin || role === "cro";
   const [tab, setTabState] = useState<Tab>("review");
   const [action, setAction] = useState<Action>(null);
   const [flash, setFlash] = useState<string>();
@@ -114,9 +117,15 @@ export function PaymentsPage() {
   const collections = useMemo(() => {
     return plans
       .map((p) => ({ plan: p, pace: planPace(p) }))
-      .filter(({ plan, pace }) => pace.balance > 0 && plan.client.status !== "cancelled")
+      // Price-pending plans stay listed: the agreed fee still has to be recorded.
+      .filter(
+        ({ plan, pace }) => (pace.balance ?? 1) > 0 && plan.client.status !== "cancelled",
+      )
       .sort(
-        (a, b) => b.pace.behindAmount - a.pace.behindAmount || b.pace.balance - a.pace.balance,
+        (a, b) =>
+          Number(b.pace.status === "price_pending") - Number(a.pace.status === "price_pending") ||
+          b.pace.behindAmount - a.pace.behindAmount ||
+          (b.pace.balance ?? 0) - (a.pace.balance ?? 0),
       );
   }, [plans]);
 
@@ -188,8 +197,8 @@ export function PaymentsPage() {
                       </span>
                     </div>
                     <p className="mt-0.5 text-xs text-muted-foreground">
-                      {plan.planNameSnapshot} · {formatINR(pace.paidTotal)} of{" "}
-                      {formatINR(plan.priceAtEnrollment)} paid
+                      {plan.planNameSnapshot} · {formatINR(pace.paidTotal)}
+                      {plan.agreedPrice != null && <> of {formatINR(plan.agreedPrice)}</>} paid
                       {pace.nextDue && (
                         <>
                           {" "}
@@ -200,8 +209,15 @@ export function PaymentsPage() {
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-num font-semibold">{formatINR(pace.balance)}</p>
-                    {pace.behindAmount > 0 ? (
+                    {pace.balance == null ? (
+                      <>
+                        <p className="text-sm font-medium text-warning">Price not set</p>
+                        <p className="text-xs text-muted-foreground">record the agreed fee</p>
+                      </>
+                    ) : (
+                      <p className="font-num font-semibold">{formatINR(pace.balance)}</p>
+                    )}
+                    {pace.balance == null ? null : pace.behindAmount > 0 ? (
                       <p className="text-xs font-medium text-danger">
                         {formatINR(pace.behindAmount)} behind
                       </p>
@@ -210,14 +226,15 @@ export function PaymentsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {isAdmin && (
+                    {canEditTerms && (
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => setAction({ kind: "schedule", plan })}
                         title="Edit payment schedule"
                       >
-                        <Pencil className="h-4 w-4" /> Schedule
+                        <Pencil className="h-4 w-4" />{" "}
+                        {pace.status === "price_pending" ? "Set price" : "Schedule"}
                       </Button>
                     )}
                     <Button
@@ -346,7 +363,8 @@ export function PaymentsPage() {
         <MilestoneScheduleModal
           clientId={action.plan.client.id}
           clientName={action.plan.client.name}
-          priceAtEnrollment={action.plan.priceAtEnrollment}
+          agreedPrice={action.plan.agreedPrice}
+          paidTotal={planPace(action.plan).paidTotal}
           milestones={action.plan.milestones}
           onClose={() => setAction(null)}
           onDone={() => {
@@ -522,8 +540,10 @@ export function RecordModal({
   onDone: (converted: boolean) => void;
 }) {
   const pace = planPace(plan);
-  const suggested = pace.behindAmount > 0 ? pace.behindAmount : (pace.nextDue?.remaining ?? pace.balance);
-  const [amount, setAmount] = useState(String(suggested));
+  // Before the fee is agreed there's no balance to suggest from or cap at.
+  const suggested =
+    pace.behindAmount > 0 ? pace.behindAmount : (pace.nextDue?.remaining ?? pace.balance);
+  const [amount, setAmount] = useState(suggested == null ? "" : String(suggested));
   const [kind, setKind] = useState<"payment" | "waiver">("payment");
   const [method, setMethod] = useState<string>("cash");
   const [notes, setNotes] = useState("");
@@ -536,7 +556,7 @@ export function RecordModal({
       setError("Enter a positive whole amount.");
       return;
     }
-    if (value > pace.balance) {
+    if (pace.balance != null && value > pace.balance) {
       setError(`That's more than the ${formatINR(pace.balance)} balance.`);
       return;
     }
@@ -577,13 +597,15 @@ export function RecordModal({
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
           <span className="font-medium text-foreground">{plan.client.name}</span> ·{" "}
-          {formatINR(pace.balance)} outstanding
+          {pace.balance == null
+            ? `${formatINR(pace.paidTotal)} paid so far, agreed price not recorded yet`
+            : `${formatINR(pace.balance)} outstanding`}
           {pace.behindAmount > 0 && (
             <span className="text-danger"> ({formatINR(pace.behindAmount)} behind)</span>
           )}
           .
         </p>
-        {canWaive && (
+        {canWaive && pace.balance != null && (
           <Field label="Type">
             <Select
               value={kind}
@@ -598,7 +620,7 @@ export function RecordModal({
           <Input
             type="number"
             min={1}
-            max={pace.balance}
+            max={pace.balance ?? undefined}
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
           />

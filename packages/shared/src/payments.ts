@@ -53,9 +53,14 @@ export function pendingReviewTotal(payments: PaymentLike[]): number {
     .reduce((sum, p) => sum + p.amount, 0);
 }
 
-/** What the client still owes. Never negative. */
-export function planBalance(priceAtEnrollment: number, payments: PaymentLike[]): number {
-  return Math.max(priceAtEnrollment - approvedTotal(payments), 0);
+/**
+ * What the client still owes. Never negative. Null while the agreed price
+ * hasn't been recorded yet: fees are negotiated per client, so until staff
+ * enter the figure there is no balance to speak of.
+ */
+export function planBalance(agreedPrice: number | null, payments: PaymentLike[]): number | null {
+  if (agreedPrice == null) return null;
+  return Math.max(agreedPrice - approvedTotal(payments), 0);
 }
 
 export interface MilestonePace<M extends MilestoneLike = MilestoneLike> {
@@ -97,23 +102,30 @@ export function milestonePace<M extends MilestoneLike>(
 
 export interface PlanPaymentPace {
   paidTotal: number;
-  balance: number;
+  /** The negotiated fee; null until staff record it. */
+  agreedPrice: number | null;
+  /** Null while the agreed price is pending. */
+  balance: number | null;
   /** Amount the client is short of the checkpoints whose dates have passed. */
   behindAmount: number;
   /** Next milestone not yet fully covered (due-date order), with what's left of it. */
   nextDue: { dueDate: DateInput; remaining: number } | null;
-  status: "paid_in_full" | "behind" | "on_track";
+  status: "price_pending" | "paid_in_full" | "behind" | "on_track";
 }
 
 /** Client-level rollup of the milestone pace — the one number staff chase. */
 export function planPaymentPace(
-  priceAtEnrollment: number,
+  agreedPrice: number | null,
   milestones: MilestoneLike[],
   payments: PaymentLike[],
   todayStart: Date,
 ): PlanPaymentPace {
   const paidTotal = approvedTotal(payments);
-  const balance = Math.max(priceAtEnrollment - paidTotal, 0);
+  if (agreedPrice == null) {
+    // No agreed fee yet → no balance, no schedule to be behind on.
+    return { paidTotal, agreedPrice, balance: null, behindAmount: 0, nextDue: null, status: "price_pending" };
+  }
+  const balance = Math.max(agreedPrice - paidTotal, 0);
   const pace = milestonePace(milestones, payments, todayStart);
   const behindAmount = Math.min(
     pace
@@ -124,6 +136,7 @@ export function planPaymentPace(
   const next = pace.find((p) => p.remaining > 0);
   return {
     paidTotal,
+    agreedPrice,
     balance,
     behindAmount,
     nextDue: next ? { dueDate: next.milestone.dueDate, remaining: next.remaining } : null,
@@ -132,11 +145,11 @@ export function planPaymentPace(
 }
 
 /**
- * Validate a proposed milestone schedule against the enrolled price.
+ * Validate a proposed milestone schedule against the client's agreed price.
  * Returns an error message key or null when valid.
  */
 export function validateMilestoneSchedule(
-  priceAtEnrollment: number,
+  agreedPrice: number,
   milestones: { amount: number; dueDate: DateInput }[],
 ): "EMPTY" | "BAD_AMOUNT" | "BAD_DATE" | "SUM_MISMATCH" | null {
   if (milestones.length === 0) return "EMPTY";
@@ -145,6 +158,6 @@ export function validateMilestoneSchedule(
     if (Number.isNaN(toTime(m.dueDate))) return "BAD_DATE";
   }
   const sum = milestones.reduce((t, m) => t + m.amount, 0);
-  if (sum !== priceAtEnrollment) return "SUM_MISMATCH";
+  if (sum !== agreedPrice) return "SUM_MISMATCH";
   return null;
 }

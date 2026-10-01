@@ -1,16 +1,21 @@
 import { useState } from "react";
-import { Check } from "lucide-react";
+import { ArrowLeft, Check } from "lucide-react";
 import { useFindManyPlan } from "@gtb/db/hooks";
 import { SERVICE_TYPE_LABELS } from "@gtb/shared";
-import { enrollClient } from "@/lib/api";
+import { changePlan, enrollClient } from "@/lib/api";
 import { Badge, Button, Spinner } from "@/components/ui";
 import { cn } from "@/lib/utils";
 
 export function PlanStep({
   client,
+  currentPlanId,
+  onBack,
   onDone,
 }: {
   client: { id: string };
+  /** Set when the client came back to change an already chosen plan. */
+  currentPlanId: string | null;
+  onBack: () => void;
   onDone: () => void | Promise<void>;
 }) {
   const { data: plans, isLoading } = useFindManyPlan({
@@ -19,7 +24,7 @@ export function PlanStep({
     orderBy: { durationMonths: "asc" },
   });
 
-  const [selected, setSelected] = useState<string>();
+  const [selected, setSelected] = useState<string | undefined>(currentPlanId ?? undefined);
   const [enrolling, setEnrolling] = useState(false);
   const [error, setError] = useState<string>();
 
@@ -28,7 +33,9 @@ export function PlanStep({
     setEnrolling(true);
     setError(undefined);
     try {
-      await enrollClient(client.id, selected);
+      // Unchanged plan → just move on; a different one switches in place.
+      if (!currentPlanId) await enrollClient(client.id, selected);
+      else if (selected !== currentPlanId) await changePlan(client.id, selected);
       await onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not enroll in this plan");
@@ -56,7 +63,7 @@ export function PlanStep({
     <div className="space-y-5">
       <p className="text-sm text-muted-foreground">
         Choose the program that fits your timeline. Your team will tailor the sessions to your
-        big day.
+        big day, and your coordinator will confirm the price with you personally.
       </p>
 
       <div className="grid gap-3 sm:grid-cols-2">
@@ -100,7 +107,10 @@ export function PlanStep({
         <div className="rounded-lg bg-danger/10 px-4 py-2 text-sm text-danger">{error}</div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <Button variant="ghost" size="lg" onClick={onBack} disabled={enrolling}>
+          <ArrowLeft className="h-4 w-4" /> Back
+        </Button>
         <Button size="lg" disabled={!selected} loading={enrolling} onClick={confirm}>
           Continue to payment
         </Button>

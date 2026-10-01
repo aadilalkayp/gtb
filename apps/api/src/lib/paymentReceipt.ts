@@ -23,7 +23,7 @@ export async function generateReceiptForPayment(
             id: true,
             clientId: true,
             planNameSnapshot: true,
-            priceAtEnrollment: true,
+            agreedPrice: true,
             client: { select: { name: true, clientCode: true } },
             payments: {
               where: { status: "approved" },
@@ -46,7 +46,10 @@ export async function generateReceiptForPayment(
       planName: payment.clientPlan.planNameSnapshot,
       paymentNumber,
       amount: payment.amount,
-      balanceAfter: Math.max(payment.clientPlan.priceAtEnrollment - approvedTotal, 0),
+      balanceAfter:
+        payment.clientPlan.agreedPrice == null
+          ? null
+          : Math.max(payment.clientPlan.agreedPrice - approvedTotal, 0),
       paymentMethod: payment.paymentMethod ?? "other",
       paidAt: payment.approvedAt ?? new Date(),
       receiptId: payment.id,

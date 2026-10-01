@@ -3,8 +3,8 @@
  * (SPEC_GUIDE rule 3) so nothing races on the client's balance.
  *
  * Precondition (from the journey project): the shared client is active on
- * "GTB (1 Month)" (price ₹5,000) with one approved payment and an outstanding
- * balance left to collect.
+ * "GTB (1 Month)" with a negotiated price of ₹5,000 recorded by its CRO, one
+ * approved payment and an outstanding balance left to collect.
  */
 import { test, expect, pageAs, portalPage, sharedClient } from "../../fixtures/test.js";
 import { field, pngFile } from "../../helpers/ui.js";
@@ -12,7 +12,7 @@ import type { Locator, Page } from "@playwright/test";
 
 test.describe.configure({ mode: "serial" });
 
-// The journey client is on the ₹5,000 plan; these amounts must stay inside the
+// The journey client's agreed price is ₹5,000; these amounts must stay inside the
 // outstanding balance the journey leaves behind.
 const RECORD_AMOUNT = 750;
 const REJECTED_AMOUNT = 600;
@@ -38,6 +38,8 @@ test("Collections lists the shared client with an outstanding balance", async ({
   // The row shows "<paid> of ₹5,000 paid" plus the outstanding balance figure.
   await expect(row).toContainText("of ₹5,000 paid");
   await expect(row.getByRole("button", { name: "Record" })).toBeVisible();
+  // CROs can also renegotiate the agreed price / schedule for their clients.
+  await expect(row.locator('[title="Edit payment schedule"]')).toBeVisible();
 });
 
 test("ops head edits the payment schedule to two milestones", async ({ asRole }) => {
@@ -52,19 +54,23 @@ test("ops head edits the payment schedule to two milestones", async ({ asRole })
   const dialog = page.getByRole("dialog", { name: `${client.name}'s payment schedule` });
   await expect(dialog).toBeVisible();
 
-  // Normalise to a single row, then build a 3000 + 2000 schedule.
+  // The agreed price recorded in the journey is prefilled.
+  await expect(field(dialog, "Agreed price (₹)")).toHaveValue("5000");
+
+  // Normalise to a single row, then build a 3000 + 2000 schedule. Number
+  // input 0 is the agreed price; milestone amounts follow it.
   const removeButtons = dialog.locator('[title="Remove milestone"]');
   while ((await removeButtons.count()) > 1) {
     await removeButtons.first().click();
   }
-  await dialog.locator('input[type="number"]').first().fill("3000");
+  await dialog.locator('input[type="number"]').nth(1).fill("3000");
   await dialog.locator('input[type="date"]').first().fill("2027-01-15");
 
   await dialog.getByRole("button", { name: "Add milestone" }).click();
-  await dialog.locator('input[type="number"]').nth(1).fill("2000");
+  await dialog.locator('input[type="number"]').nth(2).fill("2000");
   await dialog.locator('input[type="date"]').nth(1).fill("2027-02-20");
 
-  // Live validation: the schedule sums exactly to the plan price.
+  // Live validation: the schedule sums exactly to the agreed price.
   await expect(dialog.getByText("Adds up ✓")).toBeVisible();
   await dialog.getByRole("button", { name: "Save schedule" }).click();
 

@@ -63,7 +63,7 @@ export async function cancelClientPlan(input: CancelClientInput): Promise<Cancel
         where: { clientId: client.id },
         select: {
           id: true,
-          priceAtEnrollment: true,
+          agreedPrice: true,
           payments: { select: { amount: true, status: true } },
         },
       });
@@ -77,7 +77,9 @@ export async function cancelClientPlan(input: CancelClientInput): Promise<Cancel
         const approved = plan.payments
           .filter((p) => p.status === "approved")
           .reduce((t, p) => t + p.amount, 0);
-        const balance = Math.max(plan.priceAtEnrollment - approved, 0);
+        // No agreed price → no balance to write off.
+        const balance =
+          plan.agreedPrice == null ? 0 : Math.max(plan.agreedPrice - approved, 0);
         if (balance > 0) {
           await tx.payment.create({
             data: {

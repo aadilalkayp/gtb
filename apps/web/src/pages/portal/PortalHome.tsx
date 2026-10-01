@@ -58,7 +58,7 @@ export function PortalHome() {
   const plan = client.clientPlan ?? null;
   const pace = plan ? planPace(plan) : null;
   const paid = pace?.paidTotal ?? 0;
-  const total = plan?.priceAtEnrollment ?? 0;
+  const total = plan?.agreedPrice ?? null;
   const recentPayments = plan?.payments.slice(0, 3) ?? [];
 
   // Per-service progress rings
@@ -152,10 +152,14 @@ export function PortalHome() {
           <p className="font-num mt-3 font-semibold">
             {formatINR(paid)}{" "}
             <span className="text-sm font-normal text-muted-foreground">
-              of {formatINR(total)} paid
+              {total != null ? `of ${formatINR(total)} paid` : "paid so far"}
             </span>
           </p>
-          {pace && pace.balance > 0 ? (
+          {pace?.balance == null ? (
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              Your coordinator will add your agreed package price here.
+            </p>
+          ) : pace.balance > 0 ? (
             pace.nextDue ? (
               <p className="mt-0.5 text-sm text-muted-foreground">
                 Next: {formatINR(pace.nextDue.remaining)} by {formatDate(pace.nextDue.dueDate)}{" "}
@@ -165,7 +169,7 @@ export function PortalHome() {
               </p>
             ) : (
               <p className="mt-0.5 text-sm text-muted-foreground">
-                {formatINR(pace.balance)} remaining — pay anytime
+                {formatINR(pace.balance)} remaining, pay anytime
               </p>
             )
           ) : (
