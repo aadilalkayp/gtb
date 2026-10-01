@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import {
   Calendar,
   Camera,
@@ -57,6 +56,13 @@ export function PortalFitness() {
       include: {
         days: { include: { exercises: true }, orderBy: { dayIndex: "asc" } },
         checkIns: { orderBy: { weekNumber: "desc" } },
+        // The plan's diet plan PDF (one per plan; re-uploads replace it).
+        dietPlans: {
+          where: { type: "nutrition_plan" },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { id: true },
+        },
       },
     },
     { enabled: Boolean(clientId) },
@@ -136,6 +142,7 @@ interface PortalPlan {
   dietNotes: string | null;
   days: PortalDay[];
   checkIns: PortalCheckIn[];
+  dietPlans: { id: string }[];
 }
 
 function FitnessJourney({
@@ -154,6 +161,18 @@ function FitnessJourney({
   const [progressTab, setProgressTab] = useState<"weight" | "measurements" | "photos">("weight");
   const [logWeightOpen, setLogWeightOpen] = useState(false);
   const [checkInOpen, setCheckInOpen] = useState(false);
+  const [openingDiet, setOpeningDiet] = useState(false);
+  const dietPlan = plan.dietPlans[0];
+
+  const openDietPlan = async () => {
+    if (!dietPlan) return;
+    setOpeningDiet(true);
+    try {
+      window.open(await getDocumentUrl(dietPlan.id), "_blank", "noopener");
+    } finally {
+      setOpeningDiet(false);
+    }
+  };
 
   const updateDay = useUpdateFitnessWorkoutDay();
   const updateExercise = useUpdateFitnessExercise();
@@ -335,15 +354,17 @@ function FitnessJourney({
           <div className="flex-1">
             <h2 className="font-semibold">Nutrition Note</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              {plan.dietNotes || "Follow the meal plan shared by your trainer for better results."}
+              {plan.dietNotes ||
+                (dietPlan
+                  ? "Follow the diet plan your trainer shared for better results."
+                  : "Your trainer will share your diet plan here.")}
             </p>
           </div>
-          <Link
-            to="/portal/documents"
-            className="inline-flex h-8 items-center whitespace-nowrap rounded-lg border border-border bg-surface px-3 text-sm font-medium shadow-xs transition-colors hover:border-border-strong hover:bg-muted/50"
-          >
-            View Diet Plan
-          </Link>
+          {dietPlan && (
+            <Button variant="outline" size="sm" loading={openingDiet} onClick={() => void openDietPlan()}>
+              View Diet Plan
+            </Button>
+          )}
         </section>
 
         <section className="card flex items-start gap-3 p-5">

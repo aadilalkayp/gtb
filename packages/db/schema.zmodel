@@ -156,6 +156,7 @@ enum DocumentType {
   expense_receipt
   client_photo
   progress_photo
+  nutrition_plan
 }
 
 enum FitnessPlanStatus {
@@ -841,6 +842,10 @@ model Document {
   fileSize     Int
   sessionId    String?
   session      Session?     @relation(fields: [sessionId], references: [id])
+  /// Set on nutrition_plan uploads: the fitness plan the diet PDF belongs to.
+  /// One per plan; uploading a new one replaces the previous (upload route).
+  fitnessPlanId String?
+  fitnessPlan   FitnessPlan? @relation(fields: [fitnessPlanId], references: [id], onDelete: SetNull)
   uploadedById String
   uploadedBy   User         @relation("DocUploader", fields: [uploadedById], references: [id])
 
@@ -853,6 +858,7 @@ model Document {
   @@index([type])
   // DATA-5: session-scoped document lookups (pending-upload checks).
   @@index([sessionId])
+  @@index([fitnessPlanId])
 
   @@allow('read', auth().role == founder || auth().role == ops_head)
   // Assigned staff see client documents, except the financial types that are
@@ -1332,15 +1338,16 @@ model FitnessPlan {
 
   startWeightKg  Float?
   targetWeightKg Float?
-  /// Shown as the portal "Nutrition note"; the full diet plan is a
-  /// fitness_plan Document.
+  /// Optional one-line summary shown as the portal "Nutrition note"; the full
+  /// diet plan is the nutrition_plan Document in dietPlans.
   dietNotes String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  days     FitnessWorkoutDay[]
-  checkIns FitnessCheckIn[]
+  days      FitnessWorkoutDay[]
+  checkIns  FitnessCheckIn[]
+  dietPlans Document[]
 
   @@index([clientId, status])
   @@index([status, startDate])
