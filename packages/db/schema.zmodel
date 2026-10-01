@@ -96,6 +96,8 @@ enum PaymentStatus {
   pending_review
   approved
   rejected
+  // Entered by mistake: kept for audit, excluded from every total.
+  voided
 }
 
 // A `waiver` settles balance without money changing hands (cancellation
@@ -305,6 +307,7 @@ model User {
   assignmentsMade     Assignment[]     @relation("AssignmentAssigner")
   paymentsApproved    Payment[]        @relation("PaymentApprover")
   paymentsSubmitted   Payment[]        @relation("PaymentSubmitter")
+  paymentsEdited      Payment[]        @relation("PaymentEditor")
   consultantRates     ConsultantRate[]
   sessions          Session[]          @relation("ConsultantSessions")
   followUps         FollowUp[]         @relation("CroFollowUps")
@@ -627,6 +630,18 @@ model Payment {
   approvedAt      DateTime? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
   rejectionReason String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
   notes           String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+
+  // Staff corrections (payments/edit + payments/status routes): who last
+  // changed the record and when. The before/after and reason live in the
+  // activity log; these drive the "Edited" marker.
+  editedAt        DateTime? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  editedById      String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  editedBy        User?         @relation("PaymentEditor", fields: [editedById], references: [id])
+  voidReason      String? @deny('update', clientPlan.client.userId != null && clientPlan.client.userId == auth().id)
+  // Carried over from the pre-Sep-2026 fixed-installment model, where a whole
+  // installment was approved even when only part of it was paid. Flagged so
+  // staff can review and correct those amounts.
+  legacyImported  Boolean       @default(false) @deny('update', true)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

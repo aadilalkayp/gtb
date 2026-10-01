@@ -152,7 +152,10 @@ export async function changeEnrolledPlan(input: {
           id: true,
           planId: true,
           planNameSnapshot: true,
-          payments: { where: { status: { not: "rejected" } }, select: { id: true } },
+          payments: {
+            where: { status: { in: ["pending_review", "approved"] } },
+            select: { id: true },
+          },
         },
       },
     },
@@ -177,7 +180,7 @@ export async function changeEnrolledPlan(input: {
     const updated = await tx.clientPlan.updateMany({
       where: {
         id: current.id,
-        payments: { none: { status: { not: "rejected" } } },
+        payments: { none: { status: { in: ["pending_review", "approved"] } } },
         client: { status: "lead" },
       },
       data: {

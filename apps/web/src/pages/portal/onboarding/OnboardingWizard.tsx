@@ -73,9 +73,10 @@ export function OnboardingWizard() {
   if (isLoading || !client) return <FullPageSpinner />;
 
   // The payment step is done once something has been submitted (or approved):
-  // any payment row that isn't rejected counts as "money is on its way".
+  // a pending or approved payment counts as "money is on its way" (rejected
+  // and voided rows don't).
   const hasLivePayment = (client.clientPlan?.payments ?? []).some(
-    (p) => p.status !== "rejected",
+    (p) => p.status === "pending_review" || p.status === "approved",
   );
 
   // How far the client has got (server truth). Once a payment is in, the

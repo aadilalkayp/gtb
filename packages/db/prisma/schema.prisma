@@ -64,6 +64,7 @@ enum PaymentStatus {
   pending_review
   approved
   rejected
+  voided
 }
 
 enum PaymentKind {
@@ -264,6 +265,7 @@ model User {
   assignmentsMade       Assignment[]       @relation("AssignmentAssigner")
   paymentsApproved      Payment[]          @relation("PaymentApprover")
   paymentsSubmitted     Payment[]          @relation("PaymentSubmitter")
+  paymentsEdited        Payment[]          @relation("PaymentEditor")
   consultantRates       ConsultantRate[]
   sessions              Session[]          @relation("ConsultantSessions")
   followUps             FollowUp[]         @relation("CroFollowUps")
@@ -453,6 +455,11 @@ model Payment {
   approvedAt      DateTime?
   rejectionReason String?
   notes           String?
+  editedAt        DateTime?
+  editedById      String?
+  editedBy        User?          @relation("PaymentEditor", fields: [editedById], references: [id])
+  voidReason      String?
+  legacyImported  Boolean        @default(false)
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt()
 

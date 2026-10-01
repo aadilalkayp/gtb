@@ -39,6 +39,7 @@ function methodLabel(m: string): string {
  */
 export async function createPaymentReceipt(
   data: ReceiptData,
+  opts: { replace?: boolean } = {},
 ): Promise<{ id: string; fileUrl: string; fileSize: number } | null> {
   const doc = new PDFDocument({ size: "A4", margin: 48 });
   const chunks: Buffer[] = [];
@@ -93,7 +94,8 @@ export async function createPaymentReceipt(
   const buffer = Buffer.concat(chunks);
 
   const path = `${data.clientCode.toLowerCase().replace(/[^a-z0-9]/g, "")}/payment_receipt/${data.receiptId}.pdf`;
-  const { error } = await uploadObject(path, buffer, "application/pdf");
+  // The path is keyed by payment id, so a corrected payment overwrites its own receipt.
+  const { error } = await uploadObject(path, buffer, "application/pdf", { upsert: opts.replace });
   if (error) {
     log.error("receipt upload failed", { path, reason: error.message });
     return null;

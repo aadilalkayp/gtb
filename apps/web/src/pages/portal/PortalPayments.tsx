@@ -10,6 +10,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button, Input, ProgressRing, StatusBadge } from "@/components/ui";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { Wallet } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function PortalPayments() {
   const { user } = useAuth();
@@ -64,7 +65,9 @@ export function PortalPayments() {
   // Null = no ceiling yet (price not agreed): the client states what they paid.
   const submittable = pace.balance == null ? null : Math.max(pace.balance - underReview, 0);
   const canPay = submittable == null || submittable > 0;
-  const hasLivePayment = payments.some((p) => p.status !== "rejected");
+  const hasLivePayment = payments.some(
+    (p) => p.status === "pending_review" || p.status === "approved",
+  );
   const progress = total ? Math.min(pace.paidTotal / total, 1) : 0;
   const suggested =
     submittable == null
@@ -232,7 +235,12 @@ export function PortalPayments() {
             <div key={p.id} className="px-4 py-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium">
+                  <p
+                    className={cn(
+                      "text-sm font-medium",
+                      p.status === "voided" && "text-muted-foreground line-through",
+                    )}
+                  >
                     {p.kind === "waiver" ? "Waived" : formatINR(p.amount)}
                     {p.kind === "waiver" && (
                       <span className="font-normal text-muted-foreground">
@@ -244,6 +252,8 @@ export function PortalPayments() {
                   <p className="text-xs text-muted-foreground">
                     {formatDate(p.approvedAt ?? p.createdAt)}
                     {p.paymentMethod && ` · ${humanize(p.paymentMethod)}`}
+                    {/* Staff corrections are visible but the internal reason isn't. */}
+                    {p.editedAt && " · Updated by GTB"}
                   </p>
                 </div>
                 <StatusBadge status={p.status} />
