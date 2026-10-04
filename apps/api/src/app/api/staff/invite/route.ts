@@ -3,7 +3,7 @@ import { prisma } from "@gtb/db";
 import { STAFF_ROLES, STAFF_ROLE_LABELS, type StaffRole } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { sendMail, mailConfigured } from "@/lib/mailer";
+import { sendMail } from "@/lib/mailer";
 import { staffInviteEmail } from "@/lib/emails";
 import { env } from "@/lib/env";
 import { corsHeaders, handleOptions } from "@/lib/cors";
@@ -64,6 +64,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
   const redirectTo = `${env.webPublicUrl}/portal/register`;
   let registrationUrl = `${env.webPublicUrl}/login`;
   let warning: string | undefined;
+  let alreadyRegistered = false;
   try {
     let link = await supabaseAdmin.auth.admin.generateLink({
       type: "invite",
@@ -78,6 +79,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
       });
     }
     if (link.error) throw new Error(link.error.message);
+    alreadyRegistered = Boolean(link.data.user?.last_sign_in_at);
     registrationUrl = link.data.properties?.action_link ?? registrationUrl;
   } catch (e) {
     warning = e instanceof Error ? e.message : "Could not generate a verification link.";
@@ -93,18 +95,18 @@ async function handlePost(req: NextRequest): Promise<Response> {
     }),
   );
 
-  // SEC-9: same as clients/invite — the invite link (which authenticates as the
-  // invitee) is emailed only; returned in the response just as a dev fallback
-  // when mail is not configured.
-  const linkInResponse = !mailConfigured;
+  // SEC-9: same as clients/invite. The link is returned for the founder to
+  // share, except once the staff member has signed in.
+  // OPEN ISSUE (GitHub #20).
+  const linkInResponse = !alreadyRegistered;
 
   return json(req, {
     ok: true,
     userId: user.id,
     emailed: mail.sent,
-    ...(linkInResponse ? { registrationUrl } : {}),
-    ...(!linkInResponse ? { emailedHint: "Registration link sent by email" } : {}),
+    ...(linkInResponse ? { registrationUrl } : { alreadyRegistered: true }),
     ...(warning ? { warning } : {}),
+    ...(mail.error && mail.error !== "mail_not_configured" ? { mailError: mail.error } : {}),
   });
 }
 

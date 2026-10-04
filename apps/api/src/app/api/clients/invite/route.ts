@@ -3,7 +3,7 @@ import { prisma } from "@gtb/db";
 import { CLIENT_TYPE_LABELS, LEAD_PHASE_ORDER } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
-import { sendMail, mailConfigured } from "@/lib/mailer";
+import { sendMail } from "@/lib/mailer";
 import { inviteEmail } from "@/lib/emails";
 import { env } from "@/lib/env";
 import { corsHeaders, handleOptions } from "@/lib/cors";
@@ -24,8 +24,8 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  *
  * Provisions the client's User row (linked on first login by email), assigns the
  * inviting staff member as the client's CRO, advances the lead phase, then emails
- * a Supabase-backed registration link. Email is best-effort — the link is always
- * returned so the staff UI can show/copy it when SMTP isn't configured.
+ * a Supabase-backed registration link. Email is best-effort; the link is also
+ * returned so staff can share it directly (see the SEC-9 note below).
  */
 async function handlePost(req: NextRequest): Promise<Response> {
   const authUser = await resolveAuthUser(req);
@@ -97,6 +97,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
   const redirectTo = `${env.webPublicUrl}${REGISTER_PATH}`;
   let registrationUrl = `${redirectTo}?email=${encodeURIComponent(email)}`;
   let warning: string | undefined;
+  let alreadyRegistered = false;
 
   try {
     // `invite` for a brand-new auth user; fall back to `magiclink` on re-invite
@@ -114,6 +115,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
       });
     }
     if (link.error) throw new Error(link.error.message);
+    alreadyRegistered = Boolean(link.data.user?.last_sign_in_at);
     const actionLink = link.data.properties?.action_link;
     if (actionLink) registrationUrl = actionLink;
     else warning = "Could not generate a verification link; sent a fallback URL.";
@@ -127,17 +129,19 @@ async function handlePost(req: NextRequest): Promise<Response> {
     inviteEmail({ to: client.email, clientName: client.name, brand, registrationUrl }),
   );
 
-  // SEC-9: an invitation link authenticates as the invitee. In normal
-  // operation the link goes only by email; it is returned in the API response
-  // solely as a dev fallback when mail is not configured (a logged-in CRO must
-  // never be able to copy a magic link that logs them in as the client).
-  const linkInResponse = !mailConfigured;
+  // SEC-9 (relaxed Oct 2026 at GTB's request): the platform is mostly staff
+  // operated, so the link is returned for staff to share directly, even when it
+  // was also emailed. It still authenticates as the invitee, so it is withheld
+  // once the client has signed in: by then it would only let staff log in as
+  // them (a registered client uses "Forgot password" instead).
+  // OPEN ISSUE (GitHub #20): staff can still sign in as a not-yet-registered
+  // client with this link; replace it with a non-login share link.
+  const linkInResponse = !alreadyRegistered;
 
   return json(req, {
     ok: true,
     emailed: mail.sent,
-    ...(linkInResponse ? { registrationUrl } : {}),
-    ...(!linkInResponse ? { emailedHint: "Registration link sent by email" } : {}),
+    ...(linkInResponse ? { registrationUrl } : { alreadyRegistered: true }),
     ...(warning ? { warning } : {}),
     ...(mail.error && mail.error !== "mail_not_configured" ? { mailError: mail.error } : {}),
   });

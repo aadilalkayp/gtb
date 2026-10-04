@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { Mail, Check, Copy, AlertTriangle, Send } from "lucide-react";
+import { Send } from "lucide-react";
 import { inviteClient, type InviteResult } from "@/lib/api";
 import { Button } from "@/components/ui";
+import { InviteOutcome } from "@/components/InviteOutcome";
 
 /**
  * Sends (or resends) a registration invite for a lead and surfaces the result —
- * whether the email went out, plus a copyable registration link as a fallback.
+ * whether the email went out, plus a copyable registration link to share.
  */
 export function InviteClientPanel({
   clientId,
@@ -19,7 +20,6 @@ export function InviteClientPanel({
   const [result, setResult] = useState<InviteResult>();
   const [error, setError] = useState<string>();
   const [sending, setSending] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   async function send() {
     setSending(true);
@@ -33,13 +33,6 @@ export function InviteClientPanel({
     } finally {
       setSending(false);
     }
-  }
-
-  async function copyLink() {
-    if (!result?.registrationUrl) return;
-    await navigator.clipboard.writeText(result.registrationUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
   }
 
   if (!result) {
@@ -56,49 +49,7 @@ export function InviteClientPanel({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center gap-2 text-sm font-medium">
-        {result.emailed ? (
-          <>
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success/15 text-success">
-              <Check className="h-4 w-4" />
-            </span>
-            Invitation emailed
-          </>
-        ) : (
-          <>
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-warning/15 text-warning">
-              <Mail className="h-4 w-4" />
-            </span>
-            Email not sent. Share this link
-          </>
-        )}
-      </div>
-
-      {result.registrationUrl && (
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
-          <code className="flex-1 truncate text-xs text-muted-foreground">
-            {result.registrationUrl}
-          </code>
-          <button
-            onClick={copyLink}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-foreground transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
-          >
-            {copied ? (
-              <Check className="h-3.5 w-3.5 text-success" />
-            ) : (
-              <Copy className="h-3.5 w-3.5" />
-            )}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
-      )}
-
-      {result.warning && (
-        <p className="flex items-start gap-1.5 text-xs text-warning">
-          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-          {result.warning}
-        </p>
-      )}
+      <InviteOutcome result={result} />
 
       <button
         onClick={send}
