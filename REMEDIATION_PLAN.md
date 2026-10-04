@@ -122,6 +122,8 @@ Each finding: what's wrong → concrete failure/exploit → fix direction → ac
 *Acceptance:* a normal (mail-configured) invite response contains no usable auth link.
 **✅ CLOSED (Phase 1).** Both invite routes now return `registrationUrl` only when `!mailConfigured` (dev fallback); the web UIs (`InviteClientPanel`, `UsersSettings`) render/copy the link only when present.
 
+**Relaxed (Oct 2026, GTB's request).** The platform is mostly staff operated, so both invite routes now always return the link for staff to share, *except* once the invitee has signed in (`last_sign_in_at` set), when it would only serve as a log-in-as-them link. **⚠️ OPEN: tracked in GitHub issue #20.** Accepted residual risk until fixed: a CRO / Ops Head can use a not-yet-registered client's link to sign in as that client.
+
 **SEC-10 · MEDIUM · Document visibility too coarse for staff.**
 `documents/signed-url/route.ts:48-53` — any actively-assigned staffer can sign a URL for **any** doc type; only `consultation_notes` is carved out (and only vs the client).
 *Exploit:* an assigned fitness trainer or coach can fetch a client's `payment_proof` bank screenshots. SRS §16.1 restricts payment proofs to CRO/Ops/Founder.

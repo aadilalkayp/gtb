@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Plus, Pencil, Send, Check, Copy, RefreshCw } from "lucide-react";
+import { Plus, Pencil, Send, RefreshCw } from "lucide-react";
 import {
   useFindManyUser,
   useUpdateUser,
@@ -20,6 +20,7 @@ import {
   type StaffRole,
 } from "@gtb/shared";
 import { inviteStaff, type InviteResult } from "@/lib/api";
+import { InviteOutcome } from "@/components/InviteOutcome";
 import { Avatar } from "@/components/ui/Avatar";
 import { Badge, Button, Field, Input, Modal, Select, Spinner } from "@/components/ui";
 
@@ -72,7 +73,7 @@ export function UsersSettings() {
   const [modal, setModal] = useState<"new" | { userId: string } | null>(null);
   const [resendResult, setResendResult] = useState<{
     name: string;
-    url: string;
+    result: InviteResult;
   } | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
 
@@ -85,7 +86,7 @@ export function UsersSettings() {
         phone: u.phone || undefined,
         role: u.role,
       });
-      setResendResult(res.registrationUrl ? { name: u.name, url: res.registrationUrl } : null);
+      setResendResult({ name: u.name, result: res });
     } catch (e) {
       alert(e instanceof Error ? e.message : "Failed to resend invite");
     } finally {
@@ -205,7 +206,7 @@ export function UsersSettings() {
       {resendResult && (
         <InviteLinkModal
           name={resendResult.name}
-          url={resendResult.url}
+          result={resendResult.result}
           onClose={() => setResendResult(null)}
         />
       )}
@@ -217,7 +218,6 @@ function InviteStaffModal({ onClose, onDone }: { onClose: () => void; onDone: ()
   const [result, setResult] = useState<InviteResult>();
   const [error, setError] = useState<string>();
   const [sending, setSending] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   const {
     register,
@@ -269,38 +269,7 @@ function InviteStaffModal({ onClose, onDone }: { onClose: () => void; onDone: ()
       }
     >
       {result ? (
-        <div className="space-y-3">
-          <p className="flex items-center gap-2 text-sm font-medium">
-            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-success/15 text-success">
-              <Check className="h-4 w-4" />
-            </span>
-            {result.emailed ? "Invitation emailed" : "Account created"}
-          </p>
-          {result.registrationUrl && (
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
-              <code className="flex-1 truncate text-xs text-muted-foreground">
-                {result.registrationUrl}
-              </code>
-              <button
-                onClick={() => {
-                  if (result.registrationUrl) {
-                    void navigator.clipboard.writeText(result.registrationUrl);
-                  }
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 1500);
-                }}
-                className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
-              >
-                {copied ? (
-                  <Check className="h-3.5 w-3.5 text-success" />
-                ) : (
-                  <Copy className="h-3.5 w-3.5" />
-                )}
-                {copied ? "Copied" : "Copy"}
-              </button>
-            </div>
-          )}
-        </div>
+        <InviteOutcome result={result} />
       ) : (
         <form id="staff-invite-form" onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <Field label="Full name" error={errors.name?.message} required>
@@ -438,36 +407,16 @@ function EditStaffModal({
 
 function InviteLinkModal({
   name,
-  url,
+  result,
   onClose,
 }: {
   name: string;
-  url: string;
+  result: InviteResult;
   onClose: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-
   return (
-    <Modal open onClose={onClose} title={`Invite link for ${name}`} size="sm" footer={<Button onClick={onClose}>Done</Button>}>
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          A fresh invite has been emailed. You can also share this link directly:
-        </p>
-        <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
-          <code className="flex-1 truncate text-xs text-muted-foreground">{url}</code>
-          <button
-            onClick={() => {
-              void navigator.clipboard.writeText(url);
-              setCopied(true);
-              setTimeout(() => setCopied(false), 1500);
-            }}
-            className="flex h-8 shrink-0 items-center gap-1.5 rounded-lg px-2 text-xs font-medium transition-colors duration-150 hover:bg-muted active:scale-[0.98]"
-          >
-            {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-      </div>
+    <Modal open onClose={onClose} title={`Invite for ${name}`} size="sm" footer={<Button onClick={onClose}>Done</Button>}>
+      <InviteOutcome result={result} />
     </Modal>
   );
 }

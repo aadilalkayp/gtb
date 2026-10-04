@@ -56,8 +56,10 @@ async function postJson<T>(path: string, body: unknown): Promise<T> {
 export interface InviteResult {
   ok: boolean;
   emailed: boolean;
-  /** Present only as a dev fallback when mail is not configured (SEC-9). */
+  /** Shareable registration link; omitted once the invitee has signed in (SEC-9). */
   registrationUrl?: string;
+  /** The invitee already set up their account, so no link is returned. */
+  alreadyRegistered?: boolean;
   warning?: string;
   mailError?: string;
 }

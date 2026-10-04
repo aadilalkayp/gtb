@@ -51,10 +51,10 @@ test("founder invites a new Client Coach and gets a shareable link", async ({ br
   await field(dialog, "Role").selectOption({ label: "Client Coach" });
   await dialog.getByRole("button", { name: "Send invite" }).click();
 
-  // Email is unconfigured in e2e, so the result view ("Account created")
+  // Email is unconfigured in e2e, so the result view ("Email not sent")
   // renders the registration link in a <code> element inside the same modal.
-  // (The separate "Invite link for {name}" modal only appears on re-sends.)
-  await expect(dialog.getByText("Account created")).toBeVisible();
+  // (The separate "Invite for {name}" modal only appears on re-sends.)
+  await expect(dialog.getByText("Email not sent. Share this link")).toBeVisible();
   const link = await dialog.locator("code").textContent();
   expect(link).toBeTruthy();
   inviteUrl = link!.trim();
