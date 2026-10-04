@@ -180,7 +180,7 @@ describe("Phase 3 — DATA-2: reschedule history", () => {
     expect(row.originalScheduledDate).toEqual(original);
     expect(row.status).toBe("delayed");
     expect(row.scheduledDate).toEqual(later);
-    const logs = await prisma.activityLog.count({ where: { entityType: "session", entityId: s.id } });
+    const logs = await prisma.activityLog.count({ where: { entityType: "Session", entityId: s.id } });
     expect(logs).toBe(1);
   });
 
@@ -206,12 +206,12 @@ describe("Phase 3 — SYS-1: activity log writers", () => {
     const { approvePayment } = await import("../src/server/index.js");
     await approvePayment({ paymentId: p.id, paymentMethod: "upi", actorId: "cro1" });
     const paymentLogs = await prisma.activityLog.findMany({
-      where: { entityType: "payment", entityId: p.id },
+      where: { entityType: "Payment", entityId: p.id },
     });
     expect(paymentLogs).toHaveLength(1);
     expect(paymentLogs[0].action).toBe("status_changed");
     const clientLogs = await prisma.activityLog.findMany({
-      where: { entityType: "client", entityId: c.id },
+      where: { entityType: "Client", entityId: c.id },
     });
     expect(clientLogs.some((l) => l.summary?.includes("converted"))).toBe(true);
   });

@@ -35,6 +35,8 @@ export const CAPABILITIES = [
   "settings.manage",
   "calendar.view_all",
   "task.assign",
+  // Team Pulse staff monitoring: founders only (granted via founder's full set).
+  "team.monitor",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 

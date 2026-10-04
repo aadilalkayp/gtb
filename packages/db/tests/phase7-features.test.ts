@@ -78,7 +78,7 @@ describe("Phase 7 — FEAT-5: wedding-date recalculation (SRS §24.1)", () => {
     // originalScheduledDate preserved for the moved ones (DATA-2).
     expect(after[1].originalScheduledDate).toEqual(before[1].scheduledDate);
 
-    const logs = await prisma.activityLog.count({ where: { entityType: "client", entityId: c.id } });
+    const logs = await prisma.activityLog.count({ where: { entityType: "Client", entityId: c.id } });
     expect(logs).toBeGreaterThanOrEqual(1);
   });
 });

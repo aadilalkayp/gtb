@@ -44,6 +44,7 @@ export async function cancelClientPlan(input: CancelClientInput): Promise<Cancel
     });
     if (flipped.count !== 1) throw new Error("ALREADY_CANCELLED");
     await logActivity(tx, {
+      verb: "client.cancelled",
       entityType: "client",
       entityId: client.id,
       action: "status_changed",
@@ -108,6 +109,7 @@ export async function cancelClientPlan(input: CancelClientInput): Promise<Cancel
 
     if (sessions.count > 0) {
       await logActivity(tx, {
+        verb: "session.future_cancelled",
         entityType: "client",
         entityId: client.id,
         action: "updated",
@@ -117,6 +119,7 @@ export async function cancelClientPlan(input: CancelClientInput): Promise<Cancel
     }
     if (waived > 0) {
       await logActivity(tx, {
+        verb: "payment.balance_waived",
         entityType: "client",
         entityId: client.id,
         action: "updated",

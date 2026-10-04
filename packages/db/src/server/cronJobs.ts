@@ -1,5 +1,6 @@
 import { formatDate, istAddDays, istStartOfDay } from "@gtb/shared";
 import { prisma } from "../index.js";
+import { pruneActiveMinutes } from "./presence.js";
 
 export interface DailyJobReport {
   followUpsMarkedOverdue: number;
@@ -9,6 +10,7 @@ export interface DailyJobReport {
   stylingRemindersSent: number;
   taskOverdueNotifications: number;
   missedWorkoutNudges: number;
+  activeMinutesPruned: number;
 }
 
 interface NotificationInput {
@@ -42,6 +44,7 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
     stylingRemindersSent: 0,
     taskOverdueNotifications: 0,
     missedWorkoutNudges: 0,
+    activeMinutesPruned: 0,
   };
 
   // 1. Overdue follow-ups (SRS §12.4) — strictly-past IST days only.
@@ -249,6 +252,10 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
       });
     }
   }
+
+  // Team Pulse retention: minute-level presence is kept 6 months (daily
+  // totals in StaffDay and the audit trail are permanent).
+  report.activeMinutesPruned = await pruneActiveMinutes(now);
 
   return report;
 }

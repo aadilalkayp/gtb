@@ -105,6 +105,7 @@ export async function enrollClientInPlan(input: {
       });
 
       await logActivity(tx, {
+        verb: "client.enrolled",
         entityType: "client",
         entityId: client.id,
         action: "created",
@@ -198,6 +199,7 @@ export async function changeEnrolledPlan(input: {
     if (updated.count !== 1) throw new Error("PAYMENT_EXISTS");
 
     await logActivity(tx, {
+      verb: "client.plan_changed",
       entityType: "client",
       entityId: client.id,
       action: "updated",

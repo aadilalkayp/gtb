@@ -75,6 +75,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
       if (flipped.count !== 1) throw new PreconditionError("Client is already completed or cancelled");
 
       await logActivity(tx, {
+        verb: "client.completed",
         entityType: "client",
         entityId: client.id,
         action: "status_changed",

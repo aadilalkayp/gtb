@@ -4,6 +4,7 @@ import type { Session } from "@supabase/supabase-js";
 import type { StaffRole } from "@gtb/shared";
 import { supabase } from "@/lib/supabase";
 import { fetchMe, type MeResponse } from "@/lib/api";
+import { sendActivityEvent } from "@/lib/heartbeat";
 import { env } from "@/lib/env";
 
 export type AppUser = NonNullable<MeResponse["user"]>;
@@ -70,6 +71,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return error ? { error: error.message } : {};
       },
       signOut: async () => {
+        // Team Pulse: record the sign-out while the token is still valid, but
+        // never let it hold up signing out.
+        if (role !== null && role !== "client" && role !== "founder") {
+          await Promise.race([
+            sendActivityEvent({ verb: "auth.signed_out" }),
+            new Promise((resolve) => setTimeout(resolve, 1500)),
+          ]);
+        }
         await supabase.auth.signOut();
       },
       refetchUser: () => void refetch(),

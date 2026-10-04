@@ -1,9 +1,11 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
+import { recordActivityEvent } from "@gtb/db/server";
 import { resolveAuthUser } from "@/lib/auth";
 import { createSignedUrl } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 import { withRequestLog } from "@/lib/handler";
+import { requestLog } from "@/lib/logger";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -35,7 +37,9 @@ async function handlePost(req: NextRequest): Promise<Response> {
     where: { id: documentId },
     select: {
       fileUrl: true,
+      fileName: true,
       type: true,
+      clientId: true,
       client: {
         select: {
           userId: true,
@@ -66,6 +70,17 @@ async function handlePost(req: NextRequest): Promise<Response> {
 
   try {
     const url = await createSignedUrl(doc.fileUrl);
+    // Team Pulse: opening a document is a key view (no-op for founders/clients).
+    await recordActivityEvent({
+      actor: authUser,
+      verb: "document.downloaded",
+      kind: "view",
+      entityType: "Document",
+      entityId: documentId,
+      clientId: doc.clientId,
+      module: "documents",
+      meta: { type: doc.type, fileName: doc.fileName },
+    }).catch((error) => requestLog(req).error("document view not recorded", { error }));
     return json(req, { url });
   } catch (e) {
     return json(req, { error: e instanceof Error ? e.message : "Could not sign URL" }, 502);

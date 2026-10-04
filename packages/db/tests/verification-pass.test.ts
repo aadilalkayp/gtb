@@ -295,7 +295,7 @@ describe("Verification — sessions/cancel server path", () => {
     const row = await prisma.session.findUniqueOrThrow({ where: { id: s.id } });
     expect(row.status).toBe("cancelled");
     const audit = await prisma.activityLog.findFirst({
-      where: { entityType: "session", entityId: s.id, action: "status_changed" },
+      where: { entityType: "Session", entityId: s.id, action: "status_changed" },
     });
     expect(audit?.performedById).toBe("ops1");
     await expect(
@@ -371,7 +371,7 @@ describe("Verification — activation actor + seed guard (MISC-6)", () => {
     await activateClientPlan(c.id, "ops1");
 
     const audit = await prisma.activityLog.findFirst({
-      where: { entityType: "client", entityId: c.id, action: "status_changed" },
+      where: { entityType: "Client", entityId: c.id, action: "status_changed" },
     });
     expect(audit?.performedById).toBe("ops1");
 

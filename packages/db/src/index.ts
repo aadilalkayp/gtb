@@ -9,8 +9,7 @@
  * Do NOT import this from the web app — it pulls in the Prisma runtime. The web
  * app uses `@gtb/db/hooks` and `@gtb/db/models` (types only).
  */
-import { PrismaClient, Prisma } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { Prisma } from "@prisma/client";
 import { enhance } from "@zenstackhq/runtime";
 import type { Role } from "@prisma/client";
 
@@ -24,23 +23,26 @@ export interface AuthUser {
   [key: string]: unknown;
 }
 
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+import { prisma, rawPrisma } from "./client.js";
+import { flushAudit } from "./audit/flush.js";
+import type { AuditContext } from "./audit/context.js";
 
-// Prisma 7 connects through a driver adapter. Runtime uses the pooled URL.
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL ?? "",
-});
+export { prisma };
 
-export const prisma: PrismaClient =
-  globalForPrisma.prisma ??
-  new PrismaClient({
-    adapter,
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-  });
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
+/** Persist a request's captured changes (see audit/flush.ts). */
+export function flushRequestAudit(ctx: AuditContext): Promise<number> {
+  return flushAudit(rawPrisma, ctx);
 }
+
+export {
+  createAuditContext,
+  runWithAuditContext,
+  getAuditContext,
+  setAuditActor,
+  isTrackedRole,
+  type AuditContext,
+  type AuditActor,
+} from "./audit/context.js";
 
 /**
  * Returns a Prisma client that enforces row- and field-level access policies

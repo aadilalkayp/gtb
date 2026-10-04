@@ -171,6 +171,7 @@ export async function editPayment(input: EditPaymentInput): Promise<{ receipt: R
       }
     }
     await logActivity(tx, {
+      verb: "payment.edited",
       entityType: "payment",
       entityId: payment.id,
       action: "updated",
@@ -263,6 +264,7 @@ export async function changePaymentStatus(input: {
       );
     }
     await logActivity(tx, {
+      verb: input.to === "pending_review" ? "payment.reopened" : `payment.${input.to}`,
       entityType: "payment",
       entityId: payment.id,
       action: "status_changed",

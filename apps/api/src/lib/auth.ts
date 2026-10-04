@@ -1,4 +1,5 @@
-import { prisma, type AuthUser } from "@gtb/db";
+import { getAuditContext, prisma, setAuditActor, type AuthUser } from "@gtb/db";
+import { recordSignIn } from "@gtb/db/server";
 import { supabaseAnon } from "./supabase.js";
 import { addRequestLogContext, logger, requestLog } from "./logger.js";
 
@@ -18,6 +19,19 @@ import { addRequestLogContext, logger, requestLog } from "./logger.js";
 const log = logger.child({ mod: "auth" });
 
 export async function resolveAuthUser(req: Request): Promise<AuthUser | undefined> {
+  // Once per request: the gateway resolves the caller twice (getPrisma + its
+  // own check), and each resolution is a Supabase round trip.
+  const ctx = getAuditContext();
+  const memo = ctx?.memo.get(AUTH_MEMO) as Promise<AuthUser | undefined> | undefined;
+  if (memo) return memo;
+  const pending = resolveUncached(req);
+  ctx?.memo.set(AUTH_MEMO, pending);
+  return pending;
+}
+
+const AUTH_MEMO = "authUser";
+
+async function resolveUncached(req: Request): Promise<AuthUser | undefined> {
   const authHeader = req.headers.get("authorization") ?? "";
   const token = authHeader.toLowerCase().startsWith("bearer ") ? authHeader.slice(7).trim() : "";
   if (!token) {
@@ -77,7 +91,34 @@ export async function resolveAuthUser(req: Request): Promise<AuthUser | undefine
     return undefined;
   }
 
-  // Stamp the caller onto the request's access log line.
+  // Stamp the caller onto the request's access log line and audit context.
   addRequestLogContext(req, { userId: user.id, role: user.role });
+  setAuditActor({ id: user.id, role: user.role });
+
+  // Team Pulse: a Supabase session id seen for the first time is a sign-in.
+  const sessionId = jwtSessionId(token);
+  if (sessionId) {
+    const audit = getAuditContext();
+    await recordSignIn({
+      userId: user.id,
+      role: user.role,
+      sessionId,
+      ip: audit?.ip,
+      userAgent: audit?.userAgent,
+    }).catch((error) => log.error("sign-in record failed", { error, userId: user.id }));
+  }
   return { id: user.id, role: user.role };
+}
+
+/**
+ * The `session_id` claim of an access token Supabase has ALREADY validated
+ * (getUser above). It stays the same across refreshes for one sign-in.
+ */
+function jwtSessionId(token: string): string | undefined {
+  try {
+    const payload = JSON.parse(Buffer.from(token.split(".")[1] ?? "", "base64url").toString("utf8"));
+    return typeof payload.session_id === "string" ? payload.session_id : undefined;
+  } catch {
+    return undefined;
+  }
 }

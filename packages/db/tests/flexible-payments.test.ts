@@ -136,7 +136,7 @@ describe("server — updateMilestoneSchedule", () => {
     // Renumbered in due-date order.
     expect(rows.map((r) => r.amount)).toEqual([80000, 10000]);
     const log = await prisma.activityLog.findFirst({
-      where: { entityType: "client", entityId: c.id, summary: "Payment schedule updated" },
+      where: { entityType: "Client", entityId: c.id, summary: "Payment schedule updated" },
     });
     expect(log).not.toBeNull();
   });
@@ -169,7 +169,7 @@ describe("server — updateMilestoneSchedule", () => {
     expect(row.agreedPrice).toBe(120000);
     expect(row.milestones).toHaveLength(2);
     const log = await prisma.activityLog.findFirst({
-      where: { entityType: "client", entityId: c.id, summary: "Agreed price recorded" },
+      where: { entityType: "Client", entityId: c.id, summary: "Agreed price recorded" },
     });
     expect(log).not.toBeNull();
   });

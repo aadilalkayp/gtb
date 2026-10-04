@@ -5,9 +5,12 @@ import { useAuth } from "@/auth/AuthProvider";
 import { Sidebar } from "./Sidebar";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { ContentSpinner } from "@/components/ui/Spinner";
+import { useHeartbeat } from "@/lib/heartbeat";
 
 export function StaffLayout() {
-  const { signOut } = useAuth();
+  const { signOut, role } = useAuth();
+  // Team Pulse presence; founders are not tracked.
+  useHeartbeat(role !== null && role !== "founder" && role !== "client");
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />

@@ -73,6 +73,7 @@ export async function completeSession(
     if (updated.count !== 1) throw new SessionConflictError();
 
     await logActivity(tx, {
+      verb: "session.completed",
       entityType: "session",
       entityId: session.id,
       action: "status_changed",

@@ -40,6 +40,7 @@ export async function rescheduleSession(input: RescheduleInput): Promise<void> {
   await prisma.$transaction(async (tx) => {
     await tx.session.update({ where: { id: session.id }, data });
     await logActivity(tx, {
+      verb: "session.rescheduled",
       entityType: "session",
       entityId: session.id,
       action: "updated",
