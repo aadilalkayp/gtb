@@ -35,6 +35,19 @@ const ConsultationsPage = lazy(() =>
     default: m.ConsultationsPage,
   })),
 );
+// Team Pulse (founders only) lives in its own chunks: staff never download it.
+const TeamPulsePage = lazy(() =>
+  import("@/pages/team-pulse/TeamPulsePage").then((m) => ({ default: m.TeamPulsePage })),
+);
+const PulseActivityPage = lazy(() =>
+  import("@/pages/team-pulse/PulseActivityPage").then((m) => ({ default: m.PulseActivityPage })),
+);
+const StaffPulsePage = lazy(() =>
+  import("@/pages/team-pulse/StaffPulsePage").then((m) => ({ default: m.StaffPulsePage })),
+);
+const StaffReportPage = lazy(() =>
+  import("@/pages/team-pulse/StaffReportPage").then((m) => ({ default: m.StaffReportPage })),
+);
 const ClientProfilePage = lazy(() =>
   import("@/pages/clients/ClientProfilePage").then((m) => ({ default: m.ClientProfilePage })),
 );
@@ -185,6 +198,15 @@ export default function App() {
                 <Route path="/alerts" element={<AlertsPage />} />
               </Route>
               <Route path="/settings" element={<SettingsPage />} />
+              <Route element={<RequireCapability capability="team.monitor" />}>
+                <Route path="/team-pulse" element={<TeamPulsePage />} />
+                <Route path="/team-pulse/activity" element={<PulseActivityPage />} />
+                <Route path="/team-pulse/staff/:id" element={<StaffPulsePage />} />
+              </Route>
+            </Route>
+            {/* Printable report: full page, no staff chrome. */}
+            <Route element={<RequireCapability capability="team.monitor" />}>
+              <Route path="/team-pulse/staff/:id/report" element={<StaffReportPage />} />
             </Route>
           </Route>
         </Route>

@@ -79,6 +79,7 @@ export async function submitPayment(input: SubmitPaymentInput): Promise<{ paymen
       });
 
       await logActivity(tx, {
+        verb: "payment.proof_submitted",
         entityType: "payment",
         entityId: payment.id,
         action: "created",

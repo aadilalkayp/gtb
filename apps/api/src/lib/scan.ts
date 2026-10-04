@@ -41,9 +41,17 @@ export function rateLimit(key: string, max: number): boolean {
   return w.count <= max;
 }
 
+/**
+ * The caller's IP. nginx sets X-Real-IP from the TCP peer, overwriting anything
+ * the client sent. X-Forwarded-For is only a fallback, and its LAST hop is the
+ * one nginx appended: the first hop is whatever the caller claimed, so trusting
+ * it let anyone rotate a fake header past the per-IP scan rate limit.
+ */
 export function clientIp(req: Request): string {
-  const fwd = req.headers.get("x-forwarded-for");
-  return fwd?.split(",")[0]?.trim() || "local";
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  const hops = req.headers.get("x-forwarded-for")?.split(",").map((h) => h.trim()).filter(Boolean);
+  return hops?.[hops.length - 1] || "local";
 }
 
 // ---------------------------------------------------------------------------

@@ -184,6 +184,13 @@ enum ActivityAction {
   status_changed
 }
 
+enum ActivityKind {
+  change
+  view
+  export
+  auth
+}
+
 enum ScanStatus {
   pending
   scored
@@ -279,6 +286,9 @@ model User {
   contentItems          ContentItem[]      @relation("ContentOwner")
   notifications         Notification[]     @relation("UserNotifications")
   activityLogs          ActivityLog[]      @relation("ActivityActor")
+  staffDays             StaffDay[]         @relation("StaffDays")
+  activeMinutes         ActiveMinute[]     @relation("ActiveMinutes")
+  authSessions          AuthSession[]      @relation("AuthSessions")
   fitnessPlansAsTrainer FitnessPlan[]      @relation("PlanTrainer")
   weightLogsRecorded    WeightLog[]        @relation("WeightRecorder")
   measurementsRecorded  BodyMeasurement[]  @relation("MeasurementRecorder")
@@ -1044,8 +1054,62 @@ model ActivityLog {
   performedBy   User?          @relation("ActivityActor", fields: [performedById], references: [id])
   summary       String?
   changes       Json?
+  verb          String?
+  kind          ActivityKind   @default(change)
+  module        String?
+  actorRole     Role?
+  source        String?
+  requestId     String?
+  clientId      String?
+  meta          Json?
   createdAt     DateTime       @default(now())
 
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([performedById, createdAt])
+  @@index([clientId, createdAt])
+  @@index([requestId])
+}
+
+/// Team Pulse presence: one row per staff member per IST work day (4 am
+/// boundary). Kept permanently; server-written, never exposed on the gateway.
+model StaffDay {
+  id            String   @id() @default(uuid())
+  userId        String
+  user          User     @relation("StaffDays", fields: [userId], references: [id], onDelete: Cascade)
+  day           DateTime @db.Date()
+  firstSeenAt   DateTime
+  lastSeenAt    DateTime
+  activeMinutes Int      @default(0)
+  changeCount   Int      @default(0)
+  viewCount     Int      @default(0)
+
+  @@unique([userId, day])
+  @@index([day])
+}
+
+/// Team Pulse presence: one row per staff member per minute with real input.
+/// The composite key makes multiple tabs impossible to double count. Pruned
+/// after 6 months by the daily job.
+model ActiveMinute {
+  userId String
+  user   User     @relation("ActiveMinutes", fields: [userId], references: [id], onDelete: Cascade)
+  minute DateTime
+  module String
+
+  @@id([userId, minute])
+  @@index([minute])
+}
+
+/// A Supabase auth session (JWT `session_id`) seen for the first time is a real
+/// sign-in; refreshes keep the same id.
+model AuthSession {
+  id          String   @id()
+  userId      String
+  user        User     @relation("AuthSessions", fields: [userId], references: [id], onDelete: Cascade)
+  firstSeenAt DateTime @default(now())
+  ip          String?
+  userAgent   String?
+
+  @@index([userId, firstSeenAt])
 }

@@ -106,6 +106,7 @@ export async function updateWeddingDate(
     }
 
     await logActivity(tx, {
+      verb: "client.wedding_date_changed",
       entityType: "client",
       entityId: client.id,
       action: "updated",

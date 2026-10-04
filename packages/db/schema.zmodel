@@ -219,6 +219,13 @@ enum ActivityAction {
   status_changed
 }
 
+enum ActivityKind {
+  change // a database write (generic capture or a named domain event)
+  view   // opened a client profile, downloaded a document
+  export // exported data out of the app
+  auth   // sign-in / sign-out
+}
+
 enum ScanStatus {
   pending
   scored
@@ -321,6 +328,9 @@ model User {
   contentItems      ContentItem[]      @relation("ContentOwner")
   notifications     Notification[]     @relation("UserNotifications")
   activityLogs      ActivityLog[]      @relation("ActivityActor")
+  staffDays         StaffDay[]         @relation("StaffDays")
+  activeMinutes     ActiveMinute[]     @relation("ActiveMinutes")
+  authSessions      AuthSession[]      @relation("AuthSessions")
   fitnessPlansAsTrainer FitnessPlan[]     @relation("PlanTrainer")
   weightLogsRecorded    WeightLog[]       @relation("WeightRecorder")
   measurementsRecorded  BodyMeasurement[] @relation("MeasurementRecorder")
@@ -1607,17 +1617,78 @@ model ActivityLog {
   id            String         @id @default(uuid())
   entityType    String
   entityId      String
-  action        ActivityAction
+  action        ActivityAction // coarse kind kept for the original writers; `verb` is the precise one
   performedById String?
   performedBy   User?          @relation("ActivityActor", fields: [performedById], references: [id])
   summary       String?
-  changes       Json?
+  changes       Json?          // { field: [before, after] }
+
+  // Team Pulse (TEAM_PULSE_DESIGN.md). All nullable/defaulted so pre-existing
+  // rows stay valid.
+  verb      String?            // "followup.completed", "client.viewed", ...
+  kind      ActivityKind @default(change)
+  module    String?            // UI module the entry belongs to (packages/shared activity/modules)
+  actorRole Role?
+  source    String?            // request | cron
+  requestId String?
+  clientId  String?            // denormalised so a client's history is one indexed query
+  meta      Json?              // kind-specific extras (export: report/rows; auth: ip/userAgent)
 
   createdAt DateTime @default(now())
 
   @@index([entityType, entityId])
   @@index([createdAt])
+  @@index([performedById, createdAt])
+  @@index([clientId, createdAt])
+  @@index([requestId])
 
-  // Audit log is read-only to admins; written by the server (unenhanced).
-  @@allow('read', auth().role == founder || auth().role == ops_head)
+  // Audit trail: append-only, written by the server (unenhanced) and readable
+  // by founders only. Staff, including ops head, never see it.
+  @@allow('read', auth().role == founder)
+}
+
+/// Team Pulse presence: one row per staff member per IST work day (4 am
+/// boundary). Kept permanently; server-written, never exposed on the gateway.
+model StaffDay {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation("StaffDays", fields: [userId], references: [id], onDelete: Cascade)
+  day           DateTime @db.Date
+  firstSeenAt   DateTime
+  lastSeenAt    DateTime
+  activeMinutes Int      @default(0)
+  changeCount   Int      @default(0)
+  viewCount     Int      @default(0)
+
+  @@unique([userId, day])
+  @@index([day])
+  @@deny('all', true)
+}
+
+/// Team Pulse presence: one row per staff member per minute with real input.
+/// The composite key makes multiple tabs impossible to double count. Pruned
+/// after 6 months by the daily job.
+model ActiveMinute {
+  userId String
+  user   User     @relation("ActiveMinutes", fields: [userId], references: [id], onDelete: Cascade)
+  minute DateTime
+  module String
+
+  @@id([userId, minute])
+  @@index([minute])
+  @@deny('all', true)
+}
+
+/// A Supabase auth session (JWT `session_id`) seen for the first time is a real
+/// sign-in; refreshes keep the same id.
+model AuthSession {
+  id          String   @id
+  userId      String
+  user        User     @relation("AuthSessions", fields: [userId], references: [id], onDelete: Cascade)
+  firstSeenAt DateTime @default(now())
+  ip          String?
+  userAgent   String?
+
+  @@index([userId, firstSeenAt])
+  @@deny('all', true)
 }

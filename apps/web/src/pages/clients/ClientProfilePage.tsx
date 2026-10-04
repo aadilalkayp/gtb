@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -53,7 +53,7 @@ import {
   Textarea,
   type TabDef,
 } from "@/components/ui";
-import { FullPageSpinner } from "@/components/ui/Spinner";
+import { FullPageSpinner, Spinner } from "@/components/ui/Spinner";
 import { RatingStars } from "@/components/RatingStars";
 import { DocumentRow } from "@/components/DocumentRow";
 import { FileUploadField } from "@/components/FileUploadField";
@@ -63,8 +63,14 @@ import { ClientScansTab } from "./ClientScansTab";
 import { MilestoneScheduleModal } from "../payments/MilestoneScheduleModal";
 import { EditPaymentModal, type EditablePayment } from "../payments/EditPaymentModal";
 import { PaymentMarkers } from "../payments/PaymentMarkers";
+import { sendActivityEvent } from "@/lib/heartbeat";
 
-type TabId = "overview" | "sessions" | "payments" | "documents" | "assessment" | "scans";
+type TabId = "overview" | "sessions" | "payments" | "documents" | "assessment" | "scans" | "history";
+
+// Team Pulse client history (founders only): its own chunk, never loaded for staff.
+const ClientHistory = lazy(() =>
+  import("@/pages/team-pulse/ActivityLogView").then((m) => ({ default: m.ActivityLogView })),
+);
 
 export function ClientProfilePage() {
   const { id } = useParams<{ id: string }>();
@@ -77,6 +83,11 @@ export function ClientProfilePage() {
   const [editingPayment, setEditingPayment] = useState<EditablePayment | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showWeddingEdit, setShowWeddingEdit] = useState(false);
+
+  // Team Pulse: opening a client profile is a key view (server dedupes repeats).
+  useEffect(() => {
+    if (id) void sendActivityEvent({ verb: "client.viewed", entityId: id });
+  }, [id]);
 
   const {
     data: client,
@@ -150,6 +161,7 @@ export function ClientProfilePage() {
     { id: "documents", label: "Documents", count: client.documents.length },
     { id: "assessment", label: "Assessment" },
     { id: "scans", label: "Scans" },
+    ...(role === "founder" ? [{ id: "history" as const, label: "History" }] : []),
   ];
 
   async function resume() {
@@ -581,6 +593,11 @@ export function ClientProfilePage() {
           ))}
 
         {tab === "scans" && <ClientScansTab clientId={client.id} />}
+        {tab === "history" && role === "founder" && (
+          <Suspense fallback={<Spinner className="mx-auto my-12 h-5 w-5 text-muted-foreground" />}>
+            <ClientHistory clientId={client.id} showActor includeFounders />
+          </Suspense>
+        )}
       </div>
 
       {editingPayment && (

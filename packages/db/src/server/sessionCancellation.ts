@@ -34,6 +34,7 @@ export async function cancelSession(input: CancelSessionInput): Promise<void> {
     if (res.count !== 1) throw new Error("LOCKED");
 
     await logActivity(tx, {
+      verb: input.outcome === "cancelled" ? "session.cancelled" : "session.missed",
       entityType: "session",
       entityId: session.id,
       action: "status_changed",

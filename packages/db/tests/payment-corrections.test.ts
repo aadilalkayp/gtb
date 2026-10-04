@@ -55,7 +55,7 @@ describe("editPayment — correcting an approved record", () => {
     expect(row.editedAt).not.toBeNull();
     expect(await approvedTotal(cp.id)).toBe(12000);
     const log = await prisma.activityLog.findFirstOrThrow({
-      where: { entityType: "payment", entityId: approved.id, summary: "Payment edited" },
+      where: { entityType: "Payment", entityId: approved.id, summary: "Payment edited" },
     });
     expect(log.changes).toMatchObject({
       reason: "Client only paid 12k of the first installment",

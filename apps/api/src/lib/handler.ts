@@ -1,7 +1,16 @@
 import { randomUUID } from "node:crypto";
 import * as Sentry from "@sentry/nextjs";
 import { corsHeaders } from "./cors.js";
+import {
+  createAuditContext,
+  flushRequestAudit,
+  isTrackedRole,
+  runWithAuditContext,
+  type AuditContext,
+} from "@gtb/db";
+import { touchPresence } from "@gtb/db/server";
 import { bindRequestLog, logger, requestLog } from "./logger.js";
+import { clientIp } from "./scan.js";
 
 /**
  * Route-handler wrapper: the API's single source of request logging and
@@ -13,7 +22,11 @@ import { bindRequestLog, logger, requestLog } from "./logger.js";
  * - one access log line per request: method, path, status, duration, and —
  *   once resolveAuthUser has run — userId/role;
  * - a catch-all for unhandled errors: full stack to the log, an opaque 500
- *   with the request id (and CORS headers) to the client.
+ *   with the request id (and CORS headers) to the client;
+ * - a Team Pulse audit context (TEAM_PULSE_DESIGN.md §5.1): every database
+ *   write made while handling the request is captured with the caller as
+ *   actor, then persisted once the response is a success. A write request by
+ *   tracked staff also counts toward their work day.
  *
  * Usage in a route file:
  *   export const POST = withRequestLog(async (req) => { ... });
@@ -31,10 +44,18 @@ export function withRequestLog<R extends Request, Ctx = unknown>(
     bindRequestLog(req, logger.child({ reqId }));
     const started = performance.now();
 
+    const audit = createAuditContext({
+      requestId: reqId,
+      source: url.pathname.startsWith("/api/cron/") ? "cron" : "request",
+      ip: clientIp(req),
+      userAgent: req.headers.get("user-agent")?.slice(0, 300) ?? undefined,
+    });
+
     let res: Response;
     try {
-      res = await handler(req, ctx);
+      res = await runWithAuditContext(audit, () => handler(req, ctx));
     } catch (error) {
+      discardAudit(req, audit);
       const durMs = Math.round(performance.now() - started);
       // Re-read the bound logger: auth may have enriched it with userId/role.
       requestLog(req).error("request failed", {
@@ -53,6 +74,8 @@ export function withRequestLog<R extends Request, Ctx = unknown>(
       );
     }
 
+    await settleAudit(req, audit, res.status);
+
     const durMs = Math.round(performance.now() - started);
     const log = requestLog(req);
     const line = { method: req.method, path: url.pathname, status: res.status, durMs };
@@ -68,4 +91,35 @@ export function withRequestLog<R extends Request, Ctx = unknown>(
     }
     return res;
   };
+}
+
+const WRITE_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * Persist the request's captured changes when it succeeded; a failed request's
+ * transactions rolled back, so its buffer is dropped (and logged, so nothing
+ * vanishes silently). Audit problems never fail the response itself.
+ */
+async function settleAudit(req: Request, audit: AuditContext, status: number): Promise<void> {
+  if (status >= 400) {
+    discardAudit(req, audit);
+    return;
+  }
+  try {
+    const changes = await flushRequestAudit(audit);
+    const actor = audit.actor;
+    if (actor && isTrackedRole(actor.role) && WRITE_METHODS.has(req.method)) {
+      await touchPresence(actor.id, new Date(), { changes });
+    }
+  } catch (error) {
+    requestLog(req).error("audit flush failed", { error, pending: audit.pending.length });
+  }
+}
+
+function discardAudit(req: Request, audit: AuditContext): void {
+  if (audit.pending.length === 0) return;
+  requestLog(req).warn("audit entries discarded with failed request", {
+    entries: audit.pending.map((p) => `${p.model}:${p.entityId}:${p.verb}`),
+  });
+  audit.pending.length = 0;
 }

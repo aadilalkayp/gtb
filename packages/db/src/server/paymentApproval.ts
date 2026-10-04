@@ -59,6 +59,7 @@ async function maybeConvert(
   const converted = flipped.count === 1;
   if (converted) {
     await logActivity(tx, {
+      verb: "client.converted",
       entityType: "client",
       entityId: c.id,
       action: "status_changed",
@@ -139,6 +140,7 @@ export async function approvePayment(input: {
     await assertNotOverpaid(tx, payment.clientPlanId);
 
     await logActivity(tx, {
+      verb: "payment.approved",
       entityType: "payment",
       entityId: input.paymentId,
       action: "status_changed",
@@ -211,6 +213,7 @@ export async function recordPayment(input: {
     await assertNotOverpaid(tx, plan.id);
 
     await logActivity(tx, {
+      verb: kind === "waiver" ? "payment.waived" : "payment.recorded",
       entityType: "payment",
       entityId: payment.id,
       action: "created",

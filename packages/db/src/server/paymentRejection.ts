@@ -28,6 +28,7 @@ export async function rejectPayment(input: RejectPaymentInput): Promise<void> {
     });
     if (res.count !== 1) throw new Error("NOT_SUBMITTED");
     await logActivity(tx, {
+      verb: "payment.rejected",
       entityType: "payment",
       entityId: payment.id,
       action: "status_changed",

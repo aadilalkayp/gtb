@@ -4,22 +4,81 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@gtb/web", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@gtb/web",
+        "dev"
+      ],
       "autoPort": true,
       "port": 5175
     },
     {
       "name": "site",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@gtb/site", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@gtb/site",
+        "dev"
+      ],
       "autoPort": true,
       "port": 5180
     },
     {
       "name": "api",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@gtb/api", "dev"],
+      "runtimeArgs": [
+        "--filter",
+        "@gtb/api",
+        "dev"
+      ],
       "port": 3005
+    },
+    {
+      "name": "api-e2e",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@gtb/api",
+        "exec",
+        "next",
+        "dev",
+        "--port",
+        "3105"
+      ],
+      "port": 3105,
+      "env": {
+        "DATABASE_URL": "postgresql://postgres:postgres@127.0.0.1:54522/postgres",
+        "DIRECT_URL": "postgresql://postgres:postgres@127.0.0.1:54522/postgres",
+        "SUPABASE_URL": "http://127.0.0.1:54521",
+        "SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+        "SUPABASE_SERVICE_ROLE_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU",
+        "SUPABASE_JWT_SECRET": "super-secret-jwt-token-with-at-least-32-characters-long",
+        "WEB_ORIGIN": "http://localhost:5185",
+        "API_PUBLIC_URL": "http://localhost:3105",
+        "WEB_PUBLIC_URL": "http://localhost:5185",
+        "PORT": "3105",
+        "MAILGUN_SMTP_HOST": "",
+        "NODE_ENV": "development"
+      }
+    },
+    {
+      "name": "web-e2e",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@gtb/web",
+        "exec",
+        "vite",
+        "--port",
+        "5185",
+        "--strictPort"
+      ],
+      "port": 5185,
+      "env": {
+        "VITE_SUPABASE_URL": "http://127.0.0.1:54521",
+        "VITE_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0",
+        "VITE_API_URL": "http://localhost:3105"
+      }
     }
   ]
 }

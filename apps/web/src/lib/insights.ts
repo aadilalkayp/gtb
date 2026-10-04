@@ -13,6 +13,7 @@ import {
   type MilestonePaceStatus,
   type PlanPaymentPace,
 } from "@gtb/shared";
+import { sendActivityEvent } from "./heartbeat";
 
 export type DateLike = Date | string;
 
@@ -207,7 +208,7 @@ export function monthKey(d: DateLike): string {
   return `${year}-${month}`;
 }
 
-/** Download rows as a CSV file (report exports). */
+/** Download rows as a CSV file (report exports). Recorded as a Team Pulse export. */
 export function downloadCsv(
   filename: string,
   headers: string[],
@@ -225,4 +226,5 @@ export function downloadCsv(
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+  void sendActivityEvent({ verb: "report.exported", report: filename, rows: rows.length });
 }

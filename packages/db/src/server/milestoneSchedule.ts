@@ -57,6 +57,7 @@ export async function updateMilestoneSchedule(
       })),
     });
     await logActivity(tx, {
+      verb: "payment.schedule_changed",
       entityType: "client",
       entityId: input.clientId,
       action: "updated",

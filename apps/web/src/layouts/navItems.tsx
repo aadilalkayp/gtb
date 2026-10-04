@@ -13,6 +13,7 @@ import {
   BarChart3,
   Bell,
   Settings,
+  Activity,
   type LucideIcon,
 } from "lucide-react";
 import { canAny, type StaffRole } from "@gtb/shared";
@@ -103,6 +104,12 @@ export const STAFF_NAV: NavItem[] = [
     to: "/alerts",
     icon: Bell,
     visible: (r) => canAny(r, ["report.view_all"]),
+  },
+  {
+    label: "Team Pulse",
+    to: "/team-pulse",
+    icon: Activity,
+    visible: (r) => canAny(r, ["team.monitor"]),
   },
   {
     label: "Settings",

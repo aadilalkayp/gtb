@@ -127,3 +127,18 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Team Pulse report (and any future printable page): A4, chrome hidden. */
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  .no-print {
+    display: none !important;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+}

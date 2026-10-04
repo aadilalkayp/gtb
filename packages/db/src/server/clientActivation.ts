@@ -102,6 +102,7 @@ export async function activateClientPlan(
     if (client.status !== "active") {
       await tx.client.update({ where: { id: client.id }, data: { status: "active" } });
       await logActivity(tx, {
+        verb: "client.activated",
         entityType: "client",
         entityId: client.id,
         action: "status_changed",
@@ -112,6 +113,7 @@ export async function activateClientPlan(
     }
 
     await logActivity(tx, {
+      verb: "session.schedule_generated",
       entityType: "client",
       entityId: client.id,
       action: "updated",

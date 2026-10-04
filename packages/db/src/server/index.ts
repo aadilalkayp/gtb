@@ -24,3 +24,31 @@ export { rescheduleSession } from "./sessionReschedule.js";
 export { cancelSession } from "./sessionCancellation.js";
 export { rejectPayment } from "./paymentRejection.js";
 export { updateWeddingDate } from "./weddingDateChange.js";
+export {
+  touchPresence,
+  recordHeartbeat,
+  recordSignIn,
+  recordActivityEvent,
+  recordAuditEvent,
+  pruneActiveMinutes,
+  resetPresenceMemory,
+  ACTIVE_MINUTE_RETENTION_DAYS,
+  type ActivityEventInput,
+} from "./presence.js";
+export {
+  listTrackedStaff,
+  computeStaffMetrics,
+  pulseDay,
+  pulsePeriod,
+  pulseStaff,
+  pulseFeed,
+  type PulseStaff,
+  type PulseMetric,
+  type PulseSummary,
+  type PulseDayRow,
+  type PulsePeriodRow,
+  type PulseStaffDetail,
+  type PulseFeedFilters,
+  type PulseFeedEntry,
+  type PulseFeedDetail,
+} from "./pulse.js";
