@@ -34,6 +34,8 @@ import { StatCard } from "@/components/StatCard";
 import { FullPageSpinner } from "@/components/ui/Spinner";
 import { QueryErrorState } from "@/components/QueryErrorState";
 import { EmptyState } from "@/components/EmptyState";
+import { DailyReportCard } from "@/pages/sales-reports/DailyReportCard";
+import { useMySalesReports } from "@/pages/sales-reports/salesApi";
 import { useDashboardData, type DashboardMetrics } from "./useDashboardData";
 import {
   SectionCard,
@@ -375,15 +377,12 @@ function CroView({
   raw: ReturnType<typeof useDashboardData>["raw"];
   userId?: string;
 }) {
-  const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
-  // CALC-5: my performance = conversions I actually made, follow-ups that are
-  // mine, scoped to the period — not every client in the business.
-  const myConversions = raw.clients.filter(
-    (c) =>
-      c.convertedById === userId &&
-      c.conversionDate &&
-      asDate(c.conversionDate) >= monthStart,
-  ).length;
+  // CALC-5: my performance = conversions credited to me, follow-ups that are
+  // mine, scoped to the period — not every client in the business. Sales
+  // credit follows the sales reports rule (the CRO who created the lead, else
+  // the assigned CRO), not whoever approved the first payment.
+  const { data: myReports } = useMySalesReports();
+  const myConversions = myReports?.monthToDate.sales;
   const myFollowUps = raw.followUps.filter((f) => f.croId === userId);
   const completedFollowups = myFollowUps.filter((f) => f.status === "completed").length;
   const totalFollowups = myFollowUps.length;
@@ -393,6 +392,7 @@ function CroView({
 
   return (
     <>
+      <DailyReportCard />
       <div className="stagger-children grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           icon={PhoneCall}
@@ -409,7 +409,8 @@ function CroView({
         <StatCard
           icon={TrendingUp}
           label="Conversions this month"
-          value={myConversions}
+          value={myConversions ?? "–"}
+          footnote={myReports?.monthToDate.salesValue ? formatINR(myReports.monthToDate.salesValue) : undefined}
           accent="success"
         />
         <StatCard

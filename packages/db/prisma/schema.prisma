@@ -293,6 +293,8 @@ model User {
   weightLogsRecorded    WeightLog[]        @relation("WeightRecorder")
   measurementsRecorded  BodyMeasurement[]  @relation("MeasurementRecorder")
   trainerNotesAuthored  TrainerNote[]      @relation("TrainerNoteAuthor")
+  clientsCreated        Client[]           @relation("ClientCreator")
+  salesReports          SalesReport[]      @relation("SalesReports")
 }
 
 model Client {
@@ -320,6 +322,8 @@ model Client {
   convertedById      String?
   convertedBy        User?               @relation("ConvertedBy", fields: [convertedById], references: [id])
   conversionDate     DateTime?
+  createdById        String?
+  createdBy          User?               @relation("ClientCreator", fields: [createdById], references: [id])
   createdAt          DateTime            @default(now())
   updatedAt          DateTime            @updatedAt()
   assessment         Assessment?
@@ -345,6 +349,7 @@ model Client {
   @@index([status])
   @@index([type])
   @@index([weddingDate])
+  @@index([createdById])
 }
 
 /// Full onboarding assessment (SRS §6.2). 1:1 with Client.
@@ -1112,4 +1117,27 @@ model AuthSession {
   userAgent   String?
 
   @@index([userId, firstSeenAt])
+}
+
+/// A CRO's end-of-day sales report: one per CRO per IST work day (4 am
+/// boundary). Server-written by /api/sales-reports; never exposed on the
+/// gateway. Sales and payments are not stored here, they are computed live.
+model SalesReport {
+  id               String    @id() @default(uuid())
+  croId            String
+  cro              User      @relation("SalesReports", fields: [croId], references: [id])
+  day              DateTime  @db.Date()
+  dayOff           Boolean   @default(false)
+  enquiries        Int?
+  leadFollowUps    Int?
+  hotLeads         Int?
+  plannedFollowUps Int?
+  challenges       String?
+  submittedAt      DateTime
+  editedAt         DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt()
+
+  @@unique([croId, day])
+  @@index([day])
 }

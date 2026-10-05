@@ -8,3 +8,4 @@ export * from "./looks.js";
 export * from "./coach.js";
 export * from "./fitness.js";
 export * from "./activity.js";
+export * from "./salesReports.js";

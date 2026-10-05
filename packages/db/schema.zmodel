@@ -335,6 +335,8 @@ model User {
   weightLogsRecorded    WeightLog[]       @relation("WeightRecorder")
   measurementsRecorded  BodyMeasurement[] @relation("MeasurementRecorder")
   trainerNotesAuthored  TrainerNote[]     @relation("TrainerNoteAuthor")
+  clientsCreated        Client[]          @relation("ClientCreator")
+  salesReports          SalesReport[]     @relation("SalesReports")
 
   @@auth
 
@@ -395,6 +397,11 @@ model Client {
   convertedById  String? @deny('update', userId != null && userId == auth().id)
   convertedBy    User?       @relation("ConvertedBy", fields: [convertedById], references: [id])
   conversionDate DateTime? @deny('update', userId != null && userId == auth().id)
+  // Who created the lead: sales credit for the CRO daily reports
+  // (SALES_REPORTS_DESIGN.md §6). Stamped with the caller on gateway creates
+  // and never changed; null for system-created leads (Readiness Scan).
+  createdById    String? @deny('update', true)
+  createdBy      User?       @relation("ClientCreator", fields: [createdById], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -423,6 +430,7 @@ model Client {
   @@index([status])
   @@index([type])
   @@index([weddingDate])
+  @@index([createdById])
 
   @@allow('read', auth().role == founder || auth().role == ops_head || auth().role == cro)
   @@allow('read', assignments?[staffId == auth().id && isActive])
@@ -449,6 +457,8 @@ model Client {
   // every client-ownership grant). userId is nullable, so this lives at model
   // level (field denies don't reliably fire on optional fields).
   @@deny('update', future().userId != userId)
+  // Sales credit cannot be handed to someone else at create time either.
+  @@deny('create', createdById != auth().id)
 }
 
 /// Full onboarding assessment (SRS §6.2). 1:1 with Client.
@@ -1690,5 +1700,37 @@ model AuthSession {
   userAgent   String?
 
   @@index([userId, firstSeenAt])
+  @@deny('all', true)
+}
+
+// ============================================================================
+// Sales daily reports (SALES_REPORTS_DESIGN.md)
+// ============================================================================
+
+/// A CRO's end-of-day sales report: one per CRO per IST work day (4 am
+/// boundary). Server-written by /api/sales-reports; never exposed on the
+/// gateway. Sales and payments are not stored here, they are computed live.
+model SalesReport {
+  id               String    @id @default(uuid())
+  croId            String
+  cro              User      @relation("SalesReports", fields: [croId], references: [id])
+  day              DateTime  @db.Date
+
+  dayOff           Boolean   @default(false)
+  // All four counts are null on a day off.
+  enquiries        Int?
+  leadFollowUps    Int?
+  hotLeads         Int?
+  plannedFollowUps Int?      // "follow-ups planned for tomorrow"
+  challenges       String?
+
+  submittedAt      DateTime  // first submission; on time vs late
+  editedAt         DateTime? // last change before the deadline
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@unique([croId, day])
+  @@index([day])
   @@deny('all', true)
 }

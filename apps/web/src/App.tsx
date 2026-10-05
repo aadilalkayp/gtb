@@ -48,6 +48,12 @@ const StaffPulsePage = lazy(() =>
 const StaffReportPage = lazy(() =>
   import("@/pages/team-pulse/StaffReportPage").then((m) => ({ default: m.StaffReportPage })),
 );
+const SalesReportsPage = lazy(() =>
+  import("@/pages/sales-reports/SalesReportsPage").then((m) => ({ default: m.SalesReportsPage })),
+);
+const DailyReportPage = lazy(() =>
+  import("@/pages/sales-reports/DailyReportPage").then((m) => ({ default: m.DailyReportPage })),
+);
 const ClientProfilePage = lazy(() =>
   import("@/pages/clients/ClientProfilePage").then((m) => ({ default: m.ClientProfilePage })),
 );
@@ -202,6 +208,12 @@ export default function App() {
                 <Route path="/team-pulse" element={<TeamPulsePage />} />
                 <Route path="/team-pulse/activity" element={<PulseActivityPage />} />
                 <Route path="/team-pulse/staff/:id" element={<StaffPulsePage />} />
+              </Route>
+              <Route element={<RequireCapability capability="salesreport.view_all" />}>
+                <Route path="/sales-reports" element={<SalesReportsPage />} />
+              </Route>
+              <Route element={<RequireCapability capability="salesreport.submit" />}>
+                <Route path="/daily-report" element={<DailyReportPage />} />
               </Route>
             </Route>
             {/* Printable report: full page, no staff chrome. */}
