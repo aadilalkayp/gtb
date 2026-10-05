@@ -14,6 +14,8 @@ import {
   Bell,
   Settings,
   Activity,
+  ClipboardCheck,
+  ClipboardPen,
   type LucideIcon,
 } from "lucide-react";
 import { canAny, type StaffRole } from "@gtb/shared";
@@ -104,6 +106,18 @@ export const STAFF_NAV: NavItem[] = [
     to: "/alerts",
     icon: Bell,
     visible: (r) => canAny(r, ["report.view_all"]),
+  },
+  {
+    label: "Daily Report",
+    to: "/daily-report",
+    icon: ClipboardPen,
+    visible: (r) => canAny(r, ["salesreport.submit"]),
+  },
+  {
+    label: "Sales Reports",
+    to: "/sales-reports",
+    icon: ClipboardCheck,
+    visible: (r) => canAny(r, ["salesreport.view_all"]),
   },
   {
     label: "Team Pulse",

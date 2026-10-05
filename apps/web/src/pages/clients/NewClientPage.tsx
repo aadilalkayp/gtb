@@ -6,6 +6,7 @@ import { ArrowLeft, Check, UserPlus } from "lucide-react";
 import { useCreateClient, useFindManyLeadSource, useFindManyClient } from "@gtb/db/hooks";
 import { CLIENT_TYPES, CLIENT_TYPE_LABELS, generateClientCode, type ClientType } from "@gtb/shared";
 import { Button, Field, Input, Select, Textarea } from "@/components/ui";
+import { useAuth } from "@/auth/AuthProvider";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { PageHeader } from "@/components/PageHeader";
 import { InviteClientPanel } from "./InviteClientPanel";
@@ -20,6 +21,7 @@ interface CreatedLead {
 
 export function NewClientPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: leadSources } = useFindManyLeadSource({
     where: { isActive: true },
     orderBy: { name: "asc" },
@@ -72,6 +74,9 @@ export function NewClientPage() {
       city: values.city.trim(),
       leadSourceId: values.leadSourceId || undefined,
       notes: values.notes?.trim() || undefined,
+      // The creator gets the sales credit (SALES_REPORTS_DESIGN.md §6); the
+      // access policy only accepts the caller here.
+      createdById: user?.id,
     };
 
     // FEAT-3: block creating a duplicate of an existing client unless the CRO

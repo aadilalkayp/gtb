@@ -61,6 +61,8 @@ const PATH_MODULES: Array<[string, ActivityModule]> = [
   ["/fitness", "fitness"],
   ["/payments", "payments"],
   ["/cro-tracking", "cro"],
+  ["/daily-report", "cro"],
+  ["/sales-reports", "reports"],
   ["/team-tasks", "tasks"],
   ["/documents", "documents"],
   ["/expenses", "expenses"],
@@ -92,6 +94,7 @@ const MODEL_MODULES: Record<string, ActivityModule> = {
   Payment: "payments",
   Session: "consultations",
   FollowUp: "cro",
+  SalesReport: "cro",
   StylingOperation: "styling",
   Document: "documents",
   Expense: "expenses",
@@ -214,6 +217,13 @@ export function deriveVerb(model: string, op: WriteOp, changes: FieldChanges): s
       return "fitness.plan_edited";
     case "Document":
       if (op === "create") return "document.uploaded";
+      break;
+    case "SalesReport":
+      if (changedTo(changes, "dayOff", true) || (op === "create" && changes.dayOff?.[1] === true)) {
+        return "salesreport.day_off";
+      }
+      if (op === "create") return "salesreport.submitted";
+      if (op === "update") return "salesreport.edited";
       break;
   }
   return `${verbNoun(model)}.${op === "create" ? "created" : op === "delete" ? "deleted" : "updated"}`;
@@ -359,6 +369,9 @@ const CATALOG: Record<string, [string, ActivityTone]> = {
   "fitness.plan_edited": ["Edited {client}'s fitness plan", "routine"],
   "document.uploaded": ["Uploaded a document for {client}", "routine"],
   "settings.changed": ["Changed settings", "correction"],
+  "salesreport.submitted": ["Submitted a daily sales report", "routine"],
+  "salesreport.edited": ["Edited a daily sales report", "correction"],
+  "salesreport.day_off": ["Marked a day off in the daily sales report", "routine"],
   "session.completed": ["Completed a session with {client}", "routine"],
   "session.rescheduled": ["Rescheduled a session with {client}", "correction"],
   "session.cancelled": ["Cancelled a session with {client}", "sensitive"],

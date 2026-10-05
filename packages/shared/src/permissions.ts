@@ -37,12 +37,17 @@ export const CAPABILITIES = [
   "task.assign",
   // Team Pulse staff monitoring: founders only (granted via founder's full set).
   "team.monitor",
+  // CRO daily sales reports: CROs submit, founders read (SALES_REPORTS_DESIGN.md).
+  "salesreport.submit",
+  "salesreport.view_all",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 /** Capabilities granted to each staff role. Clients are handled separately. */
 export const ROLE_CAPABILITIES: Record<StaffRole, Capability[]> = {
-  founder: [...CAPABILITIES],
+  // Everything except submitting a sales report: founders read reports, they
+  // never file one.
+  founder: CAPABILITIES.filter((c) => c !== "salesreport.submit"),
   ops_head: [
     "client.view_all",
     "client.create",
@@ -75,6 +80,7 @@ export const ROLE_CAPABILITIES: Record<StaffRole, Capability[]> = {
     "report.view_own",
     "expense.submit",
     "task.assign",
+    "salesreport.submit",
   ],
   coach: [
     "client.view_assigned",
