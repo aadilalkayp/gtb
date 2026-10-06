@@ -4,6 +4,7 @@
  * the operation with Stella assigned as stylist; the styling consultant then
  * works the checklist (stylists can edit their own operations), and the status
  * advances automatically: upcoming → in_progress (1+ items) → completed (all 5).
+ * Before going out, the stylist can see whether the client has paid in full.
  */
 import { test, expect, sharedClient } from "../../fixtures/test.js";
 import { field, uniq } from "../../helpers/ui.js";
@@ -51,6 +52,31 @@ test("ops head creates a styling operation for the shared client", async ({ asRo
   await expect(card).toContainText("Stylist: Stella Styling");
   await expect(card).toContainText("Upcoming");
   await expect(card).toContainText("0/5");
+});
+
+// Labels from pages/styling/paymentClearance.tsx. The shared client's exact
+// payment state depends on what the payments spec has done, so accept any.
+const PAYMENT_LABEL =
+  /Paid in full|Payment under review|Payment pending|Fee not recorded|No plan/;
+
+test("stylist sees whether the client has paid, on the card and the dashboard", async ({
+  asRole,
+}) => {
+  const client = sharedClient();
+  const page = await asRole("styling_consultant");
+  await page.goto("/styling-operations");
+  const card = page.locator(".card").filter({ hasText: venue });
+  await expect(card).toBeVisible();
+  await expect(card.getByText(PAYMENT_LABEL).first()).toBeVisible();
+
+  await page.goto("/dashboard");
+  await expect(
+    page.getByRole("heading", { name: "My styling sessions · payment status" }),
+  ).toBeVisible();
+  const row = page.getByRole("listitem").filter({ hasText: client.name }).filter({
+    hasText: PAYMENT_LABEL,
+  });
+  await expect(row.first()).toBeVisible();
 });
 
 test("stylist ticks the checklist and the status advances automatically", async ({
