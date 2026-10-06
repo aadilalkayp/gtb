@@ -194,6 +194,42 @@ export function cancelClient(
   return postJson("/api/clients/cancel", { clientId, reason, waiveOutstanding });
 }
 
+export interface LeadDeletionPreview {
+  client: { id: string; name: string; clientCode: string };
+  deletable: boolean;
+  blockerLabels: string[];
+  counts: {
+    assignments: number;
+    followUps: number;
+    tasksUnlinked: number;
+    assessment: number;
+    scans: number;
+    roadmapItems: number;
+    coachThreads: number;
+    outfitChecks: number;
+    lookPreviews: number;
+    messages: number;
+    portalAccount: number;
+  };
+}
+
+/** Founder only: can this lead be deleted, and what would go with it. */
+export async function previewLeadDeletion(clientId: string): Promise<LeadDeletionPreview> {
+  const res = await authedFetch(
+    `${env.apiUrl}/api/clients/delete?clientId=${encodeURIComponent(clientId)}`,
+  );
+  const json = (await res.json().catch(() => null)) as
+    | (LeadDeletionPreview & { error?: string })
+    | null;
+  if (!res.ok || !json) throw new Error(json?.error || `Request failed (${res.status})`);
+  return json;
+}
+
+/** Founder only: permanently delete a fresh lead (no plan, never signed in). */
+export function deleteLead(clientId: string, reason: string): Promise<{ ok: boolean }> {
+  return postJson("/api/clients/delete", { clientId, reason });
+}
+
 /** Complete a client (SYS-3): enforces all-closed sessions + settled payments. */
 export function completeClient(clientId: string): Promise<{ ok: boolean }> {
   return postJson("/api/clients/complete", { clientId });

@@ -449,8 +449,9 @@ model Client {
       (future().leadPhase == plan_selected && (leadPhase == new || leadPhase == contacted || leadPhase == invited || leadPhase == registered)) ||
       (future().leadPhase == payment_submitted && (leadPhase == new || leadPhase == contacted || leadPhase == invited || leadPhase == registered || leadPhase == plan_selected))
     ))
-  // DATA-1: no hard deletes — client data is retained for reporting (SRS §24.3);
-  // "removal" is the cancellation cascade (clients/cancel).
+  // No gateway deletes. Clients further along are closed with the
+  // cancellation cascade (clients/cancel); a fresh lead (no plan, never signed
+  // in) can be permanently deleted by the founder via clients/delete.
   // The auth link is server-managed (clients/invite + auth resolution): no
   // gateway caller may relink a client record to a different User (the gateway
   // analogue of SEC-8 — an assigned CRO could otherwise hand a staff account

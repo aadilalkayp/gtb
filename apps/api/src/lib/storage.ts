@@ -69,6 +69,13 @@ export async function deleteScanObject(path: string): Promise<void> {
   if (error) log.warn("scan photo delete failed", { path, reason: error.message });
 }
 
+/** Best-effort bulk delete of scan-bucket objects (lead deletion). */
+export async function deleteScanObjects(paths: string[]): Promise<void> {
+  if (!paths.length) return;
+  const { error } = await supabaseAdmin.storage.from(SCAN_BUCKET).remove(paths);
+  if (error) log.warn("scan photo delete failed", { paths, reason: error.message });
+}
+
 /** Read a scan-bucket object back (e.g. the front selfie as context for
  *  outfit analysis or look generation). */
 export async function downloadScanObject(path: string): Promise<Buffer> {

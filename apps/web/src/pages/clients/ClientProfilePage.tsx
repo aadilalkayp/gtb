@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   AlertTriangle,
@@ -12,6 +12,7 @@ import {
   PlayCircle,
   XCircle,
   CheckCircle2,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { useFindUniqueClient, useUpdateClient } from "@gtb/db/hooks";
@@ -31,7 +32,14 @@ import {
   type ServiceType,
 } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
-import { cancelClient, completeClient, updateWeddingDate } from "@/lib/api";
+import {
+  cancelClient,
+  completeClient,
+  deleteLead,
+  previewLeadDeletion,
+  updateWeddingDate,
+  type LeadDeletionPreview,
+} from "@/lib/api";
 import {
   deriveAtRisk,
   averageRating,
@@ -83,6 +91,8 @@ export function ClientProfilePage() {
   const [editingPayment, setEditingPayment] = useState<EditablePayment | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showWeddingEdit, setShowWeddingEdit] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const navigate = useNavigate();
 
   // Team Pulse: opening a client profile is a key view (server dedupes repeats).
   useEffect(() => {
@@ -256,6 +266,11 @@ export function ClientProfilePage() {
                 client.status === "on_hold") && (
                 <Button size="sm" variant="ghost" onClick={() => setStatusAction("cancel")}>
                   <XCircle className="h-4 w-4" /> Cancel
+                </Button>
+              )}
+              {role === "founder" && client.status === "lead" && (
+                <Button size="sm" variant="ghost" onClick={() => setShowDelete(true)}>
+                  <Trash2 className="h-4 w-4" /> Delete lead
                 </Button>
               )}
             </div>
@@ -670,6 +685,15 @@ export function ClientProfilePage() {
         />
       )}
 
+      {showDelete && (
+        <DeleteLeadModal
+          clientId={client.id}
+          clientName={client.name}
+          onClose={() => setShowDelete(false)}
+          onDeleted={() => navigate("/clients", { replace: true })}
+        />
+      )}
+
       {showWeddingEdit && (
         <WeddingDateModal
           clientName={client.name}
@@ -848,6 +872,125 @@ function StatusChangeModal({
           <Field label="Reason" required>
             <Textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} />
           </Field>
+        )}
+        {error && <p className="text-sm text-danger">{error}</p>}
+      </div>
+    </Modal>
+  );
+}
+
+/** Founder only: permanently delete a fresh lead. The server decides
+ *  eligibility (no plan, no delivered work, never signed in); a lead that
+ *  doesn't qualify shows why instead of the reason field. */
+function DeleteLeadModal({
+  clientId,
+  clientName,
+  onClose,
+  onDeleted,
+}: {
+  clientId: string;
+  clientName: string;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [preview, setPreview] = useState<LeadDeletionPreview>();
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  useEffect(() => {
+    previewLeadDeletion(clientId)
+      .then(setPreview)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Could not check this lead"));
+  }, [clientId]);
+
+  async function confirm() {
+    if (!reason.trim()) {
+      setError("Please give a reason.");
+      return;
+    }
+    setBusy(true);
+    setError(undefined);
+    try {
+      await deleteLead(clientId, reason.trim());
+      onDeleted();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not delete this lead");
+      setBusy(false);
+    }
+  }
+
+  const c = preview?.counts;
+  const removed = c
+    ? [
+        [c.assignments, "staff assignment", "staff assignments"],
+        [c.followUps, "follow-up", "follow-ups"],
+        [c.assessment, "assessment", "assessments"],
+        [c.scans, "readiness scan", "readiness scans"],
+        [c.outfitChecks, "outfit check", "outfit checks"],
+        [c.lookPreviews, "look preview", "look previews"],
+        [c.coachThreads, "coach chat", "coach chats"],
+        [c.portalAccount, "unused portal invite", "unused portal invites"],
+      ]
+        .filter(([n]) => (n as number) > 0)
+        .map(([n, one, many]) => `${n} ${n === 1 ? one : many}`)
+    : [];
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Delete ${clientName}`}
+      size="sm"
+      footer={
+        <>
+          <Button variant="outline" onClick={onClose}>
+            Back
+          </Button>
+          {preview?.deletable && (
+            <Button variant="danger" onClick={confirm} loading={busy}>
+              Delete permanently
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="space-y-4">
+        {!preview && !error && <Spinner />}
+        {preview && !preview.deletable && (
+          <div className="space-y-2 text-sm">
+            <p className="text-muted-foreground">This lead can't be deleted:</p>
+            <ul className="list-disc space-y-1 pl-5">
+              {preview.blockerLabels.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {preview?.deletable && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              This removes the lead for good. It can't be undone. The deletion is recorded in the
+              activity log.
+            </p>
+            {removed.length > 0 && (
+              <p className="text-sm text-muted-foreground">Also removed: {removed.join(", ")}.</p>
+            )}
+            {c && c.tasksUnlinked > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {c.tasksUnlinked === 1 ? "1 task stays" : `${c.tasksUnlinked} tasks stay`}, no
+                longer linked to this lead.
+              </p>
+            )}
+            <Field label="Reason" required>
+              <Textarea
+                rows={3}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                placeholder="Duplicate, test entry, spam…"
+              />
+            </Field>
+          </>
         )}
         {error && <p className="text-sm text-danger">{error}</p>}
       </div>

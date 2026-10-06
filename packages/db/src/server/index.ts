@@ -20,6 +20,15 @@ export { enrollClientInPlan, changeEnrolledPlan, EnrollmentConflictError } from 
 export { logActivity, logActivityStandalone } from "./activityLog.js";
 export { runDailyJobs } from "./cronJobs.js";
 export { cancelClientPlan } from "./clientCancellation.js";
+export {
+  previewLeadDeletion,
+  deleteLead,
+  LeadDeletionError,
+  DELETE_BLOCKER_LABELS,
+  type DeleteBlocker,
+  type LeadDeletionCounts,
+  type LeadDeletionPreview,
+} from "./clientDeletion.js";
 export { rescheduleSession } from "./sessionReschedule.js";
 export { cancelSession } from "./sessionCancellation.js";
 export { rejectPayment } from "./paymentRejection.js";
