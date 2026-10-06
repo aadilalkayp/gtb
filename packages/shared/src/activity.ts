@@ -358,6 +358,7 @@ const CATALOG: Record<string, [string, ActivityTone]> = {
   "client.plan_changed": ["Changed {client}'s plan", "correction"],
   "client.cancelled": ["Cancelled {client}", "sensitive"],
   "client.completed": ["Completed {client}'s program", "routine"],
+  "client.deleted": ["Deleted a lead", "sensitive"],
   "client.wedding_date_changed": ["Changed {client}'s big day date", "correction"],
   "expense.submitted": ["Submitted an expense", "routine"],
   "expense.approved": ["Approved an expense", "routine"],
@@ -469,6 +470,11 @@ export function describeActivity(e: ActivityDescribeInput): ActivityDescription 
   }
   if (typeof changes.reason === "string" && changes.reason) details.push(`Reason: "${changes.reason}"`);
   if (typeof changes.rejectionReason === "string") details.push(`Reason: "${changes.rejectionReason}"`);
+
+  // The client row is gone, so the name lives only in the event's snapshot.
+  if (verb === "client.deleted" && typeof changes.name === "string") {
+    details.unshift(typeof changes.clientCode === "string" ? `${changes.name} (${changes.clientCode})` : changes.name);
+  }
 
   if (verb === "report.exported") {
     if (typeof meta.report === "string") details.push(meta.report);
