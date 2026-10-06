@@ -25,6 +25,11 @@ import {
   Textarea,
 } from "@/components/ui";
 import { cn } from "@/lib/utils";
+import {
+  PaymentClearanceBadge,
+  paymentClearanceHint,
+  useStylingPaymentStatus,
+} from "./paymentClearance";
 
 type Filter = "all" | "upcoming" | "in_progress" | "completed";
 
@@ -67,6 +72,7 @@ export function StylingOperationsPage() {
   });
 
   const updateOp = useUpdateStylingOperation();
+  const { data: paymentStatus } = useStylingPaymentStatus();
 
   async function toggleItem(
     op: { id: string } & Record<string, unknown>,
@@ -135,6 +141,7 @@ export function StylingOperationsPage() {
               const checked = CHECKLIST.filter((c) => op[c.key]).length;
               const canEdit = isAdmin || op.stylistId === user?.id;
               const dl = op.stylingDate ? daysUntil(op.stylingDate) : null;
+              const payment = paymentStatus?.[op.client.id];
               return (
                 <div key={op.id} className="card p-4">
                   <div className="flex flex-wrap items-start justify-between gap-2">
@@ -168,12 +175,28 @@ export function StylingOperationsPage() {
                         {op.stylist && <span>Stylist: {op.stylist.name}</span>}
                       </p>
                     </div>
-                    {op.travelRequired && (
-                      <Badge tone="warning">
-                        <Plane className="mr-1 h-3 w-3" /> Travel
-                      </Badge>
-                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <PaymentClearanceBadge status={payment} />
+                      {op.travelRequired && (
+                        <Badge tone="warning">
+                          <Plane className="mr-1 h-3 w-3" /> Travel
+                        </Badge>
+                      )}
+                    </div>
                   </div>
+
+                  {payment && payment !== "paid_in_full" && op.status !== "completed" && (
+                    <p
+                      className={cn(
+                        "mt-2 rounded-lg px-3 py-1.5 text-xs",
+                        payment === "balance_due"
+                          ? "bg-danger/5 text-danger"
+                          : "bg-muted/60 text-muted-foreground",
+                      )}
+                    >
+                      {paymentClearanceHint(payment)}
+                    </p>
+                  )}
 
                   {op.travelRequired && op.travelDetails && (
                     <p className="mt-2 rounded-lg bg-muted/60 px-3 py-1.5 text-xs text-muted-foreground">

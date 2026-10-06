@@ -36,6 +36,7 @@ import { QueryErrorState } from "@/components/QueryErrorState";
 import { EmptyState } from "@/components/EmptyState";
 import { DailyReportCard } from "@/pages/sales-reports/DailyReportCard";
 import { useMySalesReports } from "@/pages/sales-reports/salesApi";
+import { PaymentClearanceBadge, useStylingPaymentStatus } from "@/pages/styling/paymentClearance";
 import { useDashboardData, type DashboardMetrics } from "./useDashboardData";
 import {
   SectionCard,
@@ -124,9 +125,15 @@ function RoleView({
       return <CoachView m={metrics} raw={raw} userId={userId} />;
     case "media":
       return <MediaView raw={raw} m={metrics} />;
+    case "styling_consultant":
+      return (
+        <>
+          <ConsultantView raw={raw} userId={userId} />
+          <StylingClearanceCard raw={raw} userId={userId} />
+        </>
+      );
     case "skincare_consultant":
     case "fitness_trainer":
-    case "styling_consultant":
       return <ConsultantView raw={raw} userId={userId} />;
     default:
       return <OpsView m={metrics} />;
@@ -587,6 +594,74 @@ function ConsultantView({
         </SectionCard>
       </div>
     </>
+  );
+}
+
+// ---- Stylist: payment clearance for offline styling sessions ---------------
+
+function StylingClearanceCard({
+  raw,
+  userId,
+}: {
+  raw: ReturnType<typeof useDashboardData>["raw"];
+  userId?: string;
+}) {
+  const { data: statuses, isLoading, isError } = useStylingPaymentStatus();
+  const ops = raw.stylingOps
+    .filter((o) => o.stylistId === userId && o.status !== "completed")
+    // Dated sessions first (soonest on top), undated ones last.
+    .sort((a, b) => {
+      if (!a.stylingDate) return 1;
+      if (!b.stylingDate) return -1;
+      return asDate(a.stylingDate).getTime() - asDate(b.stylingDate).getTime();
+    })
+    .slice(0, 10);
+
+  return (
+    <SectionCard
+      title="My styling sessions · payment status"
+      icon={Scissors}
+      action={
+        <Link to="/styling-operations" className="text-xs font-medium text-primary hover:underline">
+          View all
+        </Link>
+      }
+    >
+      {ops.length ? (
+        <ul className="space-y-2">
+          {ops.map((o) => {
+            const status = statuses?.[o.client.id];
+            return (
+              <li key={o.id}>
+                <Link
+                  to="/styling-operations"
+                  className="flex items-center gap-3 rounded-lg border border-border p-2.5 transition-colors hover:border-border-strong hover:bg-muted/50"
+                >
+                  <span className="h-9 w-1 shrink-0 rounded-full bg-bride" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{o.client.name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {o.stylingDate ? formatDate(o.stylingDate) : "Date TBC"}
+                    </span>
+                  </span>
+                  {isLoading ? null : isError ? (
+                    <span className="shrink-0 text-xs text-muted-foreground">Status unavailable</span>
+                  ) : (
+                    <PaymentClearanceBadge status={status} className="shrink-0" />
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <EmptyState
+          icon={Scissors}
+          title="No open styling sessions"
+          hint="Styling sessions assigned to you will show here with the client's payment status."
+        />
+      )}
+    </SectionCard>
   );
 }
 
