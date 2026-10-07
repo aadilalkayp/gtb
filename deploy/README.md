@@ -21,6 +21,7 @@ Supabase setup; this directory is the automation that replaces its hands-on step
 | DB (Supabase) | `prisma migrate deploy` in CI, before the API rolls |
 | VPS | Provisioned + hardened by [`ansible/site.yml`](./ansible/site.yml) |
 | Daily cron | systemd timer on the VPS → `/api/cron/daily` (01:30 IST) |
+| Hourly cron | systemd timer on the VPS → `/api/cron/hourly` (unread chat emails after 12h) |
 
 ## One-time setup
 
@@ -83,7 +84,7 @@ VPS into GHCR with `ghcr_token`) or make the package public and drop the token.
 - **Rotate secrets / change env**: edit `group_vars/gtb.yml`, re-run the playbook —
   it rewrites `/opt/gtb/gtb-api.env` and restarts the API.
 - **Logs**: `docker logs -f gtb-api` · cron: `journalctl -u gtb-cron.service`
-- **Cron check**: `systemctl list-timers gtb-cron.timer`
+- **Cron check**: `systemctl list-timers gtb-cron.timer gtb-cron-hourly.timer`
 
 ## Notes
 

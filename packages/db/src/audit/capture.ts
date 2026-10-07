@@ -37,6 +37,7 @@ const EXCLUDED_MODELS = new Set([
   "CoachMessage",
   "LookPreview",
   "OutfitCheck",
+  "ConversationRead",
 ]);
 
 const CAPTURED_OPS = new Set([

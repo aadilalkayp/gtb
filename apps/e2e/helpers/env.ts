@@ -27,6 +27,9 @@ export const E2E = {
   jwtSecret: "super-secret-jwt-token-with-at-least-32-characters-long",
 
   password: "gtb-e2e-password",
+
+  /** Shared secret for /api/cron/* (injected into the API below). */
+  cronSecret: "gtb-e2e-cron-secret",
 } as const;
 
 /** Env injected into the api (Next.js) dev server. */
@@ -45,6 +48,7 @@ export function apiEnv(): Record<string, string> {
     // Mailgun is intentionally unset: outbound email must never fire from a
     // test run. The API treats missing SMTP config as "log instead of send".
     MAILGUN_SMTP_HOST: "",
+    CRON_SECRET: E2E.cronSecret,
     NODE_ENV: "development",
   };
 }

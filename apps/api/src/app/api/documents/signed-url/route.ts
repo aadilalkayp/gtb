@@ -62,8 +62,11 @@ async function handlePost(req: NextRequest): Promise<Response> {
   const financialRestricted =
     (doc.type === "payment_proof" && authUser.role !== "cro") ||
     doc.type === "expense_receipt";
-  const visibleToOwner = isOwner && doc.type !== "consultation_notes";
-  const visibleToStaff = isAssigned && !financialRestricted;
+  // Styling files and chat attachments have their own signing routes, which
+  // apply the draft / conversation rules (mirrors the Document read policy).
+  const featureOnly = doc.type === "styling_photo" || doc.type === "styling_image" || doc.type === "chat_attachment";
+  const visibleToOwner = isOwner && doc.type !== "consultation_notes" && !featureOnly;
+  const visibleToStaff = isAssigned && !financialRestricted && doc.type !== "chat_attachment";
   if (!isAdmin && !visibleToOwner && !visibleToStaff) {
     return json(req, { error: "Forbidden" }, 403);
   }

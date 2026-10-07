@@ -69,6 +69,9 @@ const PaymentsPage = lazy(() =>
 const AssignmentsPage = lazy(() =>
   import("@/pages/assignments/AssignmentsPage").then((m) => ({ default: m.AssignmentsPage })),
 );
+const MessagesPage = lazy(() =>
+  import("@/pages/messages/MessagesPage").then((m) => ({ default: m.MessagesPage })),
+);
 const StylingOperationsPage = lazy(() =>
   import("@/pages/styling/StylingOperationsPage").then((m) => ({
     default: m.StylingOperationsPage,
@@ -132,6 +135,9 @@ const PortalScan = lazy(() =>
 const PortalFitness = lazy(() =>
   import("@/pages/portal/PortalFitness").then((m) => ({ default: m.PortalFitness })),
 );
+const PortalStyling = lazy(() =>
+  import("@/pages/portal/PortalStyling").then((m) => ({ default: m.PortalStyling })),
+);
 const ScanPage = lazy(() => import("@/pages/scan/ScanPage").then((m) => ({ default: m.ScanPage })));
 const ScanReportPage = lazy(() =>
   import("@/pages/scan/ScanReportPage").then((m) => ({ default: m.ScanReportPage })),
@@ -182,6 +188,7 @@ export default function App() {
               <Route path="/consultations" element={<ConsultationsPage />} />
               <Route element={<RequireCapability capability="styling.manage" />}>
                 <Route path="/styling-operations" element={<StylingOperationsPage />} />
+                <Route path="/messages" element={<MessagesPage />} />
               </Route>
               <Route element={<RequireCapability capability="fitness.manage" />}>
                 <Route path="/fitness" element={<FitnessOperationsPage />} />
@@ -233,6 +240,7 @@ export default function App() {
                 <Route path="/portal/sessions" element={<PortalSessions />} />
                 <Route path="/portal/scan" element={<PortalScan />} />
                 <Route path="/portal/fitness" element={<PortalFitness />} />
+                <Route path="/portal/styling" element={<PortalStyling />} />
                 <Route path="/portal/payments" element={<PortalPayments />} />
                 <Route path="/portal/documents" element={<PortalDocuments />} />
                 <Route path="/portal/profile" element={<PortalProfile />} />

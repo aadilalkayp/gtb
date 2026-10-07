@@ -30,6 +30,51 @@ export async function createSignedUrl(path: string, expiresInSeconds = 3600): Pr
   return data.signedUrl;
 }
 
+/**
+ * Sign many documents-bucket paths in one round trip. Paths that fail to sign
+ * are left out of the result (callers render a placeholder). `download`
+ * makes the browser save the file under that name instead of showing it.
+ */
+export async function createSignedUrls(
+  paths: string[],
+  expiresInSeconds = 3600,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const unique = [...new Set(paths)].filter(Boolean);
+  if (!unique.length) return out;
+  const { data, error } = await supabaseAdmin.storage
+    .from(DOCUMENTS_BUCKET)
+    .createSignedUrls(unique, expiresInSeconds);
+  if (error) {
+    log.warn("bulk sign failed", { count: unique.length, reason: error.message });
+    return out;
+  }
+  for (const row of data ?? []) {
+    if (row.path && row.signedUrl && !row.error) out.set(row.path, row.signedUrl);
+  }
+  return out;
+}
+
+/** Signed URL that downloads the object under `fileName`. */
+export async function createDownloadUrl(
+  path: string,
+  fileName: string,
+  expiresInSeconds = 600,
+): Promise<string> {
+  const { data, error } = await supabaseAdmin.storage
+    .from(DOCUMENTS_BUCKET)
+    .createSignedUrl(path, expiresInSeconds, { download: fileName });
+  if (error || !data?.signedUrl) throw new Error(error?.message ?? "Could not sign document URL");
+  return data.signedUrl;
+}
+
+/** Read a documents-bucket object back (PDF images, ZIP downloads). */
+export async function downloadObject(path: string): Promise<Buffer> {
+  const { data, error } = await supabaseAdmin.storage.from(DOCUMENTS_BUCKET).download(path);
+  if (error || !data) throw new Error(error?.message ?? "Could not read document");
+  return Buffer.from(await data.arrayBuffer());
+}
+
 /** Best-effort delete of documents-bucket objects (e.g. a replaced diet plan). */
 export async function deleteObjects(paths: string[]): Promise<void> {
   if (!paths.length) return;

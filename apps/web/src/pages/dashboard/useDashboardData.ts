@@ -4,6 +4,8 @@ import {
   useFindManySession,
   useFindManyFollowUp,
   useFindManyStylingOperation,
+  useFindManyStylingBlueprint,
+  useFindManyConversation,
   useFindManyTask,
   useFindManyContentItem,
   useFindManyUser,
@@ -214,6 +216,18 @@ export function useDashboardData() {
     orderBy: { stylingDate: "asc" },
   });
 
+  // Blueprints waiting on the stylist, for the late-Blueprint alert.
+  const blueprintsQ = useFindManyStylingBlueprint({
+    where: { status: { in: ["under_review", "retake_requested"] }, client: { status: { notIn: ["completed", "cancelled"] } } },
+    select: { id: true, dueAt: true, status: true, client: { select: { id: true, name: true } } },
+  });
+
+  // Conversations where the client spoke last (reply-overdue alert).
+  const conversationsQ = useFindManyConversation({
+    where: { lastSenderIsClient: true, client: { status: { notIn: ["completed", "cancelled"] } } },
+    select: { id: true, lastMessageAt: true, lastSenderIsClient: true, client: { select: { id: true, name: true } } },
+  });
+
   const tasksQ = useFindManyTask({ orderBy: { dueDate: "asc" } });
   const contentQ = useFindManyContentItem();
   const teamQ = useFindManyUser({
@@ -227,6 +241,11 @@ export function useDashboardData() {
   const pendingUploadRows = (pendingUploadsQ.data ?? []) as unknown as PendingUploadRow[];
   const followUps = (followUpsQ.data ?? []) as unknown as FollowUpRow[];
   const stylingOps = (stylingQ.data ?? []) as unknown as StylingRow[];
+  const conversations = useMemo(() => conversationsQ.data ?? [], [conversationsQ.data]);
+  const blueprints = useMemo(
+    () => (blueprintsQ.data ?? []).map((b) => ({ id: b.id, dueAt: b.dueAt, status: b.status, client: b.client })),
+    [blueprintsQ.data],
+  );
   const tasks = (tasksQ.data ?? []) as unknown as TaskRow[];
   const content = (contentQ.data ?? []) as unknown as ContentRow[];
   const team = (teamQ.data ?? []) as unknown as {
@@ -512,6 +531,8 @@ export function useDashboardData() {
           status: o.status,
           client: o.client,
         })),
+        blueprints,
+        conversations,
         followUps: followUps.map((f) => ({
           id: f.id,
           dueDate: f.dueDate,
@@ -550,7 +571,7 @@ export function useDashboardData() {
       tasksPending: tasks.filter((t) => t.status === "pending" || t.status === "in_progress")
         .length,
     };
-  }, [clients, sessions, pendingUploadRows, followUps, stylingOps, tasks, content, team]);
+  }, [clients, sessions, pendingUploadRows, followUps, stylingOps, blueprints, conversations, tasks, content, team]);
 
   return {
     isLoading,

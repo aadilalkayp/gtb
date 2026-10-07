@@ -1,5 +1,8 @@
 import PDFDocument from "pdfkit";
-import { formatINR } from "@gtb/shared";
+import { formatINR as formatRupees } from "@gtb/shared";
+
+/** Helvetica (pdfkit standard font) has no rupee glyph; spell it out. */
+const formatINR = (n: number) => formatRupees(n).replace(/₹\s?/g, "Rs ");
 import { uploadObject } from "@/lib/storage";
 import { logger } from "@/lib/logger";
 

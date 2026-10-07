@@ -26,6 +26,8 @@ const ALERT_ICON: Record<AlertItem["kind"], LucideIcon> = {
   price_not_set: Wallet,
   consultation_due_today: CalendarClock,
   styling_tomorrow: Scissors,
+  blueprint_late: Scissors,
+  chat_waiting: Clock,
   pending_followup: PhoneCall,
   client_at_risk: ShieldAlert,
   no_activity: Clock,

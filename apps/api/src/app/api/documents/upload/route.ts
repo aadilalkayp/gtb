@@ -6,36 +6,10 @@ import { deleteObjects, uploadObject } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 import { withRequestLog } from "@/lib/handler";
 import { requestLog } from "@/lib/logger";
+import { DOCUMENT_MIME, MAX_UPLOAD_BYTES, slugifyName, sniffMime } from "@/lib/uploads";
 
 export const runtime = "nodejs";
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
-
-const MAX_BYTES = 10 * 1024 * 1024; // 10 MB (SRS §16.2)
-
-// SRS §16.2: supported formats are JPEG, PNG, PDF, DOCX. (webp/heic removed —
-// they were not in the SRS list.)
-const ALLOWED_MIME = new Set([
-  "image/jpeg",
-  "image/png",
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-]);
-
-// Magic-byte sniffing: `file.type` is client-controlled and must not be
-// trusted. The declared MIME must match the actual file content.
-const MAGIC_BYTES: { mime: string; signature: number[] }[] = [
-  { mime: "image/jpeg", signature: [0xff, 0xd8, 0xff] },
-  { mime: "image/png", signature: [0x89, 0x50, 0x4e, 0x47] },
-  { mime: "application/pdf", signature: [0x25, 0x50, 0x44, 0x46] },
-  { mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", signature: [0x50, 0x4b, 0x03, 0x04] }, // DOCX (zip container)
-];
-
-function sniffMime(buffer: Buffer): string | undefined {
-  for (const { mime, signature } of MAGIC_BYTES) {
-    if (signature.every((b, i) => buffer[i] === b)) return mime;
-  }
-  return undefined;
-}
 
 // Who may upload each document type (SRS §16.1 "Uploaded By", applied to the
 // gateway + upload route). "client" = the owning client; "client_or_staff" =
@@ -56,27 +30,15 @@ const UPLOADER_BY_TYPE: Record<DocumentType, "client" | "client_or_staff" | "sta
   // Diet plan PDF, uploaded as part of creating a fitness plan: same people who
   // may create the plan (admins + the client's assigned fitness trainer).
   nutrition_plan: new Set(["fitness_trainer"]),
+  // Styling photos and stylist edits have their own routes (/api/styling/*),
+  // which also create the Blueprint rows that reference them.
+  styling_photo: "system",
+  styling_image: "system",
+  chat_attachment: "system", // sent with a message (/api/messages)
 };
 
 function json(req: NextRequest, body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: corsHeaders(req) });
-}
-
-function slugifyName(name: string): string {
-  const dot = name.lastIndexOf(".");
-  const base = (dot > 0 ? name.slice(0, dot) : name)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "")
-    .slice(0, 40);
-  const ext =
-    dot > 0
-      ? name
-          .slice(dot + 1)
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, "")
-      : "";
-  return ext ? `${base || "file"}.${ext}` : base || "file";
 }
 
 /**
@@ -115,7 +77,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
   if (!file || typeof file === "string" || typeof file.arrayBuffer !== "function") {
     return json(req, { error: "file is required" }, 400);
   }
-  if (file.size > MAX_BYTES) {
+  if (file.size > MAX_UPLOAD_BYTES) {
     return json(req, { error: "File is larger than 10 MB" }, 413);
   }
 
@@ -187,7 +149,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
 
   // SEC-12: verify declared MIME against the content's magic bytes.
   const declaredType = file.type || "application/octet-stream";
-  if (!ALLOWED_MIME.has(declaredType)) {
+  if (!DOCUMENT_MIME.has(declaredType)) {
     return json(req, { error: "Only JPEG, PNG, PDF and DOCX files are allowed" }, 415);
   }
   const buffer = Buffer.from(await file.arrayBuffer());

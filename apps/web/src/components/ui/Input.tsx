@@ -53,6 +53,7 @@ export function Field({
   error,
   hint,
   required,
+  className,
   children,
 }: {
   label: string;
@@ -60,10 +61,11 @@ export function Field({
   error?: string;
   hint?: string;
   required?: boolean;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div>
+    <div className={className}>
       <Label htmlFor={htmlFor}>
         {label}
         {required && <span className="text-danger"> *</span>}

@@ -29,6 +29,7 @@ const GATED_ROUTES: GatedRoute[] = [
   { path: "/reports", heading: "Reports", capability: "report.view_all" },
   { path: "/alerts", heading: "Alerts", capability: "report.view_all" },
   { path: "/styling-operations", heading: "Styling Operations", capability: "styling.manage" },
+  { path: "/messages", heading: "Messages", capability: "styling.manage" },
   { path: "/fitness", heading: "Fitness Operations", capability: "fitness.manage" },
 ];
 

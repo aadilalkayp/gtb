@@ -3,12 +3,15 @@ import { STAFF_ROLE_LABELS, type StaffRole } from "@gtb/shared";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { Avatar } from "@/components/ui/Avatar";
+import { useChatInbox } from "@/lib/chatApi";
 import { STAFF_NAV } from "./navItems";
 
 export function Sidebar() {
   const { user, role } = useAuth();
   const staffRole = (role && role !== "client" ? role : "founder") as StaffRole;
   const items = STAFF_NAV.filter((i) => i.visible(staffRole));
+  const { data: inbox } = useChatInbox(items.some((i) => i.badge === "chat"));
+  const unread = inbox?.totalUnread ?? 0;
 
   return (
     <aside className="flex h-screen w-60 flex-col bg-sidebar text-sidebar-foreground">
@@ -40,6 +43,14 @@ export function Sidebar() {
           >
             <item.icon className="h-[18px] w-[18px]" />
             {item.label}
+            {item.badge === "chat" && unread > 0 && (
+              <span
+                className="ml-auto rounded-full bg-groom px-1.5 text-[11px] font-bold text-white"
+                aria-label={`${unread} unread`}
+              >
+                {unread}
+              </span>
+            )}
           </NavLink>
         ))}
       </nav>

@@ -103,3 +103,68 @@ ${registrationUrl}
 - GTB OS`;
   return { to, subject, html, text };
 }
+
+export function blueprintReadyEmail(args: {
+  to: string;
+  clientName: string;
+  stylistName: string | null;
+  portalUrl: string;
+  isUpdate: boolean;
+}): SendMailInput {
+  const { to, clientName, stylistName, portalUrl, isUpdate } = args;
+  const who = stylistName ?? "Your stylist";
+  const subject = isUpdate
+    ? "Your Styling Blueprint has been updated"
+    : "Your Styling Blueprint is ready";
+  const lead = isUpdate
+    ? `${who} has updated your Styling Blueprint.`
+    : `${who} has finished your Styling Blueprint: your looks, hair and beard brief, colours and shopping list.`;
+  const html = layout(
+    subject,
+    `
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.6">Hi ${esc(clientName)},</p>
+    <p style="margin:0 0 20px;font-size:14px;line-height:1.6">${esc(lead)} You can view it in your portal and download it as a PDF.</p>
+    <p style="margin:0 0 22px">${button(portalUrl, "View my Blueprint")}</p>
+  `,
+  );
+  const text = `Hi ${clientName},
+
+${lead} You can view it in your portal and download it as a PDF:
+
+${portalUrl}
+
+- Groom To Be`;
+  return { to, subject, html, text };
+}
+
+export function chatUnreadEmail(args: {
+  to: string;
+  clientName: string;
+  staffName: string;
+  count: number;
+  preview: string;
+  portalUrl: string;
+}): SendMailInput {
+  const { to, clientName, staffName, count, preview, portalUrl } = args;
+  const subject =
+    count === 1 ? `${staffName} sent you a message` : `${staffName} sent you ${count} messages`;
+  const html = layout(
+    subject,
+    `
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.6">Hi ${esc(clientName)},</p>
+    <p style="margin:0 0 14px;font-size:14px;line-height:1.6">You have ${count === 1 ? "an unread message" : `${count} unread messages`} from ${esc(staffName)} in your portal:</p>
+    <p style="margin:0 0 20px;font-size:14px;line-height:1.6;color:#44403c;border-left:3px solid #d6d3d1;padding-left:12px">${esc(preview)}</p>
+    <p style="margin:0 0 22px">${button(portalUrl, "Read and reply")}</p>
+  `,
+  );
+  const text = `Hi ${clientName},
+
+You have ${count === 1 ? "an unread message" : `${count} unread messages`} from ${staffName}:
+
+"${preview}"
+
+Read and reply in your portal: ${portalUrl}
+
+- Groom To Be`;
+  return { to, subject, html, text };
+}

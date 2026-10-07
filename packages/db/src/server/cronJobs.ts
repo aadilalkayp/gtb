@@ -191,7 +191,7 @@ export async function runDailyJobs(): Promise<DailyJobReport> {
       type: "styling_upcoming",
       title: "Styling operation soon",
       body: `Styling for ${o.client.name} is within 7 days.`,
-      linkPath: `/styling?op=${o.id}`,
+      linkPath: "/styling-operations?tab=days",
     });
     report.stylingRemindersSent += sent;
   }

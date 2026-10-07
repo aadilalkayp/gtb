@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   AlertTriangle,
@@ -20,7 +20,7 @@ import {
   CLIENT_TYPE_LABELS,
   STAFF_ROLE_LABELS,
   SERVICE_TYPE_LABELS,
-  DOCUMENT_TYPES,
+  MANUAL_UPLOAD_DOCUMENT_TYPES,
   LEAD_PHASE_LABELS,
   formatINR,
   formatDate,
@@ -73,7 +73,14 @@ import { EditPaymentModal, type EditablePayment } from "../payments/EditPaymentM
 import { PaymentMarkers } from "../payments/PaymentMarkers";
 import { sendActivityEvent } from "@/lib/heartbeat";
 
-type TabId = "overview" | "sessions" | "payments" | "documents" | "assessment" | "scans" | "history";
+type TabId = "overview" | "sessions" | "payments" | "documents" | "assessment" | "scans" | "styling" | "history";
+
+const TAB_IDS: TabId[] = ["overview", "sessions", "payments", "documents", "assessment", "scans", "styling", "history"];
+
+// Styling Blueprint editor: its own chunk, loaded only when the tab opens.
+const BlueprintTab = lazy(() =>
+  import("@/pages/styling/blueprint/BlueprintTab").then((m) => ({ default: m.BlueprintTab })),
+);
 
 // Team Pulse client history (founders only): its own chunk, never loaded for staff.
 const ClientHistory = lazy(() =>
@@ -85,7 +92,14 @@ export function ClientProfilePage() {
   const { role } = useAuth();
   const isAdmin = role === "founder" || role === "ops_head";
   const canEditTerms = isAdmin || role === "cro";
-  const [tab, setTab] = useState<TabId>("overview");
+  // ?tab=styling deep links (notifications) open a tab directly.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab") as TabId | null;
+  const [tab, setTabState] = useState<TabId>(initialTab && TAB_IDS.includes(initialTab) ? initialTab : "overview");
+  const setTab = (next: TabId) => {
+    setTabState(next);
+    setSearchParams(next === "overview" ? {} : { tab: next }, { replace: true });
+  };
   const [statusAction, setStatusAction] = useState<"hold" | "cancel" | "complete" | null>(null);
   const [editingTerms, setEditingTerms] = useState(false);
   const [editingPayment, setEditingPayment] = useState<EditablePayment | null>(null);
@@ -123,8 +137,13 @@ export function ClientProfilePage() {
           where: { isActive: true },
           include: { staff: { select: { id: true, name: true, avatarUrl: true } } },
         },
-        documents: { orderBy: { createdAt: "desc" } },
+        // Styling photos and stylist edits live on the Styling tab.
+        documents: {
+          where: { type: { notIn: ["styling_photo", "styling_image", "chat_attachment"] } },
+          orderBy: { createdAt: "desc" },
+        },
         assessment: true,
+        stylingBlueprint: { select: { id: true } },
       },
     },
     { enabled: Boolean(id) },
@@ -171,6 +190,7 @@ export function ClientProfilePage() {
     { id: "documents", label: "Documents", count: client.documents.length },
     { id: "assessment", label: "Assessment" },
     { id: "scans", label: "Scans" },
+    ...(client.stylingBlueprint ? [{ id: "styling" as const, label: "Styling" }] : []),
     ...(role === "founder" ? [{ id: "history" as const, label: "History" }] : []),
   ];
 
@@ -608,6 +628,11 @@ export function ClientProfilePage() {
           ))}
 
         {tab === "scans" && <ClientScansTab clientId={client.id} />}
+        {tab === "styling" && client.stylingBlueprint && (
+          <Suspense fallback={<div className="flex justify-center py-16"><Spinner className="h-6 w-6 text-muted-foreground" /></div>}>
+            <BlueprintTab clientId={client.id} />
+          </Suspense>
+        )}
         {tab === "history" && role === "founder" && (
           <Suspense fallback={<Spinner className="mx-auto my-12 h-5 w-5 text-muted-foreground" />}>
             <ClientHistory clientId={client.id} showActor includeFounders />
@@ -1103,7 +1128,7 @@ function UploadDocumentModal({
         <Field label="Document type" required>
           <Select value={type} onChange={(e) => setType(e.target.value)}>
             {/* Diet plans are uploaded from their fitness plan, which they link to. */}
-            {DOCUMENT_TYPES.filter((t) => t !== "nutrition_plan").map((t) => (
+            {MANUAL_UPLOAD_DOCUMENT_TYPES.map((t) => (
               <option key={t} value={t}>
                 {humanize(t)}
               </option>

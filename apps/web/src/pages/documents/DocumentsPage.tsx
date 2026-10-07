@@ -2,7 +2,13 @@ import { useMemo, useState } from "react";
 import { LoadMoreButton } from "@/components/LoadMoreButton";
 import { FolderOpen, Plus, Search } from "lucide-react";
 import { useFindManyDocument, useFindManyClient } from "@gtb/db/hooks";
-import { DOCUMENT_TYPES, humanize, type DocumentType } from "@gtb/shared";
+import {
+  DOCUMENT_TYPES,
+  MANUAL_UPLOAD_DOCUMENT_TYPES,
+  FEATURE_FILE_TYPES,
+  humanize,
+  type DocumentType,
+} from "@gtb/shared";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
 import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/EmptyState";
@@ -38,7 +44,8 @@ export function DocumentsPage() {
   // the "Load more" button and made the remaining pages unreachable.
   const search = useDebouncedValue(query.trim());
   const where = useMemo(() => {
-    const clauses: Record<string, unknown>[] = [];
+    // Styling photos and stylist edits live on each client's Styling tab.
+    const clauses: Record<string, unknown>[] = [{ type: { notIn: [...FEATURE_FILE_TYPES] } }];
     if (type !== "all") clauses.push({ type });
     if (search) {
       clauses.push({
@@ -49,12 +56,12 @@ export function DocumentsPage() {
         ],
       });
     }
-    return clauses.length ? { AND: clauses } : undefined;
+    return { AND: clauses };
   }, [type, search]);
 
   const { data, isLoading, isError, error, refetch } = useFindManyDocument({
     include: { client: { select: { id: true, name: true, clientCode: true } } },
-    ...(where ? { where } : {}),
+    where,
     orderBy: { createdAt: "desc" },
     take: (page + 1) * PAGE_SIZE,
   });
@@ -90,7 +97,7 @@ export function DocumentsPage() {
           className="w-auto min-w-[180px]"
         >
           <option value="all">All types</option>
-          {DOCUMENT_TYPES.map((t) => (
+          {DOCUMENT_TYPES.filter((t) => !FEATURE_FILE_TYPES.includes(t)).map((t) => (
             <option key={t} value={t}>
               {humanize(t)}
             </option>
@@ -180,7 +187,7 @@ function UploadDocumentModal({ onClose, onDone }: { onClose: () => void; onDone:
         <Field label="Type" required>
           <Select value={type} onChange={(e) => setType(e.target.value as DocumentType)}>
             {/* Diet plans are uploaded from their fitness plan, which they link to. */}
-            {DOCUMENT_TYPES.filter((t) => t !== "nutrition_plan").map((t) => (
+            {MANUAL_UPLOAD_DOCUMENT_TYPES.map((t) => (
               <option key={t} value={t}>
                 {humanize(t)}
               </option>

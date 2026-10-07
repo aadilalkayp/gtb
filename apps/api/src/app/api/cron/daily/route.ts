@@ -1,6 +1,7 @@
 import type { NextRequest } from "next/server";
 import { runDailyJobs } from "@gtb/db/server";
 import { runScanJobs } from "@/lib/scanJobs";
+import { runStylingJobs } from "@/lib/stylingJobs";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 import { withRequestLog } from "@/lib/handler";
 import { requestLog } from "@/lib/logger";
@@ -29,7 +30,8 @@ async function handleGet(req: NextRequest): Promise<Response> {
 
   const report = await runDailyJobs();
   const scanReport = await runScanJobs();
-  return json(req, { ok: true, at: new Date().toISOString(), report: { ...report, ...scanReport } });
+  const stylingReport = await runStylingJobs();
+  return json(req, { ok: true, at: new Date().toISOString(), report: { ...report, ...scanReport, ...stylingReport } });
 }
 
 export const GET = withRequestLog(handleGet);

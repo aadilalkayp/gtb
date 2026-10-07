@@ -18,8 +18,9 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * and coach only). This route answers just the yes/no question, never the
  * amounts or proofs.
  *
- * Scope: founder/ops_head see every operation; any other staff member only
- * the operations they are the stylist on. Clients are refused.
+ * Scope: founder/ops_head see every client with styling work; any other
+ * staff member only the clients they style (operation stylist or active
+ * styling consultant). Clients are refused.
  */
 export type StylingPaymentStatus =
   | "paid_in_full" // agreed price fully settled by approved payments/waivers
@@ -34,25 +35,32 @@ async function handleGet(req: NextRequest): Promise<Response> {
   if (authUser.role === "client") return json(req, { error: "Forbidden" }, 403);
 
   const isAdmin = authUser.role === "founder" || authUser.role === "ops_head";
-  const ops = await prisma.stylingOperation.findMany({
-    where: isAdmin ? {} : { stylistId: authUser.id },
+  // Clients on the styling team's desk: those with a styling operation or a
+  // Styling Blueprint (admins), or those the caller styles (stylist on an
+  // operation, or the client's active styling consultant).
+  const clients = await prisma.client.findMany({
+    where: isAdmin
+      ? { OR: [{ stylingOps: { some: {} } }, { stylingBlueprint: { isNot: null } }] }
+      : {
+          OR: [
+            { stylingOps: { some: { stylistId: authUser.id } } },
+            { assignments: { some: { staffId: authUser.id, isActive: true, role: "styling_consultant" } } },
+          ],
+        },
     select: {
-      clientId: true,
-      client: {
+      id: true,
+      clientPlan: {
         select: {
-          clientPlan: {
-            select: {
-              agreedPrice: true,
-              payments: {
-                where: { status: { in: ["approved", "pending_review"] } },
-                select: { amount: true, status: true },
-              },
-            },
+          agreedPrice: true,
+          payments: {
+            where: { status: { in: ["approved", "pending_review"] } },
+            select: { amount: true, status: true },
           },
         },
       },
     },
   });
+  const ops = clients.map((c) => ({ clientId: c.id, client: { clientPlan: c.clientPlan } }));
 
   const statuses: Record<string, StylingPaymentStatus> = {};
   for (const op of ops) {

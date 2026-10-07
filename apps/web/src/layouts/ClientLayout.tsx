@@ -1,19 +1,23 @@
 import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
-import { Home, CalendarCheck, ScanFace, Dumbbell, Wallet, FileText, User, LogOut } from "lucide-react";
+import { Home, CalendarCheck, ScanFace, Dumbbell, Scissors, Wallet, FileText, User, LogOut } from "lucide-react";
 import { CLIENT_TYPE_LABELS } from "@gtb/shared";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/auth/AuthProvider";
 import { NotificationsBell } from "@/components/NotificationsBell";
 import { ContentSpinner } from "@/components/ui/Spinner";
+import { usePortalStyling } from "@/lib/stylingApi";
 
-const CLIENT_NAV = [
+const CLIENT_NAV: { label: string; short?: string; to: string; icon: typeof Home; end: boolean }[] = [
   { label: "Home", to: "/portal", icon: Home, end: true },
   { label: "Sessions", to: "/portal/sessions", icon: CalendarCheck, end: false },
   { label: "Scan", to: "/portal/scan", icon: ScanFace, end: false },
   { label: "Fitness", to: "/portal/fitness", icon: Dumbbell, end: false },
+  // Shown only when styling is part of the client's plan (see ClientLayout).
+  { label: "Styling", to: "/portal/styling", icon: Scissors, end: false },
   { label: "Payments", to: "/portal/payments", icon: Wallet, end: false },
-  { label: "Documents", to: "/portal/documents", icon: FileText, end: false },
+  // Eight tabs share the phone's bottom bar, so long labels get a short form.
+  { label: "Documents", short: "Docs", to: "/portal/documents", icon: FileText, end: false },
   { label: "Profile", to: "/portal/profile", icon: User, end: false },
 ];
 
@@ -21,6 +25,9 @@ export function ClientLayout() {
   const { user, signOut } = useAuth();
   const type = user?.client?.type ?? "groom";
   const brand = CLIENT_TYPE_LABELS[type];
+  // Styling Blueprint is Groom To Be only for now (GTB, Oct 2026).
+  const { data: styling } = usePortalStyling(type === "groom");
+  const nav = CLIENT_NAV.filter((item) => item.to !== "/portal/styling" || (type === "groom" && styling?.enabled));
 
   return (
     <div data-theme={type === "bride" ? "bride" : undefined} className="min-h-screen bg-background">
@@ -43,7 +50,7 @@ export function ClientLayout() {
         </div>
         {/* Top nav (desktop) */}
         <nav className="mx-auto hidden max-w-3xl gap-1 px-4 sm:flex">
-          {CLIENT_NAV.map((item) => (
+          {nav.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -72,20 +79,20 @@ export function ClientLayout() {
 
       {/* Bottom nav (mobile) */}
       <nav className="fixed inset-x-0 bottom-0 z-10 flex border-t border-border bg-surface/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm sm:hidden">
-        {CLIENT_NAV.map((item) => (
+        {nav.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.end}
             className={({ isActive }) =>
               cn(
-                "flex flex-1 flex-col items-center gap-1 py-2 text-[10px] font-medium transition-colors duration-150 active:scale-95",
+                "flex min-w-0 flex-1 flex-col items-center gap-1 px-0.5 py-2 text-[10px] font-medium transition-colors duration-150 active:scale-95",
                 isActive ? "text-primary" : "text-muted-foreground",
               )
             }
           >
             <item.icon className="h-5 w-5" />
-            {item.label}
+            <span className="max-w-full truncate">{item.short ?? item.label}</span>
           </NavLink>
         ))}
       </nav>
