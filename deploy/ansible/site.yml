@@ -12,7 +12,7 @@
 #   docker     — engine + compose plugin from Docker's apt repo
 #   nginx+tls  — reverse proxy for the API + certbot certificate w/ auto-renew
 #   app        — /opt/gtb (compose.yml, env file, GHCR login), starts the API
-#   cron       — systemd timer hitting /api/cron/daily with CRON_SECRET
+#   cron       — systemd timers hitting /api/cron/daily and /api/cron/hourly with CRON_SECRET
 ---
 - name: Provision and harden the GTB VPS
   hosts: gtb
@@ -305,20 +305,21 @@
       changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr"
 
     # ------------------------------------------------------------ cron
-    - name: Install the daily-cron service + timer
+    - name: Install the daily and hourly cron services + timers
       ansible.builtin.template:
         src: "templates/{{ item }}.j2"
         dest: "/etc/systemd/system/{{ item }}"
         mode: "0644"
-      loop: [gtb-cron.service, gtb-cron.timer]
+      loop: [gtb-cron.service, gtb-cron.timer, gtb-cron-hourly.service, gtb-cron-hourly.timer]
       notify: Reload systemd
 
-    - name: Enable the daily-cron timer
+    - name: Enable the cron timers
       ansible.builtin.systemd_service:
-        name: gtb-cron.timer
+        name: "{{ item }}"
         enabled: true
         state: started
         daemon_reload: true
+      loop: [gtb-cron.timer, gtb-cron-hourly.timer]
 
   handlers:
     - name: Restart sshd

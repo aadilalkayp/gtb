@@ -4,6 +4,8 @@ import { ASSIGNMENT_ROLES, type AssignmentRole } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 import { withRequestLog } from "@/lib/handler";
+import { notifyUsers } from "@/lib/notify";
+import { PORTAL_STYLING_LINK, clientHasStyling, ensureBlueprint } from "@/lib/styling";
 
 export const OPTIONS = (req: NextRequest) => handleOptions(req);
 
@@ -65,6 +67,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
     return json(req, { error: "One or more staff members are invalid or inactive" }, 400);
   }
 
+  let newStylist = false;
   try {
     await prisma.$transaction(async (tx) => {
       for (const a of assignments) {
@@ -95,6 +98,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
             assignedById: authUser.id,
           },
         });
+        if (a.role === "styling_consultant" && !existing) newStylist = true;
       }
     });
   } catch (e) {
@@ -104,6 +108,25 @@ async function handlePost(req: NextRequest): Promise<Response> {
       return json(req, { error: "This role was just reassigned. Try again" }, 409);
     }
     throw e;
+  }
+
+  // A first stylist opens the Styling Blueprint: the client is asked for
+  // their photos straight away (GTB decision, Oct 2026). A reassignment keeps
+  // the existing Blueprint and history for the new stylist.
+  if (newStylist && (await clientHasStyling(client.id))) {
+    const bp = await ensureBlueprint(client.id);
+    const owner = await prisma.client.findUnique({
+      where: { id: client.id },
+      select: { userId: true },
+    });
+    if (owner?.userId && bp.status === "awaiting_photos") {
+      await notifyUsers([owner.userId], {
+        type: "styling_photos_requested",
+        title: "Your stylist is ready for your photos",
+        body: "Send five quick photos so your Styling Blueprint can be prepared.",
+        linkPath: PORTAL_STYLING_LINK,
+      });
+    }
   }
 
   return json(req, { ok: true });

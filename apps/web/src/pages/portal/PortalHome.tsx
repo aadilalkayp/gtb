@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CalendarCheck, Wallet, FileText, Sparkles, ArrowRight, Heart } from "lucide-react";
+import { CalendarCheck, Wallet, FileText, Sparkles, ArrowRight, Heart, Camera } from "lucide-react";
 import { useFindUniqueClient } from "@gtb/db/hooks";
 import {
   ASSIGNMENT_ROLES,
@@ -17,10 +17,13 @@ import { Avatar } from "@/components/ui/Avatar";
 import { ProgressRing, StatusBadge } from "@/components/ui";
 import { StylingDayCard } from "@/components/StylingDayCard";
 import { FullPageSpinner } from "@/components/ui/Spinner";
+import { usePortalStyling, type PortalStyling } from "@/lib/stylingApi";
 
 export function PortalHome() {
   const { user } = useAuth();
   const clientId = user?.client?.id;
+  const { data: styling } = usePortalStyling(user?.client?.type === "groom");
+  const stylingReady = styling?.enabled ? (styling as Extract<PortalStyling, { enabled: true }>) : null;
 
   const { data: client, isLoading } = useFindUniqueClient(
     {
@@ -178,6 +181,29 @@ export function PortalHome() {
         </Link>
       </div>
 
+      {/* Styling Blueprint nudge: photos still to send, or a retake asked for */}
+      {stylingReady && (stylingReady.status === "awaiting_photos" || stylingReady.status === "retake_requested") && (
+        <Link
+          to="/portal/styling"
+          className="card group flex items-center gap-4 border-warning/30 bg-warning/[0.06] p-5 transition-[box-shadow,border-color,transform] duration-150 ease-out-strong hover:shadow-md active:scale-[0.99]"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-warning/15 text-warning">
+            <Camera className="h-5 w-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">
+              {stylingReady.status === "retake_requested" ? "Your stylist needs a new photo" : "Send your styling photos"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {stylingReady.status === "retake_requested"
+                ? "One quick retake and your Blueprint is back on track."
+                : "Five quick photos so your stylist can prepare your Styling Blueprint."}
+            </p>
+          </div>
+          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      )}
+
       {/* Styling day (only renders if staff created a styling operation) */}
       <StylingDayCard clientId={client.id} />
 
@@ -189,8 +215,8 @@ export function PortalHome() {
             {services.map((svc) => {
               const all = sessions.filter((s) => s.serviceType === svc);
               const done = all.filter((s) => s.status === "completed").length;
-              return (
-                <div key={svc} className="flex flex-col items-center gap-2 text-center">
+              const ring = (
+                <>
                   <ProgressRing
                     value={all.length ? done / all.length : 0}
                     size={64}
@@ -203,6 +229,20 @@ export function PortalHome() {
                   <p className="text-xs font-medium text-muted-foreground">
                     {SERVICE_TYPE_LABELS[svc]}
                   </p>
+                </>
+              );
+              // The Styling ring opens the Styling Blueprint.
+              return svc === "styling" && stylingReady ? (
+                <Link
+                  key={svc}
+                  to="/portal/styling"
+                  className="flex flex-col items-center gap-2 rounded-lg py-1 text-center transition-colors hover:bg-muted/60"
+                >
+                  {ring}
+                </Link>
+              ) : (
+                <div key={svc} className="flex flex-col items-center gap-2 text-center">
+                  {ring}
                 </div>
               );
             })}

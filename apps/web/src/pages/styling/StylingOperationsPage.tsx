@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Plus, MapPin, Plane, Scissors } from "lucide-react";
 import {
   useFindManyStylingOperation,
@@ -22,8 +22,11 @@ import {
   Select,
   Spinner,
   StatusBadge,
+  Tabs,
   Textarea,
 } from "@/components/ui";
+import { BlueprintQueue } from "./BlueprintQueue";
+import { StylingLibrary } from "./StylingLibrary";
 import { cn } from "@/lib/utils";
 import {
   PaymentClearanceBadge,
@@ -52,11 +55,59 @@ type ChecklistKey =
   | "guideDelivered"
   | "finalConfirmation";
 
+type PageTab = "blueprints" | "days" | "library";
+
+/**
+ * Styling Operations: the Blueprint queue (STYLING_BLUEPRINT.md, S1), the
+ * styling-day logistics checklist, and the styling team's library.
+ */
 export function StylingOperationsPage() {
+  const { role } = useAuth();
+  const isAdmin = role === "founder" || role === "ops_head";
+  const [params, setParams] = useSearchParams();
+  const fromUrl = params.get("tab");
+  const tab: PageTab = fromUrl === "days" || fromUrl === "library" ? fromUrl : "blueprints";
+  const [showNew, setShowNew] = useState(false);
+
+  return (
+    <div className="page">
+      <PageHeader
+        title="Styling Operations"
+        subtitle="Styling Blueprints, styling-day logistics and the styling library."
+        actions={
+          isAdmin &&
+          tab === "days" && (
+            <Button onClick={() => setShowNew(true)}>
+              <Plus className="h-4 w-4" /> New operation
+            </Button>
+          )
+        }
+      />
+      <Tabs
+        className="mt-5"
+        tabs={[
+          { id: "blueprints", label: "Blueprints" },
+          { id: "days", label: "Styling days" },
+          { id: "library", label: "Library" },
+        ]}
+        active={tab}
+        onChange={(next) =>
+          setParams(next === "blueprints" ? {} : { tab: next }, { replace: true })
+        }
+      />
+      <div className="mt-5">
+        {tab === "blueprints" && <BlueprintQueue />}
+        {tab === "days" && <StylingDays showNew={showNew} onCloseNew={() => setShowNew(false)} />}
+        {tab === "library" && <StylingLibrary />}
+      </div>
+    </div>
+  );
+}
+
+function StylingDays({ showNew, onCloseNew }: { showNew: boolean; onCloseNew: () => void }) {
   const { user, role } = useAuth();
   const isAdmin = role === "founder" || role === "ops_head";
   const [filter, setFilter] = useState<Filter>("all");
-  const [showNew, setShowNew] = useState(false);
 
   const {
     data: ops,
@@ -99,21 +150,8 @@ export function StylingOperationsPage() {
   }
 
   return (
-    <div className="page">
-      <PageHeader
-        title="Styling Operations"
-        subtitle="Outfits, accessories, travel, and the delivery checklist."
-        actions={
-          isAdmin && (
-            <Button onClick={() => setShowNew(true)}>
-              <Plus className="h-4 w-4" /> New operation
-            </Button>
-          )
-        }
-      />
-
+    <div>
       <PillFilter
-        className="mt-5"
         options={[
           { id: "all", label: "All" },
           { id: "upcoming", label: "Upcoming" },
@@ -261,9 +299,9 @@ export function StylingOperationsPage() {
 
       {showNew && (
         <NewOperationModal
-          onClose={() => setShowNew(false)}
+          onClose={onCloseNew}
           onDone={() => {
-            setShowNew(false);
+            onCloseNew();
             void refetch();
           }}
         />

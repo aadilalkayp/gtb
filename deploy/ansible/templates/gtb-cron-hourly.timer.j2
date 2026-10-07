@@ -1,0 +1,12 @@
+# Every hour, on the hour: the chat job emails unread messages once they are
+# 12 hours old, so an hourly cadence means at most ~13 hours end to end.
+[Unit]
+Description=GTB OS hourly cron timer
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

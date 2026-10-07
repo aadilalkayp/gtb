@@ -93,6 +93,55 @@ enum StylingStatus {
   completed
 }
 
+/// Styling Blueprint workflow (STYLING_BLUEPRINT.md). "Archived" is not stored:
+/// it is derived from the client's status (completed / cancelled).
+enum BlueprintStatus {
+  awaiting_photos
+  under_review
+  retake_requested
+  published
+}
+
+/// Guided photo slots the client fills before the stylist starts. `extra` is
+/// the optional outfits / inspiration set (several rows allowed).
+enum StylingPhotoSlot {
+  front
+  left_side
+  right_side
+  back
+  full_body
+  extra
+}
+
+/// Blueprint recommendation cards that share one shape: Outfit
+/// Recommendations, Footwear, Eyewear and Shopping List products.
+enum StylingItemKind {
+  outfit
+  footwear
+  eyewear
+  product
+}
+
+enum StylingItemPriority {
+  must_have
+  nice_to_have
+}
+
+/// Staff <-> client chat channels. One conversation per client per kind; the
+/// staff side is whoever holds the matching active assignment (styling ->
+/// styling_consultant). New kinds are added here plus a policy clause on
+/// Conversation and an entry in CHAT_KINDS (packages/shared/src/chat.ts).
+enum ConversationKind {
+  styling
+}
+
+/// Reusable starting points the styling team inserts into a Blueprint.
+enum StylingLibraryKind {
+  product
+  barber_line
+  essential
+}
+
 enum FollowUpType {
   weekly_checkin
   payment_reminder
@@ -124,6 +173,9 @@ enum DocumentType {
   client_photo
   progress_photo
   nutrition_plan
+  styling_photo
+  styling_image
+  chat_attachment
 }
 
 enum FitnessPlanStatus {
@@ -256,45 +308,49 @@ enum MessageStatus {
 /// via authId. Staff rows have a staff role; client rows have role = client and
 /// a 1:1 Client profile.
 model User {
-  id                    String             @id() @default(uuid())
-  authId                String?            @unique()
-  email                 String             @unique()
-  name                  String
-  phone                 String?
-  role                  Role
-  avatarUrl             String?
-  isActive              Boolean            @default(true)
-  createdAt             DateTime           @default(now())
-  updatedAt             DateTime           @updatedAt()
-  client                Client?            @relation("ClientUser")
-  convertedClients      Client[]           @relation("ConvertedBy")
-  assignments           Assignment[]       @relation("StaffAssignments")
-  assignmentsMade       Assignment[]       @relation("AssignmentAssigner")
-  paymentsApproved      Payment[]          @relation("PaymentApprover")
-  paymentsSubmitted     Payment[]          @relation("PaymentSubmitter")
-  paymentsEdited        Payment[]          @relation("PaymentEditor")
-  consultantRates       ConsultantRate[]
-  sessions              Session[]          @relation("ConsultantSessions")
-  followUps             FollowUp[]         @relation("CroFollowUps")
-  stylingOps            StylingOperation[] @relation("StylistOps")
-  tasksAssigned         Task[]             @relation("TaskAssignee")
-  tasksCreated          Task[]             @relation("TaskCreator")
-  expensesSubmitted     Expense[]          @relation("ExpenseSubmitter")
-  expensesApproved      Expense[]          @relation("ExpenseApprover")
-  expensesAsPayee       Expense[]          @relation("ExpensePayee")
-  documentsUploaded     Document[]         @relation("DocUploader")
-  contentItems          ContentItem[]      @relation("ContentOwner")
-  notifications         Notification[]     @relation("UserNotifications")
-  activityLogs          ActivityLog[]      @relation("ActivityActor")
-  staffDays             StaffDay[]         @relation("StaffDays")
-  activeMinutes         ActiveMinute[]     @relation("ActiveMinutes")
-  authSessions          AuthSession[]      @relation("AuthSessions")
-  fitnessPlansAsTrainer FitnessPlan[]      @relation("PlanTrainer")
-  weightLogsRecorded    WeightLog[]        @relation("WeightRecorder")
-  measurementsRecorded  BodyMeasurement[]  @relation("MeasurementRecorder")
-  trainerNotesAuthored  TrainerNote[]      @relation("TrainerNoteAuthor")
-  clientsCreated        Client[]           @relation("ClientCreator")
-  salesReports          SalesReport[]      @relation("SalesReports")
+  id                         String                    @id() @default(uuid())
+  authId                     String?                   @unique()
+  email                      String                    @unique()
+  name                       String
+  phone                      String?
+  role                       Role
+  avatarUrl                  String?
+  isActive                   Boolean                   @default(true)
+  createdAt                  DateTime                  @default(now())
+  updatedAt                  DateTime                  @updatedAt()
+  client                     Client?                   @relation("ClientUser")
+  convertedClients           Client[]                  @relation("ConvertedBy")
+  assignments                Assignment[]              @relation("StaffAssignments")
+  assignmentsMade            Assignment[]              @relation("AssignmentAssigner")
+  paymentsApproved           Payment[]                 @relation("PaymentApprover")
+  paymentsSubmitted          Payment[]                 @relation("PaymentSubmitter")
+  paymentsEdited             Payment[]                 @relation("PaymentEditor")
+  consultantRates            ConsultantRate[]
+  sessions                   Session[]                 @relation("ConsultantSessions")
+  followUps                  FollowUp[]                @relation("CroFollowUps")
+  stylingOps                 StylingOperation[]        @relation("StylistOps")
+  tasksAssigned              Task[]                    @relation("TaskAssignee")
+  tasksCreated               Task[]                    @relation("TaskCreator")
+  expensesSubmitted          Expense[]                 @relation("ExpenseSubmitter")
+  expensesApproved           Expense[]                 @relation("ExpenseApprover")
+  expensesAsPayee            Expense[]                 @relation("ExpensePayee")
+  documentsUploaded          Document[]                @relation("DocUploader")
+  contentItems               ContentItem[]             @relation("ContentOwner")
+  notifications              Notification[]            @relation("UserNotifications")
+  activityLogs               ActivityLog[]             @relation("ActivityActor")
+  staffDays                  StaffDay[]                @relation("StaffDays")
+  activeMinutes              ActiveMinute[]            @relation("ActiveMinutes")
+  authSessions               AuthSession[]             @relation("AuthSessions")
+  fitnessPlansAsTrainer      FitnessPlan[]             @relation("PlanTrainer")
+  weightLogsRecorded         WeightLog[]               @relation("WeightRecorder")
+  measurementsRecorded       BodyMeasurement[]         @relation("MeasurementRecorder")
+  trainerNotesAuthored       TrainerNote[]             @relation("TrainerNoteAuthor")
+  clientsCreated             Client[]                  @relation("ClientCreator")
+  salesReports               SalesReport[]             @relation("SalesReports")
+  blueprintVersionsPublished StylingBlueprintVersion[] @relation("BlueprintPublisher")
+  stylingLibraryItems        StylingLibraryItem[]      @relation("StylingLibraryAuthor")
+  messagesSent               Message[]                 @relation("MessageSender")
+  conversationReads          ConversationRead[]        @relation("ConversationReader")
 }
 
 model Client {
@@ -332,6 +388,8 @@ model Client {
   sessions           Session[]
   followUps          FollowUp[]
   stylingOps         StylingOperation[]
+  stylingBlueprint   StylingBlueprint?
+  conversations      Conversation[]
   documents          Document[]
   expenses           Expense[]
   tasks              Task[]
@@ -575,25 +633,254 @@ model StylingOperation {
   @@index([status])
 }
 
-model Document {
+/// One per client. Holds workflow state plus the single-value sections
+/// (Style Profile, Style Direction, Hair & Beard).
+model StylingBlueprint {
+  id                  String                    @id() @default(uuid())
+  clientId            String                    @unique()
+  client              Client                    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  status              BlueprintStatus           @default(awaiting_photos)
+  photosSubmittedAt   DateTime?
+  /// Stylist's turnaround target: photosSubmittedAt + 5 working days.
+  dueAt               DateTime?
+  publishedAt         DateTime?
+  publishedVersion    Int                       @default(0)
+  lastReminderAt      DateTime?
+  /// Big Day Essentials the client has ticked (StylingEssential ids). Written
+  /// by the client through /api/styling/essentials only.
+  checkedEssentialIds String[]
+  faceShape           String?
+  skinTone            String?
+  /// Optional swatch for the skin tone chip ("#a0714f").
+  skinToneHex         String?
+  hairType            String?
+  beardType           String?
+  bodyType            String?
+  heightCm            Int?
+  existingStyle       String?
+  stylePreferences    String?
+  styleTags           String[]
+  styleDescription    String?
+  hairFrontDocId      String?
+  hairSideDocId       String?
+  hairBackDocId       String?
+  barberBrief         String[]
+  hairNotes           String?
+  /// Section keys (BLUEPRINT_SECTIONS) the stylist has marked done.
+  sectionsDone        String[]
+  createdAt           DateTime                  @default(now())
+  updatedAt           DateTime                  @updatedAt()
+  photos              StylingPhoto[]
+  looks               StylingLook[]
+  palettes            StylingPalette[]
+  items               StylingItem[]
+  essentials          StylingEssential[]
+  versions            StylingBlueprintVersion[]
+
+  @@index([status, dueAt])
+}
+
+/// A client photo in one guided slot. The file is a styling_photo Document;
+/// rows are created and replaced only by /api/styling/photos.
+model StylingPhoto {
+  id                String           @id() @default(uuid())
+  blueprintId       String
+  blueprint         StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  slot              StylingPhotoSlot
+  documentId        String           @unique()
+  document          Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  /// Set when the stylist asks for this photo again; cleared on re-upload.
+  retakeNote        String?
+  retakeRequestedAt DateTime?
+  createdAt         DateTime         @default(now())
+
+  @@index([blueprintId, slot])
+}
+
+/// Best Looks: an event-specific outfit, usually on the client's edited photo.
+model StylingLook {
+  id          String           @id() @default(uuid())
+  blueprintId String
+  blueprint   StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  title       String
+  /// Stylist-written occasion label ("Big day", "Reception"). Event-neutral.
+  eventLabel  String?
+  imageDocId  String?
+  description String?
+  outfit      String?
+  footwear    String?
+  accessories String?
+  /// Hex swatches shown on the look card.
+  colors      String[]
+  stylistNote String?
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt()
+
+  @@index([blueprintId, sortOrder])
+}
+
+/// Outfit Colours: one combination of swatches with a label and note.
+model StylingPalette {
+  id          String           @id() @default(uuid())
+  blueprintId String
+  blueprint   StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  colors      String[]
+  label       String
+  notes       String?
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt()
+
+  @@index([blueprintId, sortOrder])
+}
+
+/// Outfit Recommendations, Footwear, Eyewear and Shopping List products.
+/// Fields a kind doesn't use stay null.
+model StylingItem {
+  id             String               @id() @default(uuid())
+  blueprintId    String
+  blueprint      StylingBlueprint     @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  kind           StylingItemKind
+  name           String
+  /// Shopping category ("Outfits", "Accessories", "Grooming") or outfit occasion.
+  category       String?
+  imageDocId     String?
+  priceRange     String?
+  url            String?
+  priority       StylingItemPriority?
+  color          String?
+  fit            String?
+  /// Eyewear: "Recommended", "Alternative" or "Avoid".
+  recommendation String?
+  notes          String?
+  sortOrder      Int                  @default(0)
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt()
+
+  @@index([blueprintId, kind, sortOrder])
+}
+
+/// Big Day Essentials checklist item. The client's ticks live on the
+/// Blueprint (checkedEssentialIds), so a republish keeps them.
+model StylingEssential {
+  id          String           @id() @default(uuid())
+  blueprintId String
+  blueprint   StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  item        String
+  category    String?
+  notes       String?
+  sortOrder   Int              @default(0)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt()
+
+  @@index([blueprintId, sortOrder])
+}
+
+/// Immutable published copy. The portal and the PDF read only this.
+model StylingBlueprintVersion {
+  id            String           @id() @default(uuid())
+  blueprintId   String
+  blueprint     StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  version       Int
+  /// BlueprintSnapshot (packages/shared/src/styling.ts).
+  snapshot      Json
+  publishedById String
+  publishedBy   User             @relation("BlueprintPublisher", fields: [publishedById], references: [id])
+  /// The generated styling_guide PDF, when generation succeeded.
+  pdfDocumentId String?
+  createdAt     DateTime         @default(now())
+
+  @@unique([blueprintId, version])
+}
+
+/// Templates library: products, barber-brief lines and essentials the styling
+/// team picks from instead of retyping each Blueprint.
+model StylingLibraryItem {
+  id          String             @id() @default(uuid())
+  kind        StylingLibraryKind
+  title       String
+  category    String?
+  priceRange  String?
+  url         String?
+  notes       String?
+  isActive    Boolean            @default(true)
+  createdById String
+  createdBy   User               @relation("StylingLibraryAuthor", fields: [createdById], references: [id])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt()
+
+  @@index([kind, isActive])
+}
+
+model Conversation {
+  id                 String             @id() @default(uuid())
+  clientId           String
+  client             Client             @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  kind               ConversationKind
+  lastMessageAt      DateTime?
+  /// Who spoke last, so "client waiting for a reply" is a cheap query.
+  lastSenderIsClient Boolean            @default(false)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt()
+  messages           Message[]
+  reads              ConversationRead[]
+
+  @@unique([clientId, kind])
+  @@index([kind, lastMessageAt])
+}
+
+model Message {
   id             String       @id() @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  body           String
+  /// Optional chat_attachment Document (image or PDF).
+  documentId     String?      @unique()
+  document       Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  /// Set once the 12-hour unread email has been attempted (sent or not).
+  emailAlertedAt DateTime?
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([createdAt, emailAlertedAt])
+}
+
+/// How far each participant has read. One row per conversation per user.
+model ConversationRead {
+  id             String       @id() @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("ConversationReader", fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime
+
+  @@unique([conversationId, userId])
+}
+
+model Document {
+  id             String        @id() @default(uuid())
   clientId       String
-  client         Client       @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client         Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
   type           DocumentType
   fileName       String
   fileUrl        String
   fileSize       Int
   sessionId      String?
-  session        Session?     @relation(fields: [sessionId], references: [id])
+  session        Session?      @relation(fields: [sessionId], references: [id])
   /// Set on nutrition_plan uploads: the fitness plan the diet PDF belongs to.
   /// One per plan; uploading a new one replaces the previous (upload route).
   fitnessPlanId  String?
-  fitnessPlan    FitnessPlan? @relation(fields: [fitnessPlanId], references: [id], onDelete: SetNull)
+  fitnessPlan    FitnessPlan?  @relation(fields: [fitnessPlanId], references: [id], onDelete: SetNull)
   uploadedById   String
-  uploadedBy     User         @relation("DocUploader", fields: [uploadedById], references: [id])
-  createdAt      DateTime     @default(now())
-  paymentProof   Payment?     @relation("PaymentProof")
-  expenseReceipt Expense?     @relation("ExpenseReceipt")
+  uploadedBy     User          @relation("DocUploader", fields: [uploadedById], references: [id])
+  createdAt      DateTime      @default(now())
+  paymentProof   Payment?      @relation("PaymentProof")
+  expenseReceipt Expense?      @relation("ExpenseReceipt")
+  stylingPhoto   StylingPhoto?
+  chatMessage    Message?
 
   @@index([clientId])
   @@index([type])

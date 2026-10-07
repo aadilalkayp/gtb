@@ -25,7 +25,7 @@ const CHECKLIST_LABELS = [
 test("ops head creates a styling operation for the shared client", async ({ asRole }) => {
   const client = sharedClient();
   const page = await asRole("ops_head");
-  await page.goto("/styling-operations");
+  await page.goto("/styling-operations?tab=days");
 
   await page.getByRole("button", { name: "New operation" }).click();
   const dialog = page.getByRole("dialog", { name: "New styling operation" });
@@ -64,7 +64,7 @@ test("stylist sees whether the client has paid, on the card and the dashboard", 
 }) => {
   const client = sharedClient();
   const page = await asRole("styling_consultant");
-  await page.goto("/styling-operations");
+  await page.goto("/styling-operations?tab=days");
   const card = page.locator(".card").filter({ hasText: venue });
   await expect(card).toBeVisible();
   await expect(card.getByText(PAYMENT_LABEL).first()).toBeVisible();
@@ -83,7 +83,7 @@ test("stylist ticks the checklist and the status advances automatically", async 
   asRole,
 }) => {
   const page = await asRole("styling_consultant");
-  await page.goto("/styling-operations");
+  await page.goto("/styling-operations?tab=days");
   const card = page.locator(".card").filter({ hasText: venue });
   await expect(card).toBeVisible();
 

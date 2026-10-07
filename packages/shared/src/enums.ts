@@ -202,8 +202,25 @@ export const DOCUMENT_TYPES = [
   "client_photo",
   "progress_photo",
   "nutrition_plan",
+  "styling_photo",
+  "styling_image",
+  "chat_attachment",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+
+/** Styling Blueprint files: managed on the client's Styling tab, never the document room. */
+export const STYLING_FILE_TYPES: readonly DocumentType[] = ["styling_photo", "styling_image"];
+
+/** Files that belong to a feature's own screen rather than the document room. */
+export const FEATURE_FILE_TYPES: readonly DocumentType[] = [
+  ...STYLING_FILE_TYPES,
+  "chat_attachment",
+];
+
+/** Types staff pick in the generic upload dialogs (others have their own flows). */
+export const MANUAL_UPLOAD_DOCUMENT_TYPES: readonly DocumentType[] = DOCUMENT_TYPES.filter(
+  (t) => t !== "nutrition_plan" && !FEATURE_FILE_TYPES.includes(t),
+);
 
 export const TASK_PRIORITIES = ["low", "medium", "high", "urgent"] as const;
 export type TaskPriority = (typeof TASK_PRIORITIES)[number];

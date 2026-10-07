@@ -128,6 +128,55 @@ enum StylingStatus {
   completed
 }
 
+/// Styling Blueprint workflow (STYLING_BLUEPRINT.md). "Archived" is not stored:
+/// it is derived from the client's status (completed / cancelled).
+enum BlueprintStatus {
+  awaiting_photos
+  under_review
+  retake_requested
+  published
+}
+
+/// Guided photo slots the client fills before the stylist starts. `extra` is
+/// the optional outfits / inspiration set (several rows allowed).
+enum StylingPhotoSlot {
+  front
+  left_side
+  right_side
+  back
+  full_body
+  extra
+}
+
+/// Blueprint recommendation cards that share one shape: Outfit
+/// Recommendations, Footwear, Eyewear and Shopping List products.
+enum StylingItemKind {
+  outfit
+  footwear
+  eyewear
+  product
+}
+
+enum StylingItemPriority {
+  must_have
+  nice_to_have
+}
+
+/// Staff <-> client chat channels. One conversation per client per kind; the
+/// staff side is whoever holds the matching active assignment (styling ->
+/// styling_consultant). New kinds are added here plus a policy clause on
+/// Conversation and an entry in CHAT_KINDS (packages/shared/src/chat.ts).
+enum ConversationKind {
+  styling
+}
+
+/// Reusable starting points the styling team inserts into a Blueprint.
+enum StylingLibraryKind {
+  product
+  barber_line
+  essential
+}
+
 enum FollowUpType {
   weekly_checkin
   payment_reminder
@@ -159,6 +208,9 @@ enum DocumentType {
   client_photo
   progress_photo
   nutrition_plan
+  styling_photo
+  styling_image
+  chat_attachment
 }
 
 enum FitnessPlanStatus {
@@ -337,6 +389,10 @@ model User {
   trainerNotesAuthored  TrainerNote[]     @relation("TrainerNoteAuthor")
   clientsCreated        Client[]          @relation("ClientCreator")
   salesReports          SalesReport[]     @relation("SalesReports")
+  blueprintVersionsPublished StylingBlueprintVersion[] @relation("BlueprintPublisher")
+  stylingLibraryItems        StylingLibraryItem[]      @relation("StylingLibraryAuthor")
+  messagesSent               Message[]                 @relation("MessageSender")
+  conversationReads          ConversationRead[]        @relation("ConversationReader")
 
   @@auth
 
@@ -413,6 +469,8 @@ model Client {
   sessions    Session[]
   followUps   FollowUp[]
   stylingOps  StylingOperation[]
+  stylingBlueprint StylingBlueprint?
+  conversations    Conversation[]
   documents   Document[]
   expenses    Expense[]
   tasks       Task[]
@@ -865,6 +923,328 @@ model StylingOperation {
 }
 
 // ============================================================================
+// Styling Blueprint (STYLING_BLUEPRINT.md)
+// ============================================================================
+//
+// The stylist's working copy lives in these tables and is edited through the
+// gateway by admins and the client's assigned styling consultant. Workflow
+// transitions (photo submit, retakes, publish) are server routes. The client
+// has NO gateway access here: the portal reads the last published snapshot
+// (StylingBlueprintVersion) through /api/styling/portal, so drafts never leak.
+
+/// One per client. Holds workflow state plus the single-value sections
+/// (Style Profile, Style Direction, Hair & Beard).
+model StylingBlueprint {
+  id       String @id @default(uuid()) @deny('update', true)
+  clientId String @unique @deny('update', true)
+  client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
+
+  // Workflow: server-written only (model-level guard below).
+  status            BlueprintStatus @default(awaiting_photos)
+  photosSubmittedAt DateTime?
+  /// Stylist's turnaround target: photosSubmittedAt + 5 working days.
+  dueAt             DateTime?
+  publishedAt       DateTime?
+  publishedVersion  Int             @default(0)
+  lastReminderAt    DateTime?
+  /// Big Day Essentials the client has ticked (StylingEssential ids). Written
+  /// by the client through /api/styling/essentials only.
+  checkedEssentialIds String[] @deny('update', true)
+
+  // Style Profile
+  faceShape        String?
+  skinTone         String?
+  /// Optional swatch for the skin tone chip ("#a0714f").
+  skinToneHex      String?
+  hairType         String?
+  beardType        String?
+  bodyType         String?
+  heightCm         Int?
+  existingStyle    String?
+  stylePreferences String?
+
+  // Style Direction
+  styleTags        String[]
+  styleDescription String?
+
+  // Hair & Beard: edited reference photos are styling_image Document ids,
+  // validated against this client when the Blueprint is published.
+  hairFrontDocId String?
+  hairSideDocId  String?
+  hairBackDocId  String?
+  barberBrief    String[]
+  hairNotes      String?
+
+  /// Section keys (BLUEPRINT_SECTIONS) the stylist has marked done.
+  sectionsDone String[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  photos     StylingPhoto[]
+  looks      StylingLook[]
+  palettes   StylingPalette[]
+  items      StylingItem[]
+  essentials StylingEssential[]
+  versions   StylingBlueprintVersion[]
+
+  @@index([status, dueAt])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  // Rows are created server-side (assignment, first portal visit, backfill).
+  @@allow('update', auth().role == founder || auth().role == ops_head)
+  @@allow('update', client.assignments?[staffId == auth().id && isActive && role == styling_consultant])
+  @@deny('update', future().status != status || future().photosSubmittedAt != photosSubmittedAt || future().dueAt != dueAt || future().publishedAt != publishedAt || future().publishedVersion != publishedVersion || future().lastReminderAt != lastReminderAt)
+}
+
+/// A client photo in one guided slot. The file is a styling_photo Document;
+/// rows are created and replaced only by /api/styling/photos.
+model StylingPhoto {
+  id          String           @id @default(uuid()) @deny('update', true)
+  blueprintId String           @deny('update', true)
+  blueprint   StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  slot        StylingPhotoSlot @deny('update', true)
+  documentId  String           @unique @deny('update', true)
+  document    Document         @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  /// Set when the stylist asks for this photo again; cleared on re-upload.
+  retakeNote        String?
+  retakeRequestedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([blueprintId, slot])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', blueprint.client.assignments?[staffId == auth().id && isActive])
+}
+
+/// Best Looks: an event-specific outfit, usually on the client's edited photo.
+model StylingLook {
+  id          String           @id @default(uuid()) @deny('update', true)
+  blueprintId String           @deny('update', true)
+  blueprint   StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  title       String
+  /// Stylist-written occasion label ("Big day", "Reception"). Event-neutral.
+  eventLabel  String?
+  imageDocId  String?
+  description String?
+  outfit      String?
+  footwear    String?
+  accessories String?
+  /// Hex swatches shown on the look card.
+  colors      String[]
+  stylistNote String?
+  sortOrder   Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([blueprintId, sortOrder])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', blueprint.client.assignments?[staffId == auth().id && isActive])
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update,delete', blueprint.client.assignments?[staffId == auth().id && isActive && role == styling_consultant])
+}
+
+/// Outfit Colours: one combination of swatches with a label and note.
+model StylingPalette {
+  id          String           @id @default(uuid()) @deny('update', true)
+  blueprintId String           @deny('update', true)
+  blueprint   StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  colors    String[]
+  label     String
+  notes     String?
+  sortOrder Int      @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([blueprintId, sortOrder])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', blueprint.client.assignments?[staffId == auth().id && isActive])
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update,delete', blueprint.client.assignments?[staffId == auth().id && isActive && role == styling_consultant])
+}
+
+/// Outfit Recommendations, Footwear, Eyewear and Shopping List products.
+/// Fields a kind doesn't use stay null.
+model StylingItem {
+  id          String           @id @default(uuid()) @deny('update', true)
+  blueprintId String           @deny('update', true)
+  blueprint   StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  kind           StylingItemKind
+  name           String
+  /// Shopping category ("Outfits", "Accessories", "Grooming") or outfit occasion.
+  category       String?
+  imageDocId     String?
+  priceRange     String?
+  url            String?
+  priority       StylingItemPriority?
+  color          String?
+  fit            String?
+  /// Eyewear: "Recommended", "Alternative" or "Avoid".
+  recommendation String?
+  notes          String?
+  sortOrder      Int                  @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([blueprintId, kind, sortOrder])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', blueprint.client.assignments?[staffId == auth().id && isActive])
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update,delete', blueprint.client.assignments?[staffId == auth().id && isActive && role == styling_consultant])
+}
+
+/// Big Day Essentials checklist item. The client's ticks live on the
+/// Blueprint (checkedEssentialIds), so a republish keeps them.
+model StylingEssential {
+  id          String           @id @default(uuid()) @deny('update', true)
+  blueprintId String           @deny('update', true)
+  blueprint   StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+
+  item      String
+  category  String?
+  notes     String?
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([blueprintId, sortOrder])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', blueprint.client.assignments?[staffId == auth().id && isActive])
+  @@allow('create,update,delete', auth().role == founder || auth().role == ops_head)
+  @@allow('create,update,delete', blueprint.client.assignments?[staffId == auth().id && isActive && role == styling_consultant])
+}
+
+/// Immutable published copy. The portal and the PDF read only this.
+model StylingBlueprintVersion {
+  id            String           @id @default(uuid()) @deny('update', true)
+  blueprintId   String
+  blueprint     StylingBlueprint @relation(fields: [blueprintId], references: [id], onDelete: Cascade)
+  version       Int
+  /// BlueprintSnapshot (packages/shared/src/styling.ts).
+  snapshot      Json
+  publishedById String
+  publishedBy   User             @relation("BlueprintPublisher", fields: [publishedById], references: [id])
+  /// The generated styling_guide PDF, when generation succeeded.
+  pdfDocumentId String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([blueprintId, version])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', blueprint.client.assignments?[staffId == auth().id && isActive])
+}
+
+/// Templates library: products, barber-brief lines and essentials the styling
+/// team picks from instead of retyping each Blueprint.
+model StylingLibraryItem {
+  id          String             @id @default(uuid()) @deny('update', true)
+  kind        StylingLibraryKind
+  title       String
+  category    String?
+  priceRange  String?
+  url         String?
+  notes       String?
+  isActive    Boolean            @default(true)
+  createdById String             @deny('update', true)
+  createdBy   User               @relation("StylingLibraryAuthor", fields: [createdById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([kind, isActive])
+
+  @@allow('read,create,update', auth().role == founder || auth().role == ops_head || auth().role == styling_consultant)
+  @@allow('delete', auth().role == founder || auth().role == ops_head)
+  @@deny('create', createdById != auth().id)
+}
+
+// ============================================================================
+// Chat (staff <-> client), STYLING_BLUEPRINT.md "Chat"
+// ============================================================================
+//
+// Reads go through the gateway for the inbox and alerts; every write (send,
+// mark read) is a server route that checks the sender is the client or the
+// client's assigned staff for that kind. Founder and Ops Head can read every
+// conversation (the client is told) but never post.
+
+model Conversation {
+  id       String           @id @default(uuid()) @deny('update', true)
+  clientId String           @deny('update', true)
+  client   Client           @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  kind     ConversationKind @deny('update', true)
+
+  lastMessageAt      DateTime?
+  /// Who spoke last, so "client waiting for a reply" is a cheap query.
+  lastSenderIsClient Boolean   @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages Message[]
+  reads    ConversationRead[]
+
+  @@unique([clientId, kind])
+  @@index([kind, lastMessageAt])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', client.userId == auth().id)
+  @@allow('read', kind == styling && client.assignments?[staffId == auth().id && isActive && role == styling_consultant])
+}
+
+model Message {
+  id             String       @id @default(uuid()) @deny('update', true)
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User         @relation("MessageSender", fields: [senderId], references: [id])
+  body           String
+  /// Optional chat_attachment Document (image or PDF).
+  documentId     String?      @unique
+  document       Document?    @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  /// Set once the 12-hour unread email has been attempted (sent or not).
+  emailAlertedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([createdAt, emailAlertedAt])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', conversation.client.userId == auth().id)
+  @@allow('read', conversation.kind == styling && conversation.client.assignments?[staffId == auth().id && isActive && role == styling_consultant])
+}
+
+/// How far each participant has read. One row per conversation per user.
+model ConversationRead {
+  id             String       @id @default(uuid()) @deny('update', true)
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation("ConversationReader", fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime
+
+  @@unique([conversationId, userId])
+
+  @@allow('read', userId == auth().id)
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+}
+
+// ============================================================================
 // Documents
 // ============================================================================
 
@@ -889,6 +1269,8 @@ model Document {
 
   paymentProof     Payment?     @relation("PaymentProof")
   expenseReceipt   Expense?     @relation("ExpenseReceipt")
+  stylingPhoto     StylingPhoto?
+  chatMessage      Message?
 
   @@index([clientId])
   @@index([type])
@@ -900,9 +1282,11 @@ model Document {
   // Assigned staff see client documents, except the financial types that are
   // restricted by SRS §16.1: payment_proof is CRO/Ops/Founder only,
   // expense_receipt is Ops/Founder only (SEC-10).
-  @@allow('read', client.assignments?[staffId == auth().id && isActive] && (type != payment_proof || auth().role == cro) && type != expense_receipt)
-  // Client sees own documents except internal consultation notes.
-  @@allow('read', client.userId == auth().id && type != consultation_notes)
+  @@allow('read', client.assignments?[staffId == auth().id && isActive] && (type != payment_proof || auth().role == cro) && type != expense_receipt && type != chat_attachment)
+  // Client sees own documents except internal consultation notes. Styling
+  // photos and stylist edits reach the client only through the Blueprint
+  // portal route, which signs just the published ones (drafts stay hidden).
+  @@allow('read', client.userId == auth().id && type != consultation_notes && type != styling_photo && type != styling_image && type != chat_attachment)
   // Gateway creates are intentionally not allowed: every Document row must be
   // created by the server upload route, which validates ownership and builds a
   // traversal-safe storage key (SEC-5). Deletes are admin-only.

@@ -16,6 +16,7 @@ import {
   Activity,
   ClipboardCheck,
   ClipboardPen,
+  MessageCircle,
   type LucideIcon,
 } from "lucide-react";
 import { canAny, type StaffRole } from "@gtb/shared";
@@ -25,6 +26,8 @@ export interface NavItem {
   to: string;
   icon: LucideIcon;
   visible: (role: StaffRole) => boolean;
+  /** Show the unread chat count next to the label. */
+  badge?: "chat";
 }
 
 /** Staff sidebar (SRS dashboards + modules). Each item is filtered by capability. */
@@ -63,6 +66,15 @@ export const STAFF_NAV: NavItem[] = [
     // Styling-only: fitness/skincare consultants share session.mark_complete
     // but must not see the styling team's section (client feedback).
     visible: (r) => canAny(r, ["styling.manage"]),
+  },
+  {
+    label: "Messages",
+    to: "/messages",
+    icon: MessageCircle,
+    // Chat is open for the styling channel only (GTB, Oct 2026): stylists
+    // answer, Founder and Ops Head read for oversight.
+    visible: (r) => canAny(r, ["styling.manage"]),
+    badge: "chat",
   },
   {
     label: "Payments",

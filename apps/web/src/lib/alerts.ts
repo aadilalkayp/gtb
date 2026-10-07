@@ -3,7 +3,7 @@
  * render time — no background job — and shared by the dashboard and the /alerts
  * center. Each alert rolls up a category with a count and drill-down items.
  */
-import { formatINR } from "@gtb/shared";
+import { formatDate, formatINR, isBlueprintLate, isReplyOverdue } from "@gtb/shared";
 import {
   asDate,
   startOfDay,
@@ -21,6 +21,8 @@ export interface AlertItem {
     | "payment_due_today"
     | "consultation_due_today"
     | "styling_tomorrow"
+    | "blueprint_late"
+    | "chat_waiting"
     | "pending_followup"
     | "client_at_risk"
     | "overdue_payments"
@@ -64,6 +66,20 @@ interface StylingNode {
   client: { id: string; name: string };
 }
 
+interface BlueprintNode {
+  id: string;
+  dueAt: string | Date | null;
+  status: string;
+  client: { id: string; name: string };
+}
+
+interface ConversationNode {
+  id: string;
+  lastMessageAt: string | Date | null;
+  lastSenderIsClient: boolean;
+  client: { id: string; name: string };
+}
+
 interface FollowUpNode {
   id: string;
   dueDate: string | Date;
@@ -75,6 +91,10 @@ export interface AlertInput {
   clients: ClientNode[];
   sessions: SessionNode[];
   stylingOps: StylingNode[];
+  /** Blueprints waiting on the stylist (optional for older callers). */
+  blueprints?: BlueprintNode[];
+  /** Chat conversations (admins see all; optional for older callers). */
+  conversations?: ConversationNode[];
   followUps: FollowUpNode[];
 }
 
@@ -173,6 +193,44 @@ export function deriveAlerts(input: AlertInput): AlertItem[] {
       title: "Styling tomorrow",
       count: stylingTomorrow.length,
       items: stylingTomorrow,
+    });
+
+  // Styling Blueprint past its due date (5 working days after the photos).
+  const lateBlueprints = (input.blueprints ?? [])
+    .filter(
+      (b) =>
+        (b.status === "under_review" || b.status === "retake_requested") &&
+        isBlueprintLate(b.dueAt),
+    )
+    .map((b) => ({
+      label: b.client.name,
+      sublabel: `Styling Blueprint was due ${formatDate(b.dueAt)}`,
+      linkPath: `/clients/${b.client.id}?tab=styling`,
+    }));
+  if (lateBlueprints.length)
+    out.push({
+      kind: "blueprint_late",
+      severity: "warning",
+      title: "Styling Blueprints late",
+      count: lateBlueprints.length,
+      items: lateBlueprints,
+    });
+
+  // Client message unanswered for more than 2 working days.
+  const waiting = (input.conversations ?? [])
+    .filter((c) => isReplyOverdue(c))
+    .map((c) => ({
+      label: c.client.name,
+      sublabel: `Waiting for a reply since ${formatDate(c.lastMessageAt)}`,
+      linkPath: `/clients/${c.client.id}?tab=styling`,
+    }));
+  if (waiting.length)
+    out.push({
+      kind: "chat_waiting",
+      severity: "warning",
+      title: "Clients waiting for a reply",
+      count: waiting.length,
+      items: waiting,
     });
 
   // Pending follow-up — past due, not completed.

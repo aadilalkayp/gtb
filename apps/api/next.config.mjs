@@ -23,17 +23,24 @@ const nextConfig = {
       "../../node_modules/.pnpm/harfbuzzjs@*/node_modules/harfbuzzjs/**",
       "../../node_modules/.pnpm/yoga-wasm-web@*/node_modules/yoga-wasm-web/**",
     ],
+    // pdfkit reads its standard-font metrics (data/*.afm) from disk; the
+    // Blueprint PDF also embeds the Inter fonts.
+    "/api/**": ["../../node_modules/.pnpm/pdfkit@*/node_modules/pdfkit/js/data/**"],
+    "/api/styling/**": ["./src/assets/fonts/**"],
   },
   // @gtb/* packages ship TypeScript source; let Next transpile them.
   transpilePackages: ["@gtb/db", "@gtb/shared"],
-  // ZenStack runtime, Prisma client, resvg (native binary) and satori (ships
-  // WebAssembly that webpack can't relocate) are server-only — don't bundle them.
+  // ZenStack runtime, Prisma client, resvg (native binary), satori (ships
+  // WebAssembly that webpack can't relocate) and pdfkit are server-only; don't bundle them.
   serverExternalPackages: [
     "@prisma/client",
     "@prisma/adapter-pg",
     "@zenstackhq/runtime",
     "@resvg/resvg-js",
     "satori",
+    // pdfkit loads font files relative to its own path, so bundling it breaks
+    // every PDF (Oct 2026 review, H1: receipts failed with ENOENT Helvetica.afm).
+    "pdfkit",
   ],
   webpack: (config) => {
     // Our packages use NodeNext `.js` import specifiers that actually point to

@@ -65,6 +65,12 @@ const STATUS_TONES: Record<string, Tone> = {
   paid_in_full: "success",
   // fitness (derived health)
   needs_follow_up: "danger",
+  // styling blueprint
+  awaiting_photos: "neutral",
+  under_review: "info",
+  retake_requested: "warning",
+  published: "success",
+  archived: "neutral",
 };
 
 export function StatusBadge({ status, className }: { status: string; className?: string }) {

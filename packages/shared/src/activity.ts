@@ -59,6 +59,7 @@ const PATH_MODULES: Array<[string, ActivityModule]> = [
   ["/consultations", "consultations"],
   ["/styling-operations", "styling"],
   ["/fitness", "fitness"],
+  ["/messages", "styling"],
   ["/payments", "payments"],
   ["/cro-tracking", "cro"],
   ["/daily-report", "cro"],
@@ -96,6 +97,17 @@ const MODEL_MODULES: Record<string, ActivityModule> = {
   FollowUp: "cro",
   SalesReport: "cro",
   StylingOperation: "styling",
+  StylingBlueprint: "styling",
+  StylingPhoto: "styling",
+  StylingLook: "styling",
+  StylingPalette: "styling",
+  StylingItem: "styling",
+  StylingEssential: "styling",
+  StylingBlueprintVersion: "styling",
+  StylingLibraryItem: "styling",
+  // Only the styling channel is open; new chat kinds may need their own module.
+  Conversation: "styling",
+  Message: "styling",
   Document: "documents",
   Expense: "expenses",
   ContentItem: "media",
@@ -186,6 +198,23 @@ export function deriveVerb(model: string, op: WriteOp, changes: FieldChanges): s
       }
       break;
     }
+    case "StylingBlueprint":
+      if (op === "update" && changedTo(changes, "status", "published")) return "styling.blueprint_published";
+      if (op === "update" && changedTo(changes, "status", "retake_requested")) return "styling.retake_requested";
+      if (op === "update") return "styling.blueprint_edited";
+      break;
+    case "StylingLook":
+    case "StylingPalette":
+    case "StylingItem":
+    case "StylingEssential":
+      return "styling.blueprint_edited";
+    case "StylingLibraryItem":
+      return "styling.library_edited";
+    case "Message":
+      if (op === "create") return "chat.message_sent";
+      return "chat.message_updated";
+    case "Conversation":
+      return "chat.conversation_updated";
     case "Client":
       if (op === "create") return "client.created";
       if (changes.status) return "client.status_changed";
@@ -348,6 +377,13 @@ const CATALOG: Record<string, [string, ActivityTone]> = {
   "content.posted": ["Marked a content item as posted", "routine"],
   "styling.item_done": ["Ticked a styling checklist item for {client}", "routine"],
   "styling.item_undone": ["Unticked a styling checklist item for {client}", "correction"],
+  "styling.blueprint_edited": ["Worked on {client}'s Styling Blueprint", "routine"],
+  "styling.blueprint_published": ["Published {client}'s Styling Blueprint", "routine"],
+  "styling.retake_requested": ["Asked {client} to retake a photo", "routine"],
+  "styling.library_edited": ["Edited the styling library", "routine"],
+  "chat.message_sent": ["Sent a message to {client}", "routine"],
+  "chat.message_updated": ["Updated a chat message with {client}", "neutral"],
+  "chat.conversation_updated": ["Chat with {client} updated", "neutral"],
   "client.created": ["Added {client} as a lead", "routine"],
   "client.status_changed": ["Changed {client}'s status", "correction"],
   "client.updated": ["Updated {client}'s profile", "routine"],
