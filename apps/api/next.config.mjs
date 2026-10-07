@@ -27,6 +27,7 @@ const nextConfig = {
     // Blueprint PDF also embeds the Inter fonts.
     "/api/**": ["../../node_modules/.pnpm/pdfkit@*/node_modules/pdfkit/js/data/**"],
     "/api/styling/**": ["./src/assets/fonts/**"],
+    "/api/assessment/**": ["./src/assets/fonts/**"],
   },
   // @gtb/* packages ship TypeScript source; let Next transpile them.
   transpilePackages: ["@gtb/db", "@gtb/shared"],

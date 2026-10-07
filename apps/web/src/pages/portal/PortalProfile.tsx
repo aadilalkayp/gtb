@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useFindUniqueClient, useUpdateClient, useUpdateUser } from "@gtb/db/hooks";
-import { CLIENT_TYPE_LABELS, formatDate, humanize, type ClientType } from "@gtb/shared";
+import { CLIENT_TYPE_LABELS, formatDate, humanize, preConsultLabel, type ClientType } from "@gtb/shared";
 import { useAuth } from "@/auth/AuthProvider";
 import { supabase } from "@/lib/supabase";
 import { Avatar } from "@/components/ui/Avatar";
@@ -58,18 +58,32 @@ export function PortalProfile() {
 
       {client.assessment?.completedAt && (
         <section className="card p-5">
-          <h2 className="text-sm font-semibold">Assessment summary</h2>
+          <h2 className="text-sm font-semibold">Pre-consultation assessment</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Shared with your team · completed {formatDate(client.assessment.completedAt)}
+            Shared with your team · completed{" "}
+            {formatDate(client.assessment.submittedAt ?? client.assessment.completedAt)}
           </p>
           <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
             {client.assessment.skinType && (
-              <SummaryItem label="Skin type" value={humanize(client.assessment.skinType)} />
+              <SummaryItem label="Skin type" value={preConsultLabel(client.assessment.skinType)} />
             )}
             {client.assessment.skinConcerns.length > 0 && (
               <SummaryItem
                 label="Skin concerns"
-                value={client.assessment.skinConcerns.map(humanize).join(", ")}
+                value={client.assessment.skinConcerns.map(preConsultLabel).join(", ")}
+              />
+            )}
+            {client.assessment.activityLevel && (
+              <SummaryItem label="Activity level" value={preConsultLabel(client.assessment.activityLevel)} />
+            )}
+            {client.assessment.fitnessGoal && (
+              <SummaryItem
+                label="Fitness goal"
+                value={
+                  client.assessment.fitnessGoal === "other" && client.assessment.fitnessGoalOther
+                    ? client.assessment.fitnessGoalOther
+                    : preConsultLabel(client.assessment.fitnessGoal)
+                }
               />
             )}
             {client.assessment.fitnessLevel && (
@@ -100,7 +114,7 @@ export function PortalProfile() {
               />
             )}
             {client.assessment.dietaryPreference && (
-              <SummaryItem label="Diet" value={humanize(client.assessment.dietaryPreference)} />
+              <SummaryItem label="Diet" value={preConsultLabel(client.assessment.dietaryPreference)} />
             )}
           </dl>
           <p className="mt-4 text-xs text-muted-foreground">

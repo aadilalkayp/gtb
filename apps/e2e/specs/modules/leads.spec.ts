@@ -80,7 +80,8 @@ test("the client profile tabs all switch content", async ({ asRole }) => {
   await page.getByRole("button", { name: /^Documents/ }).click();
   await expect(page.getByRole("button", { name: "Upload document" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Assessment" }).click();
+  await page.getByRole("button", { name: "Pre-consultation" }).click();
+  await expect(page.getByRole("heading", { name: "Pre-Consultation Assessment" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Skincare" })).toBeVisible();
 
   await page.getByRole("button", { name: "Scans" }).click();

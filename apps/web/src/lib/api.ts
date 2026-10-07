@@ -552,6 +552,8 @@ export async function uploadClientDocument(args: {
   sessionId?: string;
   /** Required for nutrition_plan: the fitness plan the diet PDF belongs to. */
   fitnessPlanId?: string;
+  /** Optional short title / description (consultation plans). */
+  description?: string;
 }): Promise<UploadedDocument> {
   const form = new FormData();
   form.append("file", args.file);
@@ -559,6 +561,7 @@ export async function uploadClientDocument(args: {
   form.append("type", args.type);
   if (args.sessionId) form.append("sessionId", args.sessionId);
   if (args.fitnessPlanId) form.append("fitnessPlanId", args.fitnessPlanId);
+  if (args.description) form.append("description", args.description);
   const res = await authedFetch(`${env.apiUrl}/api/documents/upload`, {
     method: "POST",
     body: form,

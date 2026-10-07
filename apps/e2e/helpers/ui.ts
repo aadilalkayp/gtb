@@ -54,3 +54,38 @@ const TINY_PDF = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<
 export function pdfFile(name = "plan.pdf"): { name: string; mimeType: string; buffer: Buffer } {
   return { name, mimeType: "application/pdf", buffer: TINY_PDF };
 }
+
+/**
+ * Fill the Pre-Consultation Assessment (onboarding step 1 / /portal/assessment)
+ * with valid answers and upload the three skin photos.
+ */
+export async function fillPreConsultation(page: Page): Promise<void> {
+  await field(page, "Skin type").selectOption("combination");
+  await page.getByRole("group", { name: "Current skin concerns" }).getByText("Acne marks").click();
+  await page.getByRole("group", { name: "Current skin concerns" }).getByText("Dullness").click();
+  await page
+    .getByRole("radiogroup", { name: "Known skin allergies or product reactions" })
+    .getByText("No", { exact: true })
+    .click();
+  await page
+    .getByRole("radiogroup", { name: "Current dermatological treatment" })
+    .getByText("No", { exact: true })
+    .click();
+  for (const angle of ["front", "left", "right"] as const) {
+    await page.locator(`input[type="file"][data-angle="${angle}"]`).setInputFiles(pngFile(`${angle}.png`));
+    await page
+      .getByRole("button", { name: new RegExp(`^Replace ${angle} (side )?view photo$`) })
+      .waitFor();
+  }
+  await field(page, "Current activity level").selectOption("lightly_active");
+  await field(page, "Primary fitness goal").selectOption("fat_loss_muscle_gain");
+  await field(page, "Height (cm)").fill("178");
+  await field(page, "Weight (kg)").fill("76.5");
+  await page
+    .getByRole("radiogroup", { name: "Injury, medical condition or physical limitation" })
+    .getByText("No", { exact: true })
+    .click();
+  await field(page, "Dietary preference").selectOption("eggetarian");
+  await page.getByText(/^I confirm that the information provided is accurate/).click();
+  await page.getByText(/^I understand that the information and photos/).click();
+}

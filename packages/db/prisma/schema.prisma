@@ -176,6 +176,19 @@ enum DocumentType {
   styling_photo
   styling_image
   chat_attachment
+  skin_photo
+}
+
+/// Versioned plan PDFs: a newer upload supersedes, never deletes, the old one.
+enum DocumentStatus {
+  active
+  superseded
+}
+
+enum SkinPhotoAngle {
+  front
+  left
+  right
 }
 
 enum FitnessPlanStatus {
@@ -410,35 +423,68 @@ model Client {
   @@index([createdById])
 }
 
-/// Full onboarding assessment (SRS §6.2). 1:1 with Client.
+/// Onboarding assessment (SRS §6.2, replaced by the Pre-Consultation
+/// Assessment in Oct 2026). 1:1 with Client.
 model Assessment {
-  id                  String    @id() @default(uuid())
-  clientId            String    @unique()
-  client              Client    @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  age                 Int?
-  gender              String?
-  profilePhotoUrl     String?
-  skinType            String?
-  skinConcerns        String[]
-  skincareRoutine     String?
-  allergies           String?
-  dermatologicalNotes String?
-  heightCm            Int?
-  weightKg            Float?
-  fitnessLevel        String?
-  healthConditions    String?
-  dietaryPreference   String?
-  fitnessGoals        String[]
-  bodyType            String?
-  stylePreferences    String[]
-  outfitBudgetRange   String?
-  colorPreferences    String?
-  stylingNotes        String?
-  fullBodyPhotoUrl    String?
-  facePhotoUrl        String?
-  completedAt         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt()
+  id                        String      @id() @default(uuid())
+  clientId                  String      @unique()
+  client                    Client      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  age                       Int?
+  gender                    String?
+  profilePhotoUrl           String?
+  skinType                  String?
+  skinConcerns              String[]
+  skincareRoutine           String?
+  allergies                 String?
+  dermatologicalNotes       String?
+  heightCm                  Int?
+  weightKg                  Float?
+  fitnessLevel              String?
+  healthConditions          String?
+  dietaryPreference         String?
+  fitnessGoals              String[]
+  bodyType                  String?
+  stylePreferences          String[]
+  outfitBudgetRange         String?
+  colorPreferences          String?
+  stylingNotes              String?
+  fullBodyPhotoUrl          String?
+  facePhotoUrl              String?
+  completedAt               DateTime?
+  skinConcernOther          String?
+  skinAllergyFlag           Boolean?
+  dermTreatmentFlag         Boolean?
+  activityLevel             String?
+  fitnessGoal               String?
+  fitnessGoalOther          String?
+  healthConditionFlag       Boolean?
+  dietaryPreferenceOther    String?
+  dietaryRestrictions       String?
+  consentAccuracy           Boolean     @default(false)
+  consentProfessionalReview Boolean     @default(false)
+  /// Set when the pre-consultation form is submitted (null on older assessments).
+  submittedAt               DateTime?
+  /// Set when an admin reopens a submitted form so the client can change it.
+  reopenedAt                DateTime?
+  createdAt                 DateTime    @default(now())
+  updatedAt                 DateTime    @updatedAt()
+  skinPhotos                SkinPhoto[]
+}
+
+/// One of the three required skin assessment photos. The Document holds the
+/// untouched original; `previewPath` a browser-made ~1600px JPEG used for
+/// on-screen previews and the PDF (falls back to the original when absent).
+model SkinPhoto {
+  id           String         @id() @default(uuid())
+  assessmentId String
+  assessment   Assessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  angle        SkinPhotoAngle
+  documentId   String         @unique()
+  document     Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  previewPath  String?
+  createdAt    DateTime       @default(now())
+
+  @@unique([assessmentId, angle])
 }
 
 model LeadSource {
@@ -861,31 +907,38 @@ model ConversationRead {
 }
 
 model Document {
-  id             String        @id() @default(uuid())
+  id             String         @id() @default(uuid())
   clientId       String
-  client         Client        @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  client         Client         @relation(fields: [clientId], references: [id], onDelete: Restrict)
   type           DocumentType
   fileName       String
   fileUrl        String
   fileSize       Int
   sessionId      String?
-  session        Session?      @relation(fields: [sessionId], references: [id])
+  session        Session?       @relation(fields: [sessionId], references: [id])
   /// Set on nutrition_plan uploads: the fitness plan the diet PDF belongs to.
   /// One per plan; uploading a new one replaces the previous (upload route).
   fitnessPlanId  String?
-  fitnessPlan    FitnessPlan?  @relation(fields: [fitnessPlanId], references: [id], onDelete: SetNull)
+  fitnessPlan    FitnessPlan?   @relation(fields: [fitnessPlanId], references: [id], onDelete: SetNull)
   uploadedById   String
-  uploadedBy     User          @relation("DocUploader", fields: [uploadedById], references: [id])
-  createdAt      DateTime      @default(now())
-  paymentProof   Payment?      @relation("PaymentProof")
-  expenseReceipt Expense?      @relation("ExpenseReceipt")
+  uploadedBy     User           @relation("DocUploader", fields: [uploadedById], references: [id])
+  /// Plan PDFs (skincare/fitness/nutrition) are versioned per client and type
+  /// (nutrition: per fitness plan). Other documents stay version null, active.
+  version        Int?
+  status         DocumentStatus @default(active)
+  description    String?
+  createdAt      DateTime       @default(now())
+  paymentProof   Payment?       @relation("PaymentProof")
+  expenseReceipt Expense?       @relation("ExpenseReceipt")
   stylingPhoto   StylingPhoto?
   chatMessage    Message?
+  skinPhoto      SkinPhoto?
 
   @@index([clientId])
   @@index([type])
   @@index([sessionId])
   @@index([fitnessPlanId])
+  @@index([clientId, type, version])
 }
 
 /// Per-session fee for a consultant, optionally specific to a service type.

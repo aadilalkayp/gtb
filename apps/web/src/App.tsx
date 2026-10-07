@@ -138,6 +138,9 @@ const PortalFitness = lazy(() =>
 const PortalStyling = lazy(() =>
   import("@/pages/portal/PortalStyling").then((m) => ({ default: m.PortalStyling })),
 );
+const PortalAssessment = lazy(() =>
+  import("@/pages/portal/PortalAssessment").then((m) => ({ default: m.PortalAssessment })),
+);
 const ScanPage = lazy(() => import("@/pages/scan/ScanPage").then((m) => ({ default: m.ScanPage })));
 const ScanReportPage = lazy(() =>
   import("@/pages/scan/ScanReportPage").then((m) => ({ default: m.ScanReportPage })),
@@ -241,6 +244,7 @@ export default function App() {
                 <Route path="/portal/scan" element={<PortalScan />} />
                 <Route path="/portal/fitness" element={<PortalFitness />} />
                 <Route path="/portal/styling" element={<PortalStyling />} />
+                <Route path="/portal/assessment" element={<PortalAssessment />} />
                 <Route path="/portal/payments" element={<PortalPayments />} />
                 <Route path="/portal/documents" element={<PortalDocuments />} />
                 <Route path="/portal/profile" element={<PortalProfile />} />

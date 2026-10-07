@@ -65,7 +65,7 @@ test("consultant completes a skincare session", async ({ asRole }) => {
   const dialog = page.getByRole("dialog", { name: /^Complete Skincare session \d+$/ });
   await expect(dialog).toBeVisible();
   await field(dialog, "Actual date").fill(isoDaysFromNow(0));
-  await field(dialog, "Session notes").fill(sessionNote);
+  await field(dialog, "Internal note").fill(sessionNote);
   await dialog.getByRole("button", { name: "Mark completed" }).click();
   await expect(dialog).not.toBeVisible();
 

@@ -6,7 +6,9 @@ import {
   DOCUMENT_TYPES,
   MANUAL_UPLOAD_DOCUMENT_TYPES,
   FEATURE_FILE_TYPES,
+  CONSULTATION_PLAN_LABELS,
   humanize,
+  isVersionedPlanType,
   type DocumentType,
 } from "@gtb/shared";
 import { useDebouncedValue } from "@/lib/useDebouncedValue";
@@ -159,7 +161,9 @@ function UploadDocumentModal({ onClose, onDone }: { onClose: () => void; onDone:
 
   const [clientId, setClientId] = useState("");
   const [type, setType] = useState<DocumentType>("consultation_notes");
+  const [description, setDescription] = useState("");
   const [uploaded, setUploaded] = useState(false);
+  const isPlan = isVersionedPlanType(type);
 
   return (
     <Modal
@@ -189,17 +193,32 @@ function UploadDocumentModal({ onClose, onDone }: { onClose: () => void; onDone:
             {/* Diet plans are uploaded from their fitness plan, which they link to. */}
             {MANUAL_UPLOAD_DOCUMENT_TYPES.map((t) => (
               <option key={t} value={t}>
-                {humanize(t)}
+                {isVersionedPlanType(t) ? CONSULTATION_PLAN_LABELS[t] : humanize(t)}
               </option>
             ))}
           </Select>
         </Field>
+        {isPlan && (
+          <Field
+            label="Title or description"
+            hint="Optional. A newer plan becomes the active version; earlier ones stay in history."
+          >
+            <Input
+              value={description}
+              maxLength={300}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Week 1 to 4 routine"
+            />
+          </Field>
+        )}
         {clientId ? (
-          <Field label="File">
+          <Field label={isPlan ? "Plan PDF" : "File"}>
             <FileUploadField
               key={`${clientId}-${type}`}
               clientId={clientId}
               type={type}
+              description={isPlan ? description : undefined}
+              accept={isPlan ? "application/pdf" : undefined}
               label="Choose a file"
               onUploaded={(doc) => setUploaded(Boolean(doc))}
             />

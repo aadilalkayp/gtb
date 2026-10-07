@@ -2,7 +2,7 @@
  * The spine of the suite: one client's full journey across every role lane.
  *
  *   CRO creates a lead → sends the invite → the client registers, completes
- *   the onboarding assessment, picks a plan, steps back through the wizard to
+ *   the pre-consultation assessment (answers + three skin photos), picks a plan, steps back through the wizard to
  *   review, submits a payment proof → the CRO approves it (lead → converted)
  *   and records the negotiated price → the Ops Head assigns the team and
  *   activates (sessions scheduled) → consultant and client both see sessions.
@@ -12,7 +12,7 @@
  */
 import path from "node:path";
 import { test, expect, pageAs, E2E_DIR, saveSharedFixtures } from "../../fixtures/test.js";
-import { field, pngFile, uniq } from "../../helpers/ui.js";
+import { field, fillPreConsultation, pngFile, uniq } from "../../helpers/ui.js";
 import { E2E } from "../../helpers/env.js";
 
 test.describe.configure({ mode: "serial" });
@@ -60,12 +60,15 @@ test("client registers, completes onboarding, and submits first payment", async 
   await page.getByLabel("Confirm password").fill(clientPassword);
   await page.getByRole("button", { name: "Continue" }).click();
 
-  // Step 1: assessment (only the three required selects matter).
+  // Step 1: the pre-consultation assessment. Submitting without photos is
+  // refused; with all answers and three photos it goes through.
   await expect(page).toHaveURL(/\/portal\/onboarding/);
-  await field(page, "Gender").selectOption("male");
-  await field(page, "Skin type").selectOption("combination");
-  await field(page, "Current fitness level").selectOption("beginner");
-  await page.getByRole("button", { name: "Save & continue" }).click();
+  await page.getByRole("button", { name: "Submit Assessment" }).click();
+  await expect(page.getByText("Please choose your skin type")).toBeVisible();
+  await fillPreConsultation(page);
+  await page.getByRole("button", { name: "Submit Assessment" }).click();
+  await expect(page.getByText("Assessment submitted successfully.")).toBeVisible();
+  await page.getByRole("button", { name: "Continue to choose your plan" }).click();
 
   // Step 2: choose a plan.
   await page.getByRole("button", { name: "GTB (1 Month)" }).click();
@@ -78,7 +81,9 @@ test("client registers, completes onboarding, and submits first payment", async 
   await expect(page.getByRole("button", { name: "Continue to payment" })).toBeEnabled();
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(field(page, "Skin type")).toHaveValue("combination");
-  await page.getByRole("button", { name: "Save & continue" }).click();
+  await expect(page.getByText("All 3 skin photos added")).toBeVisible();
+  await page.getByRole("button", { name: "Submit Assessment" }).click();
+  await page.getByRole("button", { name: "Continue to choose your plan" }).click();
   await page.getByRole("button", { name: "Continue to payment" }).click();
   await expect(page.getByRole("heading", { name: "Review your details" })).toBeVisible();
 

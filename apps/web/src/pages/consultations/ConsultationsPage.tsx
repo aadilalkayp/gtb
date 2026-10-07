@@ -373,7 +373,7 @@ function CompleteSessionModal({
         <Field label="Actual date" required>
           <Input type="date" value={actualDate} onChange={(e) => setActualDate(e.target.value)} />
         </Field>
-        <Field label="Session notes">
+        <Field label="Internal note" hint="A short note for the team. Not shared with the client.">
           <Textarea
             rows={3}
             value={notes}
@@ -381,14 +381,20 @@ function CompleteSessionModal({
             placeholder="What was covered, observations, next steps…"
           />
         </Field>
+        {/* The consultant's plan PDF is the official plan; a re-upload adds a new version. */}
         <Field
-          label={`Upload ${SERVICE_TYPE_LABELS[svc].toLowerCase()} ${svc === "styling" ? "guide" : "plan"} (optional)`}
+          label={
+            svc === "styling"
+              ? "Upload styling guide (optional)"
+              : `Upload ${SERVICE_TYPE_LABELS[svc].toLowerCase()} consultation plan PDF (optional)`
+          }
         >
           <FileUploadField
             clientId={session.client.id}
             type={SERVICE_DOC_TYPE[svc]}
             sessionId={session.id}
-            label="Attach document"
+            accept={svc === "styling" ? undefined : "application/pdf"}
+            label={svc === "styling" ? "Attach document" : "Attach plan PDF"}
             onUploaded={() => undefined}
           />
         </Field>

@@ -12,6 +12,7 @@ export function FileUploadField({
   clientId,
   type,
   sessionId,
+  description,
   accept = "image/*,application/pdf",
   label = "Upload file",
   onUploaded,
@@ -20,6 +21,8 @@ export function FileUploadField({
   clientId: string;
   type: string;
   sessionId?: string;
+  /** Optional title / description stored with the document. */
+  description?: string;
   accept?: string;
   label?: string;
   onUploaded: (doc: UploadedDocument | null) => void;
@@ -44,7 +47,13 @@ export function FileUploadField({
     const localUrl = isImage ? URL.createObjectURL(file) : undefined;
     setPreview({ url: localUrl, name: file.name, isImage });
     try {
-      const doc = await uploadClientDocument({ clientId, type, file, sessionId });
+      const doc = await uploadClientDocument({
+        clientId,
+        type,
+        file,
+        sessionId,
+        description: description?.trim() || undefined,
+      });
       onUploaded(doc);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Upload failed");

@@ -4,7 +4,7 @@ import { humanize, formatDate } from "@gtb/shared";
 import { getDocumentUrl } from "@/lib/api";
 import { Badge, Spinner } from "@/components/ui";
 
-function prettySize(bytes: number): string {
+export function prettySize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;

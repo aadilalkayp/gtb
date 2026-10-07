@@ -37,6 +37,12 @@ export async function resolveClientId(
       (await db.fitnessPlan.findUnique({ where: { id }, select: { clientId: true } }))?.clientId,
     );
   }
+  if (model === "SkinPhoto" && typeof row.assessmentId === "string") {
+    const id = row.assessmentId;
+    return lookup(`Assessment:${id}`, async () =>
+      (await db.assessment.findUnique({ where: { id }, select: { clientId: true } }))?.clientId,
+    );
+  }
   if (model === "FitnessExercise" && typeof row.dayId === "string") {
     const id = row.dayId;
     return lookup(`FitnessWorkoutDay:${id}`, async () =>

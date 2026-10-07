@@ -13,7 +13,6 @@ import {
   XCircle,
   CheckCircle2,
   Trash2,
-  Upload,
 } from "lucide-react";
 import { useFindUniqueClient, useUpdateClient } from "@gtb/db/hooks";
 import {
@@ -21,6 +20,8 @@ import {
   STAFF_ROLE_LABELS,
   SERVICE_TYPE_LABELS,
   MANUAL_UPLOAD_DOCUMENT_TYPES,
+  CONSULTATION_PLAN_TYPES,
+  isVersionedPlanType,
   LEAD_PHASE_LABELS,
   formatINR,
   formatDate,
@@ -63,11 +64,12 @@ import {
 } from "@/components/ui";
 import { FullPageSpinner, Spinner } from "@/components/ui/Spinner";
 import { RatingStars } from "@/components/RatingStars";
-import { DocumentRow } from "@/components/DocumentRow";
 import { FileUploadField } from "@/components/FileUploadField";
 import { cn } from "@/lib/utils";
 import { InviteClientPanel } from "./InviteClientPanel";
 import { ClientScansTab } from "./ClientScansTab";
+import { PreConsultationTab } from "./PreConsultationTab";
+import { ConsultationPlanUploadModal, DocumentTimeline } from "./DocumentTimeline";
 import { MilestoneScheduleModal } from "../payments/MilestoneScheduleModal";
 import { EditPaymentModal, type EditablePayment } from "../payments/EditPaymentModal";
 import { PaymentMarkers } from "../payments/PaymentMarkers";
@@ -92,6 +94,15 @@ export function ClientProfilePage() {
   const { role } = useAuth();
   const isAdmin = role === "founder" || role === "ops_head";
   const canEditTerms = isAdmin || role === "cro";
+  // Pre-consultation answers and skin photos: admins, CRO, skincare and fitness.
+  const canSeeAssessment =
+    isAdmin || role === "cro" || role === "skincare_consultant" || role === "fitness_trainer";
+  const planUploadTypes = CONSULTATION_PLAN_TYPES.filter(
+    (t) =>
+      isAdmin ||
+      (t === "skincare_plan" && role === "skincare_consultant") ||
+      (t === "fitness_plan" && role === "fitness_trainer"),
+  );
   // ?tab=styling deep links (notifications) open a tab directly.
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get("tab") as TabId | null;
@@ -104,6 +115,7 @@ export function ClientProfilePage() {
   const [editingTerms, setEditingTerms] = useState(false);
   const [editingPayment, setEditingPayment] = useState<EditablePayment | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [showPlanUpload, setShowPlanUpload] = useState(false);
   const [showWeddingEdit, setShowWeddingEdit] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const navigate = useNavigate();
@@ -137,10 +149,12 @@ export function ClientProfilePage() {
           where: { isActive: true },
           include: { staff: { select: { id: true, name: true, avatarUrl: true } } },
         },
-        // Styling photos and stylist edits live on the Styling tab.
+        // Styling photos and stylist edits live on the Styling tab, skin
+        // photos on the Pre-consultation tab.
         documents: {
-          where: { type: { notIn: ["styling_photo", "styling_image", "chat_attachment"] } },
+          where: { type: { notIn: ["styling_photo", "styling_image", "chat_attachment", "skin_photo"] } },
           orderBy: { createdAt: "desc" },
+          include: { uploadedBy: { select: { name: true } } },
         },
         assessment: true,
         stylingBlueprint: { select: { id: true } },
@@ -188,7 +202,7 @@ export function ClientProfilePage() {
     { id: "sessions", label: "Sessions", count: client.sessions.length },
     { id: "payments", label: "Payments", count: payments.length },
     { id: "documents", label: "Documents", count: client.documents.length },
-    { id: "assessment", label: "Assessment" },
+    ...(canSeeAssessment ? [{ id: "assessment" as const, label: "Pre-consultation" }] : []),
     { id: "scans", label: "Scans" },
     ...(client.stylingBlueprint ? [{ id: "styling" as const, label: "Styling" }] : []),
     ...(role === "founder" ? [{ id: "history" as const, label: "History" }] : []),
@@ -598,34 +612,23 @@ export function ClientProfilePage() {
           ))}
 
         {tab === "documents" && (
-          <div className="space-y-3">
-            <div className="flex justify-end">
-              <Button size="sm" variant="outline" onClick={() => setShowUpload(true)}>
-                <Upload className="h-4 w-4" /> Upload document
-              </Button>
-            </div>
-            {client.documents.length ? (
-              <div className="card divide-y divide-border">
-                {client.documents.map((d) => (
-                  <DocumentRow key={d.id} doc={d} />
-                ))}
-              </div>
-            ) : (
-              <p className="card p-10 text-center text-sm text-muted-foreground">
-                No documents uploaded yet.
-              </p>
-            )}
-          </div>
+          <DocumentTimeline
+            clientId={client.id}
+            documents={client.documents}
+            assessmentSubmittedAt={client.assessment?.submittedAt ?? null}
+            canUploadPlan={planUploadTypes.length > 0}
+            onUploadPlan={() => setShowPlanUpload(true)}
+            onUploadOther={() => setShowUpload(true)}
+          />
         )}
 
-        {tab === "assessment" &&
-          (client.assessment?.completedAt ? (
-            <AssessmentDetail assessment={client.assessment} />
-          ) : (
-            <p className="card p-10 text-center text-sm text-muted-foreground">
-              The client hasn't completed their onboarding assessment yet.
-            </p>
-          ))}
+        {tab === "assessment" && canSeeAssessment && (
+          <PreConsultationTab
+            clientId={client.id}
+            isAdmin={isAdmin}
+            legacy={client.assessment ? <AssessmentDetail assessment={client.assessment} /> : null}
+          />
+        )}
 
         {tab === "scans" && <ClientScansTab clientId={client.id} />}
         {tab === "styling" && client.stylingBlueprint && (
@@ -695,6 +698,18 @@ export function ClientProfilePage() {
             }
             setStatusAction(null);
             await refetch();
+          }}
+        />
+      )}
+
+      {showPlanUpload && (
+        <ConsultationPlanUploadModal
+          clientId={client.id}
+          allowedTypes={planUploadTypes}
+          onClose={() => setShowPlanUpload(false)}
+          onDone={() => {
+            setShowPlanUpload(false);
+            void refetch();
           }}
         />
       )}
@@ -1113,7 +1128,9 @@ function UploadDocumentModal({
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [type, setType] = useState<string>("skincare_plan");
+  // Consultation plans have their own "Upload Consultation Plan PDF" flow.
+  const types = MANUAL_UPLOAD_DOCUMENT_TYPES.filter((t) => !isVersionedPlanType(t));
+  const [type, setType] = useState<string>(types[0] ?? "consultation_notes");
   const [uploaded, setUploaded] = useState(false);
 
   return (
@@ -1128,7 +1145,7 @@ function UploadDocumentModal({
         <Field label="Document type" required>
           <Select value={type} onChange={(e) => setType(e.target.value)}>
             {/* Diet plans are uploaded from their fitness plan, which they link to. */}
-            {MANUAL_UPLOAD_DOCUMENT_TYPES.map((t) => (
+            {types.map((t) => (
               <option key={t} value={t}>
                 {humanize(t)}
               </option>

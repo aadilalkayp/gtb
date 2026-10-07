@@ -3,10 +3,8 @@ import { ArrowLeft } from "lucide-react";
 import {
   formatINR,
   formatDate,
-  FITNESS_LEVEL_LABELS,
   SERVICE_TYPE_LABELS,
-  SKIN_TYPE_LABELS,
-  STYLE_PREFERENCE_LABELS,
+  preConsultLabel,
 } from "@gtb/shared";
 import { submitPayment } from "@/lib/api";
 import { milestonePaces, planPace, type PlanPaymentLite } from "@/lib/insights";
@@ -17,8 +15,9 @@ import type { UploadedDocument } from "@/lib/api";
 
 interface AssessmentSummary {
   skinType: string | null;
-  fitnessLevel: string | null;
-  stylePreferences: string[];
+  activityLevel: string | null;
+  fitnessGoal: string | null;
+  submittedAt: Date | string | null;
 }
 
 interface ReviewPlan {
@@ -90,10 +89,10 @@ export function PaymentStep({
 
   const assessmentBits = assessment
     ? [
-        assessment.skinType && `${label(SKIN_TYPE_LABELS, assessment.skinType)} skin`,
-        assessment.fitnessLevel &&
-          `${label(FITNESS_LEVEL_LABELS, assessment.fitnessLevel)} fitness`,
-        ...assessment.stylePreferences.slice(0, 2).map((s) => label(STYLE_PREFERENCE_LABELS, s)),
+        assessment.skinType && `${preConsultLabel(assessment.skinType)} skin`,
+        assessment.activityLevel && preConsultLabel(assessment.activityLevel),
+        assessment.fitnessGoal && preConsultLabel(assessment.fitnessGoal),
+        assessment.submittedAt && "3 skin photos",
       ].filter(Boolean)
     : [];
 
@@ -109,8 +108,8 @@ export function PaymentStep({
           </p>
         </div>
         <ReviewRow
-          label="Assessment"
-          value="Completed"
+          label="Pre-consultation assessment"
+          value="Submitted"
           detail={assessmentBits.join(" · ") || undefined}
           action="Edit"
           onAction={() => onEdit("assessment")}
