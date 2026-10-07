@@ -17,7 +17,8 @@ function json(req: NextRequest, body: unknown, status = 200): Response {
  * Mint a short-lived signed URL for a stored document, mirroring the Document
  * read policy and SRS §16.1's visibility matrix:
  *   - admins see everything;
- *   - the owning client sees their own docs except consultation_notes;
+ *   - the owning client sees their own docs except consultation_notes, skin
+ *     photos and superseded plan versions;
  *   - assigned staff see docs except payment_proof (CRO/Ops/Founder only) and
  *     expense_receipt (Ops/Founder only).
  */
@@ -39,13 +40,14 @@ async function handlePost(req: NextRequest): Promise<Response> {
       fileUrl: true,
       fileName: true,
       type: true,
+      status: true,
       clientId: true,
       client: {
         select: {
           userId: true,
           assignments: {
             where: { staffId: authUser.id, isActive: true },
-            select: { id: true },
+            select: { id: true, role: true },
           },
         },
       },
@@ -65,8 +67,22 @@ async function handlePost(req: NextRequest): Promise<Response> {
   // Styling files and chat attachments have their own signing routes, which
   // apply the draft / conversation rules (mirrors the Document read policy).
   const featureOnly = doc.type === "styling_photo" || doc.type === "styling_image" || doc.type === "chat_attachment";
-  const visibleToOwner = isOwner && doc.type !== "consultation_notes" && !featureOnly;
-  const visibleToStaff = isAssigned && !financialRestricted && doc.type !== "chat_attachment";
+  // Skin photos: the client sees them in their assessment form (signed by
+  // /api/assessment); among assigned staff only CRO, skincare and fitness.
+  const skinPhotoViewer = doc.client.assignments.some((a) =>
+    ["cro", "skincare_consultant", "fitness_trainer"].includes(a.role),
+  );
+  const visibleToOwner =
+    isOwner &&
+    doc.type !== "consultation_notes" &&
+    doc.type !== "skin_photo" &&
+    doc.status === "active" &&
+    !featureOnly;
+  const visibleToStaff =
+    isAssigned &&
+    !financialRestricted &&
+    doc.type !== "chat_attachment" &&
+    (doc.type !== "skin_photo" || skinPhotoViewer);
   if (!isAdmin && !visibleToOwner && !visibleToStaff) {
     return json(req, { error: "Forbidden" }, 403);
   }

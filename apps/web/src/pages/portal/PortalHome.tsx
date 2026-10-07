@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CalendarCheck, Wallet, FileText, Sparkles, ArrowRight, Heart, Camera } from "lucide-react";
+import { CalendarCheck, Wallet, FileText, Sparkles, ArrowRight, Heart, Camera, ClipboardList } from "lucide-react";
 import { useFindUniqueClient } from "@gtb/db/hooks";
 import {
   ASSIGNMENT_ROLES,
@@ -36,6 +36,7 @@ export function PortalHome() {
           },
         },
         sessions: { orderBy: { scheduledDate: "asc" } },
+        assessment: { select: { submittedAt: true, reopenedAt: true } },
         assignments: {
           where: { isActive: true },
           include: { staff: { select: { id: true, name: true, avatarUrl: true } } },
@@ -72,8 +73,30 @@ export function PortalHome() {
     assignment: client.assignments.find((a) => a.role === role),
   })).filter((t) => t.assignment);
 
+  const assessmentReopened = Boolean(
+    client.assessment?.reopenedAt && !client.assessment.submittedAt,
+  );
+
   return (
     <div className="animate-fade-up space-y-5">
+      {assessmentReopened && (
+        <Link
+          to="/portal/assessment"
+          className="card group flex items-center gap-3 border-primary/30 p-4 transition-[border-color,box-shadow] hover:border-primary/60 hover:shadow-md"
+        >
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+            <ClipboardList className="h-[18px] w-[18px]" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold">Update your pre-consultation assessment</span>
+            <span className="block text-xs text-muted-foreground">
+              Your team has reopened it so you can change your answers or photos.
+            </span>
+          </span>
+          <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+        </Link>
+      )}
+
       {/* Wedding countdown hero */}
       <section className="relative overflow-hidden rounded-card bg-gradient-to-br from-primary via-primary to-primary/80 p-6 text-primary-foreground shadow-card sm:p-8">
         <Heart className="absolute -right-6 -top-6 h-36 w-36 rotate-12 opacity-10" />

@@ -4,6 +4,7 @@ import { ASSIGNMENT_ROLES, type AssignmentRole } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { corsHeaders, handleOptions } from "@/lib/cors";
 import { withRequestLog } from "@/lib/handler";
+import { notifyNewAssigneesOfAssessment } from "@/lib/assessment";
 import { notifyUsers } from "@/lib/notify";
 import { PORTAL_STYLING_LINK, clientHasStyling, ensureBlueprint } from "@/lib/styling";
 
@@ -68,6 +69,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
   }
 
   let newStylist = false;
+  const created: { staffId: string; role: string }[] = [];
   try {
     await prisma.$transaction(async (tx) => {
       for (const a of assignments) {
@@ -98,6 +100,7 @@ async function handlePost(req: NextRequest): Promise<Response> {
             assignedById: authUser.id,
           },
         });
+        created.push({ staffId: a.staffId, role: a.role });
         if (a.role === "styling_consultant" && !existing) newStylist = true;
       }
     });
@@ -109,6 +112,10 @@ async function handlePost(req: NextRequest): Promise<Response> {
     }
     throw e;
   }
+
+  // A newly assigned skincare consultant or fitness trainer hears that the
+  // client's pre-consultation assessment is ready to review.
+  await notifyNewAssigneesOfAssessment(client.id, created);
 
   // A first stylist opens the Styling Blueprint: the client is asked for
   // their photos straight away (GTB decision, Oct 2026). A reassignment keeps

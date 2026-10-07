@@ -545,18 +545,20 @@ describe("Phase 1 — SEC-17: assessment field scoping", () => {
     });
   });
 
-  it("allows the client wizard upsert including completedAt", async () => {
+  // Pre-Consultation Assessment (Oct 2026): the client fills the form only via
+  // /api/assessment/submit, which validates it; the gateway is read-only.
+  it("rejects a client writing their assessment through the gateway", async () => {
     await seedUser({ id: "client1", role: "client" });
     const client = await seedClient({ id: "c1", userId: "client1" });
-    await seedAssessment(client.id, {});
-    const db = as("client1", "client");
-    await db.assessment.upsert({
-      where: { clientId: client.id },
-      create: { clientId: client.id, completedAt: new Date(), skinType: "oily" },
-      update: { completedAt: new Date(), skinType: "dry" },
-    });
+    await seedAssessment(client.id, { skinType: "oily" });
+    await expectDenied(
+      as("client1", "client").assessment.update({
+        where: { clientId: client.id },
+        data: { skinType: "dry", completedAt: new Date() },
+      }),
+    );
     const row = await prisma.assessment.findUniqueOrThrow({ where: { clientId: client.id } });
-    expect(row.skinType).toBe("dry");
+    expect(row.skinType).toBe("oily");
   });
 
   it("rejects a client moving the assessment to another client", async () => {

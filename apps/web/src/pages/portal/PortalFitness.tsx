@@ -56,9 +56,9 @@ export function PortalFitness() {
       include: {
         days: { include: { exercises: true }, orderBy: { dayIndex: "asc" } },
         checkIns: { orderBy: { weekNumber: "desc" } },
-        // The plan's diet plan PDF (one per plan; re-uploads replace it).
+        // The plan's current diet plan PDF (re-uploads add a version; older ones stay in history).
         dietPlans: {
-          where: { type: "nutrition_plan" },
+          where: { type: "nutrition_plan", status: "active" },
           orderBy: { createdAt: "desc" },
           take: 1,
           select: { id: true },

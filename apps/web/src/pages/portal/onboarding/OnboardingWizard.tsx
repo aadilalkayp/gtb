@@ -147,11 +147,7 @@ export function OnboardingWizard() {
             </div>
 
             {stepKey === "assessment" && (
-              <AssessmentStep
-                client={{ id: client.id, type: client.type, leadPhase: client.leadPhase }}
-                assessment={client.assessment ?? null}
-                onDone={() => handleStepDone("plan")}
-              />
+              <AssessmentStep onDone={() => handleStepDone("plan")} />
             )}
             {stepKey === "plan" && (
               <PlanStep

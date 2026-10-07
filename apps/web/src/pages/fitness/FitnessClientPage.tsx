@@ -86,8 +86,8 @@ export function FitnessClientPage() {
         checkIns: { orderBy: { weekNumber: "desc" } },
         trainer: { select: { id: true, name: true } },
         client: { select: { id: true, name: true, clientCode: true, city: true } },
-        // The plan's diet plan PDF (one per plan; re-uploads replace it).
-        dietPlans: { where: { type: "nutrition_plan" }, orderBy: { createdAt: "desc" }, take: 1 },
+        // The plan's current diet plan PDF (re-uploads add a version; older ones stay in history).
+        dietPlans: { where: { type: "nutrition_plan", status: "active" }, orderBy: { createdAt: "desc" }, take: 1 },
       },
     },
     { enabled: Boolean(id) },
@@ -397,7 +397,7 @@ function DietPlanCard({
               onClick={() => inputRef.current?.click()}
             >
               <Upload className="mr-1.5 h-4 w-4" />
-              {dietPlan ? "Replace PDF" : "Upload PDF"}
+              {dietPlan ? "Upload new version" : "Upload PDF"}
             </Button>
           </>
         )}

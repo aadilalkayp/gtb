@@ -205,6 +205,7 @@ export const DOCUMENT_TYPES = [
   "styling_photo",
   "styling_image",
   "chat_attachment",
+  "skin_photo",
 ] as const;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];
 
@@ -215,6 +216,7 @@ export const STYLING_FILE_TYPES: readonly DocumentType[] = ["styling_photo", "st
 export const FEATURE_FILE_TYPES: readonly DocumentType[] = [
   ...STYLING_FILE_TYPES,
   "chat_attachment",
+  "skin_photo",
 ];
 
 /** Types staff pick in the generic upload dialogs (others have their own flows). */

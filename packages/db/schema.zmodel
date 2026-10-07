@@ -211,6 +211,19 @@ enum DocumentType {
   styling_photo
   styling_image
   chat_attachment
+  skin_photo
+}
+
+/// Versioned plan PDFs: a newer upload supersedes, never deletes, the old one.
+enum DocumentStatus {
+  active
+  superseded
+}
+
+enum SkinPhotoAngle {
+  front
+  left
+  right
 }
 
 enum FitnessPlanStatus {
@@ -520,56 +533,103 @@ model Client {
   @@deny('create', createdById != auth().id)
 }
 
-/// Full onboarding assessment (SRS §6.2). 1:1 with Client.
-// SEC-17: fields carry @allow('update') scoping which service's staff (or the
-// owning client) may write them; the client owns the whole form, consultants
-// are limited to their own service's fields, completedAt is client/admin-only.
+/// Onboarding assessment (SRS §6.2, replaced by the Pre-Consultation
+/// Assessment in Oct 2026). 1:1 with Client.
+// SEC-17: fields carry @allow('update') scoping which service's staff may
+// write them. The client fills the form only through /api/assessment/submit,
+// so clients have no gateway write access at all.
 model Assessment {
   id       String @id @default(uuid()) @deny('update', true)
   clientId String @unique @deny('update', true)
   client   Client @relation(fields: [clientId], references: [id], onDelete: Restrict)
 
   // General
-  age             Int? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
-  gender          String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
-  profilePhotoUrl String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
+  age             Int? @allow('update', auth().role == founder || auth().role == ops_head)
+  gender          String? @allow('update', auth().role == founder || auth().role == ops_head)
+  profilePhotoUrl String? @allow('update', auth().role == founder || auth().role == ops_head)
 
   // Skincare
-  skinType            String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
-  skinConcerns        String[] @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
-  skincareRoutine     String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
-  allergies           String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
-  dermatologicalNotes String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == skincare_consultant)
+  skinType            String? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == skincare_consultant)
+  skinConcerns        String[] @allow('update', auth().role == founder || auth().role == ops_head || auth().role == skincare_consultant)
+  skincareRoutine     String? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == skincare_consultant)
+  allergies           String? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == skincare_consultant)
+  dermatologicalNotes String? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == skincare_consultant)
 
   // Fitness
-  heightCm         Int? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
-  weightKg         Float? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
-  fitnessLevel     String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
-  healthConditions String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
-  dietaryPreference String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
-  fitnessGoals     String[] @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == fitness_trainer)
+  heightCm         Int? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == fitness_trainer)
+  weightKg         Float? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == fitness_trainer)
+  fitnessLevel     String? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == fitness_trainer)
+  healthConditions String? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == fitness_trainer)
+  dietaryPreference String? @allow('update', auth().role == founder || auth().role == ops_head || auth().role == fitness_trainer)
+  fitnessGoals     String[] @allow('update', auth().role == founder || auth().role == ops_head || auth().role == fitness_trainer)
 
   // Styling
-  bodyType          String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
-  stylePreferences  String[] @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
-  outfitBudgetRange String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
-  colorPreferences  String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
-  stylingNotes      String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id || auth().role == styling_consultant)
+  bodyType          String? @allow('update', auth().role == founder || auth().role == ops_head)
+  stylePreferences  String[] @allow('update', auth().role == founder || auth().role == ops_head)
+  outfitBudgetRange String? @allow('update', auth().role == founder || auth().role == ops_head)
+  colorPreferences  String? @allow('update', auth().role == founder || auth().role == ops_head)
+  stylingNotes      String? @allow('update', auth().role == founder || auth().role == ops_head)
 
   // Photos
-  fullBodyPhotoUrl String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
-  facePhotoUrl     String? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
+  fullBodyPhotoUrl String? @allow('update', auth().role == founder || auth().role == ops_head)
+  facePhotoUrl     String? @allow('update', auth().role == founder || auth().role == ops_head)
 
-  completedAt DateTime? @allow('update', auth().role == founder || auth().role == ops_head || client.userId == auth().id)
+  completedAt DateTime? @allow('update', auth().role == founder || auth().role == ops_head)
+
+  // ---- Pre-Consultation Assessment (Oct 2026, packages/shared preConsultation.ts).
+  // Written only by /api/assessment/* (server routes validate the whole form),
+  // so none of these are gateway-updatable. Details reuse the columns above:
+  // allergies, dermatologicalNotes, healthConditions.
+  skinConcernOther          String?  @deny('update', true)
+  skinAllergyFlag           Boolean? @deny('update', true)
+  dermTreatmentFlag         Boolean? @deny('update', true)
+  activityLevel             String?  @deny('update', true)
+  fitnessGoal               String?  @deny('update', true)
+  fitnessGoalOther          String?  @deny('update', true)
+  healthConditionFlag       Boolean? @deny('update', true)
+  dietaryPreferenceOther    String?  @deny('update', true)
+  dietaryRestrictions       String?  @deny('update', true)
+  consentAccuracy           Boolean  @default(false) @deny('update', true)
+  consentProfessionalReview Boolean  @default(false) @deny('update', true)
+  /// Set when the pre-consultation form is submitted (null on older assessments).
+  submittedAt               DateTime? @deny('update', true)
+  /// Set when an admin reopens a submitted form so the client can change it.
+  reopenedAt                DateTime? @deny('update', true)
+
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
+  skinPhotos SkinPhoto[]
+
+  // Facial photos and health answers: founder, ops head and the client's
+  // assigned CRO, skincare consultant and fitness trainer only (GTB, Oct 2026).
+  // Coaches and stylists no longer see the assessment.
   @@allow('read', auth().role == founder || auth().role == ops_head)
-  @@allow('read', client.assignments?[staffId == auth().id && isActive])
+  @@allow('read', client.assignments?[staffId == auth().id && isActive && (role == cro || role == skincare_consultant || role == fitness_trainer)])
   @@allow('read', client.userId == auth().id)
   @@allow('create,update', auth().role == founder || auth().role == ops_head)
-  @@allow('create,update', client.userId == auth().id)
-  @@allow('update', client.assignments?[staffId == auth().id && isActive && (role == skincare_consultant || role == fitness_trainer || role == styling_consultant)])
+  @@allow('update', client.assignments?[staffId == auth().id && isActive && (role == skincare_consultant || role == fitness_trainer)])
+}
+
+/// One of the three required skin assessment photos. The Document holds the
+/// untouched original; `previewPath` a browser-made ~1600px JPEG used for
+/// on-screen previews and the PDF (falls back to the original when absent).
+model SkinPhoto {
+  id           String         @id @default(uuid()) @deny('update', true)
+  assessmentId String         @deny('update', true)
+  assessment   Assessment     @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  angle        SkinPhotoAngle @deny('update', true)
+  documentId   String         @unique @deny('update', true)
+  document     Document       @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  previewPath  String?        @deny('update', true)
+
+  createdAt DateTime @default(now())
+
+  @@unique([assessmentId, angle])
+
+  @@allow('read', auth().role == founder || auth().role == ops_head)
+  @@allow('read', assessment.client.assignments?[staffId == auth().id && isActive && (role == cro || role == skincare_consultant || role == fitness_trainer)])
+  @@allow('read', assessment.client.userId == auth().id)
 }
 
 model LeadSource {
@@ -1265,28 +1325,39 @@ model Document {
   uploadedById String
   uploadedBy   User         @relation("DocUploader", fields: [uploadedById], references: [id])
 
+  /// Plan PDFs (skincare/fitness/nutrition) are versioned per client and type
+  /// (nutrition: per fitness plan). Other documents stay version null, active.
+  version     Int?
+  status      DocumentStatus @default(active)
+  description String?
+
   createdAt DateTime @default(now())
 
   paymentProof     Payment?     @relation("PaymentProof")
   expenseReceipt   Expense?     @relation("ExpenseReceipt")
   stylingPhoto     StylingPhoto?
   chatMessage      Message?
+  skinPhoto        SkinPhoto?
 
   @@index([clientId])
   @@index([type])
   // DATA-5: session-scoped document lookups (pending-upload checks).
   @@index([sessionId])
   @@index([fitnessPlanId])
+  @@index([clientId, type, version])
 
   @@allow('read', auth().role == founder || auth().role == ops_head)
   // Assigned staff see client documents, except the financial types that are
   // restricted by SRS §16.1: payment_proof is CRO/Ops/Founder only,
   // expense_receipt is Ops/Founder only (SEC-10).
-  @@allow('read', client.assignments?[staffId == auth().id && isActive] && (type != payment_proof || auth().role == cro) && type != expense_receipt && type != chat_attachment)
+  // Skin photos: CRO, skincare consultant and fitness trainer only.
+  @@allow('read', client.assignments?[staffId == auth().id && isActive] && (type != payment_proof || auth().role == cro) && type != expense_receipt && type != chat_attachment && (type != skin_photo || auth().role == cro || auth().role == skincare_consultant || auth().role == fitness_trainer))
   // Client sees own documents except internal consultation notes. Styling
   // photos and stylist edits reach the client only through the Blueprint
   // portal route, which signs just the published ones (drafts stay hidden).
-  @@allow('read', client.userId == auth().id && type != consultation_notes && type != styling_photo && type != styling_image && type != chat_attachment)
+  // Skin photos live in the assessment form; of a versioned plan the client
+  // sees only the current version.
+  @@allow('read', client.userId == auth().id && type != consultation_notes && type != styling_photo && type != styling_image && type != chat_attachment && type != skin_photo && status == active)
   // Gateway creates are intentionally not allowed: every Document row must be
   // created by the server upload route, which validates ownership and builds a
   // traversal-safe storage key (SEC-5). Deletes are admin-only.

@@ -38,7 +38,7 @@ test("fitness trainer completes one of the shared client's fitness sessions", as
   const dialog = page.getByRole("dialog", { name: /^Complete Fitness session/ });
   await expect(dialog).toBeVisible();
   await field(dialog, "Actual date").fill(new Date().toISOString().slice(0, 10));
-  await field(dialog, "Session notes").fill("Full-body baseline workout, good form.");
+  await field(dialog, "Internal note").fill("Full-body baseline workout, good form.");
   await dialog.getByRole("button", { name: "Mark completed" }).click();
   await expect(dialog).not.toBeVisible();
   await page.context().close();

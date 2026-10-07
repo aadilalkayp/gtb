@@ -89,6 +89,7 @@ export function moduleForPath(pathname: string): ActivityModule {
 const MODEL_MODULES: Record<string, ActivityModule> = {
   Client: "clients",
   Assessment: "clients",
+  SkinPhoto: "clients",
   Assignment: "assignments",
   ClientPlan: "payments",
   PaymentMilestone: "payments",
@@ -246,6 +247,15 @@ export function deriveVerb(model: string, op: WriteOp, changes: FieldChanges): s
       return "fitness.plan_edited";
     case "Document":
       if (op === "create") return "document.uploaded";
+      break;
+    case "Assessment":
+      if (op === "update" && changes.submittedAt?.[1]) return "assessment.submitted";
+      if (op === "create" && changes.submittedAt?.[1]) return "assessment.submitted";
+      if (op === "update" && changes.reopenedAt?.[1]) return "assessment.reopened";
+      break;
+    case "SkinPhoto":
+      if (op === "create") return "assessment.photo_uploaded";
+      if (op === "delete") return "assessment.photo_removed";
       break;
     case "SalesReport":
       if (changedTo(changes, "dayOff", true) || (op === "create" && changes.dayOff?.[1] === true)) {
@@ -405,6 +415,10 @@ const CATALOG: Record<string, [string, ActivityTone]> = {
   "fitness.note_added": ["Added a trainer note for {client}", "routine"],
   "fitness.plan_edited": ["Edited {client}'s fitness plan", "routine"],
   "document.uploaded": ["Uploaded a document for {client}", "routine"],
+  "assessment.submitted": ["{client} submitted the pre-consultation assessment", "routine"],
+  "assessment.reopened": ["Reopened {client}'s pre-consultation assessment", "correction"],
+  "assessment.photo_uploaded": ["Added a skin photo for {client}", "routine"],
+  "assessment.photo_removed": ["Removed a skin photo for {client}", "correction"],
   "settings.changed": ["Changed settings", "correction"],
   "salesreport.submitted": ["Submitted a daily sales report", "routine"],
   "salesreport.edited": ["Edited a daily sales report", "correction"],

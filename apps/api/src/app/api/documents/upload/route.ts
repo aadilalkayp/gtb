@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 import { prisma } from "@gtb/db";
-import { DOCUMENT_TYPES, type DocumentType } from "@gtb/shared";
+import { DOCUMENT_TYPES, isVersionedPlanType, type DocumentType } from "@gtb/shared";
 import { resolveAuthUser } from "@/lib/auth";
 import { deleteObjects, uploadObject } from "@/lib/storage";
 import { corsHeaders, handleOptions } from "@/lib/cors";
@@ -35,6 +35,7 @@ const UPLOADER_BY_TYPE: Record<DocumentType, "client" | "client_or_staff" | "sta
   styling_photo: "system",
   styling_image: "system",
   chat_attachment: "system", // sent with a message (/api/messages)
+  skin_photo: "system", // pre-consultation assessment (/api/assessment/photos)
 };
 
 function json(req: NextRequest, body: unknown, status = 200): Response {
@@ -67,6 +68,11 @@ async function handlePost(req: NextRequest): Promise<Response> {
   const type = form.get("type");
   const sessionId = form.get("sessionId");
   const fitnessPlanId = form.get("fitnessPlanId");
+  const rawDescription = form.get("description");
+  const description =
+    typeof rawDescription === "string" && rawDescription.trim()
+      ? rawDescription.trim().slice(0, 300)
+      : undefined;
 
   if (typeof clientId !== "string" || typeof type !== "string") {
     return json(req, { error: "clientId and type are required" }, 400);
@@ -152,6 +158,10 @@ async function handlePost(req: NextRequest): Promise<Response> {
   if (!DOCUMENT_MIME.has(declaredType)) {
     return json(req, { error: "Only JPEG, PNG, PDF and DOCX files are allowed" }, 415);
   }
+  // Consultation plans are delivered as PDFs (pre-consultation spec §12).
+  if (isVersionedPlanType(type) && declaredType !== "application/pdf") {
+    return json(req, { error: "Plans must be uploaded as a PDF" }, 415);
+  }
   const buffer = Buffer.from(await file.arrayBuffer());
   const sniffed = sniffMime(buffer);
   if (!sniffed || sniffed !== declaredType) {
@@ -167,30 +177,46 @@ async function handlePost(req: NextRequest): Promise<Response> {
     return json(req, { error: "Upload failed. Please try again." }, 502);
   }
 
-  const document = await prisma.document.create({
-    data: {
-      clientId: client.id,
-      type: type as DocumentType,
-      fileName: file.name || fileName,
-      fileUrl: path, // storage object path; resolved to a signed URL when viewed
-      fileSize: file.size,
-      uploadedById: authUser.id,
-      sessionId: typeof sessionId === "string" && sessionId ? sessionId : undefined,
-      fitnessPlanId: planId,
-    },
-  });
-
-  // A plan has one diet plan: uploading a new one replaces the previous file,
-  // so the client's document room never shows stale or mistaken versions.
-  if (type === "nutrition_plan" && planId) {
-    const previous = await prisma.document.findMany({
-      where: { fitnessPlanId: planId, type: "nutrition_plan", id: { not: document.id } },
-      select: { id: true, fileUrl: true },
+  // Plan PDFs are versioned: a new upload becomes the active version and the
+  // previous one is kept as superseded history (spec §12; diet plans included,
+  // one series per fitness plan). Other documents are stored as-is.
+  let document;
+  try {
+    document = await prisma.$transaction(async (tx) => {
+      let version: number | undefined;
+      if (isVersionedPlanType(type)) {
+        const series = {
+          clientId: client.id,
+          type: type as DocumentType,
+          ...(type === "nutrition_plan" ? { fitnessPlanId: planId } : {}),
+        };
+        // Serialise concurrent uploads to the same series so versions stay unique.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`doc-version:${client.id}:${type}:${planId ?? ""}`}))`;
+        const latest = await tx.document.aggregate({ where: series, _max: { version: true } });
+        version = (latest._max.version ?? 0) + 1;
+        await tx.document.updateMany({
+          where: { ...series, status: "active" },
+          data: { status: "superseded" },
+        });
+      }
+      return tx.document.create({
+        data: {
+          clientId: client.id,
+          type: type as DocumentType,
+          fileName: file.name || fileName,
+          fileUrl: path, // storage object path; resolved to a signed URL when viewed
+          fileSize: file.size,
+          uploadedById: authUser.id,
+          sessionId: typeof sessionId === "string" && sessionId ? sessionId : undefined,
+          fitnessPlanId: planId,
+          version,
+          description,
+        },
+      });
     });
-    if (previous.length) {
-      await prisma.document.deleteMany({ where: { id: { in: previous.map((d) => d.id) } } });
-      await deleteObjects(previous.map((d) => d.fileUrl));
-    }
+  } catch (e) {
+    await deleteObjects([path]);
+    throw e;
   }
 
   return json(req, { document });
